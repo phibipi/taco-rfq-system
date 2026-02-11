@@ -444,7 +444,7 @@ def admin_dashboard():
                     st.divider()
                     c_val1, c_val2 = st.columns([2, 1])
                     with c_val1:
-                        val_period = st.selectbox("Pilih Periode", ["Januari - Juni", "Januari - Desember", "Juli - Desember"])
+                        val_period = st.selectbox("Pilih Periode", ["Januari - Juni", "Juli - Desember", "Januari - Desember"])
                     with c_val2:
                         val_year = st.text_input("Tahun", value=str(datetime.now().year))
                     
@@ -843,6 +843,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
