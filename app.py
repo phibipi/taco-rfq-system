@@ -438,13 +438,18 @@ def admin_dashboard():
                         org_gids = set(org_groups['group_id'].tolist())
                         is_checked = not org_gids.isdisjoint(existing_gids)
                         
-                        if col_ptr.checkbox(org, value=is_checked, key=f"chk_org_{org}_{sel_lt}"):
+                        if col_ptr.checkbox(org, value=False, key=f"chk_org_{org}_{sel_lt}"):
                             selected_origins.append(org)
                     
                     st.divider()
-                    val = st.text_input("Validity (ex: 2025-H1)")
+                    c_val1, c_val2 = st.columns([2, 1])
+                    with c_val1:
+                        val_period = st.selectbox("Pilih Periode", ["Januari - Juni", "Januari - Desember", "Juli - Desember"])
+                    with c_val2:
+                        val_year = st.text_input("Tahun", value=str(datetime.now().year))
                     
                     if st.form_submit_button("Grant Access", type="primary"):
+                        val = f"{val_period} {val_year}"
                         if selected_origins and val:
                             target_groups = df_g[
                                 (df_g['load_type'] == sel_lt) & 
@@ -838,6 +843,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
