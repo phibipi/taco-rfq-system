@@ -544,14 +544,41 @@ def admin_dashboard():
                         st.dataframe(pivot_df, use_container_width=True, hide_index=True)
                     except: st.dataframe(subset_pr, use_container_width=True)
 
-                    st.markdown("**C. Biaya Lain (Multidrop, Buruh)**")
+                    st.markdown("**C. Biaya Lain (Multidrop & Buruh)**")
                     if not df_md.empty:
-                        sub_md = df_md[(df_md['vendor_email'] == vendor) & (df_md['validity'] == validity) & (df_md['group_id'] == g_id)]
+                        # 1. Bersihkan Data Sumber (Di DataFrame) - Paksa jadi String & Hapus Spasi
+                        df_md['vendor_email'] = df_md['vendor_email'].astype(str).str.strip()
+                        df_md['validity'] = df_md['validity'].astype(str).str.strip()
+                        df_md['group_id'] = df_md['group_id'].astype(str).str.strip()
+                        
+                        # 2. Bersihkan Data Target (Variable Loop)
+                        curr_ven = str(vendor).strip()
+                        curr_val = str(validity).strip()
+                        curr_gid = str(g_id).strip()
+
+                        # 3. Filter Data (Pencocokan yang pasti akurat)
+                        sub_md = df_md[
+                            (df_md['vendor_email'] == curr_ven) &
+                            (df_md['validity'] == curr_val) &
+                            (df_md['group_id'] == curr_gid)
+                        ]
+
                         if not sub_md.empty:
-                            disp_md = sub_md[['inner_city_price', 'outer_city_price','labor_cost']].reset_index(drop=True)
-                            disp_md.columns = ["Dalam Kota", "Luar Kota","Biaya Buruh"]
+                            cols_to_show = ['inner_city_price', 'outer_city_price']
+                            header_names = ["Dalam Kota", "Luar Kota"]
+                            
+                            # Cek otomatis apakah ada kolom labor_cost di Google Sheet
+                            if 'labor_cost' in sub_md.columns:
+                                cols_to_show.append('labor_cost')
+                                header_names.append("Biaya Buruh")
+                            
+                            disp_md = sub_md[cols_to_show].reset_index(drop=True)
+                            disp_md.columns = header_names
                             st.dataframe(disp_md, use_container_width=True, hide_index=True)
-                        else: st.info("Data Multidrop tidak ditemukan.")
+                        else:
+                            st.info("Data Multidrop belum diinput oleh vendor.")
+                    else:
+                        st.info("Database Multidrop masih kosong.")
                     
                     st.divider()
                     c1, c2 = st.columns([1, 4])
@@ -843,6 +870,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
