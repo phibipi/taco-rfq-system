@@ -1,4 +1,3 @@
-%%writefile app.py
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
@@ -808,3 +807,4 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
