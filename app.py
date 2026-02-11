@@ -565,7 +565,7 @@ def admin_dashboard():
 
                         if not sub_md.empty:
                             cols_to_show = ['inner_city_price', 'outer_city_price']
-                            header_names = ["Dalam Kota", "Luar Kota"]
+                            header_names = ["Multidrop Dalam Kota", " Multidrop Luar Kota"]
                             
                             # Cek otomatis apakah ada kolom labor_cost di Google Sheet
                             if 'labor_cost' in sub_md.columns:
@@ -870,6 +870,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
