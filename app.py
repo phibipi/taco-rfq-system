@@ -122,9 +122,14 @@ def get_data(sheet_name):
                 headers = all_values[0]
                 data = all_values[1:]
                 return pd.DataFrame(data, columns=headers)
-            else: return pd.DataFrame()
-        except: return pd.DataFrame()
-    return pd.DataFrame()
+            else:
+                return pd.DataFrame()
+        except Exception as e:
+            st.error(f"ERROR GSPREAD: {e}")  # Tampilkan Error Asli di Layar
+            return pd.DataFrame()
+    else:
+        st.error("ERROR: Gagal Login ke Google (Kredensial Salah/Tidak Ditemukan)")
+        return pd.DataFrame()
 
 # --- FUNGSI SAVE (UPSERT UNTUK ID UNIK) ---
 def save_data(sheet_name, new_data_list):
@@ -807,4 +812,5 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
