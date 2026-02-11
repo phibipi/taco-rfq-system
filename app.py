@@ -42,17 +42,36 @@ def init_style():
         li[role="option"]:hover { background-color: #F3F4F6 !important; }
         span[data-baseweb="tag"] { background-color: #E5E7EB !important; color: #111827 !important; }
         
-        /* BUTTONS */
-        div[data-testid="stButton"] button, div[data-testid="stFormSubmitButton"] button {
-            background-color: #F97316 !important; color: #FFFFFF !important; border: none !important;
+        /* --- STANDARD BUTTONS --- */
+        div[data-testid="stButton"] button {
+            background-color: #FCA568 !important; color: #FFFFFF !important; border: 2px solid #F58536 !important;
             border-radius: 8px !important; font-weight: 600 !important; padding: 0.5rem 1.2rem !important;
             box-shadow: 0 2px 4px rgba(249, 115, 22, 0.2);
         }
-        div[data-testid="stButton"] button:hover, div[data-testid="stFormSubmitButton"] button:hover {
+        div[data-testid="stButton"] button:hover {
             background-color: #EA580C !important; transform: translateY(-1px);
         }
         button[kind="secondary"] { background-color: #E5E7EB !important; color: #111827 !important; box-shadow: none !important; }
         button[kind="secondary"]:hover { background-color: #D1D5DB !important; }
+        
+        /* --- TOMBOL SIMPAN (SUBMIT) LEBIH BESAR --- */
+        div[data-testid="stFormSubmitButton"] button {
+            background-color: #FCA568 !important; 
+            color: #FFFFFF !important; 
+            border: 2px solid #F58536 !important;
+            border-radius: 12px !important; 
+            font-weight: 900 !important;      /* Lebih Tebal */
+            font-size: 24px !important;       /* Huruf Lebih Besar */
+            padding: 0.8rem 2rem !important;  /* Ukuran Tombol Lebih Besar */
+            box-shadow: 0 4px 8px rgba(249, 115, 22, 0.3);
+            width: 100% !important;           /* Tombol Memanjang Penuh */
+            transition: all 0.3s ease;
+        }
+        div[data-testid="stFormSubmitButton"] button:hover {
+            background-color: #EA580C !important; 
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(249, 115, 22, 0.4);
+        }
         
         /* --- DISABLED BUTTON STYLE (ABU TUA) --- */
         div[data-testid="stButton"] button:disabled {
@@ -79,7 +98,7 @@ def init_style():
         /* TABS */
         .stTabs [data-baseweb="tab-list"] { gap: 8px; }
         .stTabs [data-baseweb="tab"] { background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 6px; padding: 4px 16px; color: #111827 !important; }
-        .stTabs [data-baseweb="tab"][aria-selected="true"] { background-color: #F97316 !important; color: #FFFFFF !important; border: none; }
+        .stTabs [data-baseweb="tab"][aria-selected="true"] { background-color: #B5B2B0 !important; color: #FFFFFF !important; border: none; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -93,7 +112,7 @@ def connect_to_gsheet():
         return client.open_by_key(SPREADSHEET_ID)
     except Exception as e: return None
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=10, show_spinner=False)
 def get_data(sheet_name):
     sh = connect_to_gsheet()
     if sh:
@@ -203,11 +222,11 @@ def main():
         with c2:
             st.markdown("<br><br>", unsafe_allow_html=True)
             with st.container(border=True):
-                st.markdown("### 🔐 TACO RFQ System")
+                st.markdown("### 🔐 TACO Transport RFQ")
                 with st.form("login"):
                     email = st.text_input("Email")
                     pw = st.text_input("Password", type="password")
-                    if st.form_submit_button("Masuk Sistem", type="primary", use_container_width=True):
+                    if st.form_submit_button("Masuk", type="primary", use_container_width=True):
                         df = get_data("Users")
                         if not df.empty:
                             u = df[(df['email']==email) & (df['password']==pw)]
@@ -240,7 +259,7 @@ def main():
 
 # ================= ADMIN =================
 def admin_dashboard():
-    tabs = st.tabs(["1. Master Groups", "2. Master Routes", "3. Master Units", "4. Users", "5. Access Rights", "6. Monitoring & Approval"])
+    tabs = st.tabs(["📍Master Groups", "🛣️Master Routes", "🚛Master Units", "👥Users", "🔑Access Rights", "✅Monitoring & Approval"])
     
     # --- TAB 1: GROUPS ---
     with tabs[0]:
@@ -248,7 +267,7 @@ def admin_dashboard():
         with st.form("add_grp"):
             c1, c2, c3 = st.columns(3)
             lt = c1.selectbox("Load Type", ["FTL", "FCL"])
-            org = c2.text_input("Origin (Area/Hub)") 
+            org = c2.text_input("Origin (Area)") 
             gn = c3.text_input("Nama Route Group")
             
             if st.form_submit_button("Simpan Group", type="primary"):
@@ -516,7 +535,7 @@ def vendor_dashboard(email):
     step = st.session_state['vendor_step']
     
     if step == "dashboard":
-        t1, t2 = st.tabs(["Pilih Rute & Isi Harga", "📋 Company Profile"])
+        t1, t2 = st.tabs(["🛣️Pilih Rute & Isi Harga", "📋Isi Data Perusahaan"])
         with t2:
             df_p = get_data("Vendor_Profile")
             curr = {}
@@ -532,8 +551,8 @@ def vendor_dashboard(email):
                     with c2:
                         ph = st.text_input("No. Telepon", value=curr.get('phone',''))
                         top = st.selectbox("Term of Payment", ["7 hari","14 Hari", "30 Hari"])
-                    ppn = st.selectbox("Status PPN", ["11%", "1,1%","0%"]); pph = st.selectbox("Status PPh", ["Include", "Exclude"])
-                    if st.form_submit_button("Simpan", type="primary"):
+                    ppn = st.selectbox("PPN", ["11%", "1,1%","0%"]); pph = st.selectbox("PPh", ["Include", "Exclude"])
+                    if st.form_submit_button("Simpan Data", type="primary"):
                         save_data("Vendor_Profile", [[email, ad, cp, ph, top, ppn, pph, datetime.now().strftime("%Y-%m-%d")]])
                         st.success("Saved")
         
@@ -577,7 +596,7 @@ def vendor_dashboard(email):
                                 st.markdown(f"#### 📍 {org}")
                                 org_groups = df_sub[df_sub['origin'] == org]
                                 c1, c2, c3, c4 = st.columns([3, 4, 2, 2])
-                                c1.caption("Group Area"); c2.caption("Preview"); c3.caption("Aksi"); c4.caption("Status")
+                                c1.caption(""); c2.caption("Kota Tujuan"); c3.caption(""); c4.caption("Status Pengisian")
                                 st.divider()
                                 
                                 for _, row in org_groups.iterrows():
@@ -586,7 +605,7 @@ def vendor_dashboard(email):
                                     
                                     # CHECK STATUS PER VALIDITY
                                     r_data = df_routes[df_routes['group_id'] == gid] if not df_routes.empty else pd.DataFrame()
-                                    status_ui = '<span class="status-pending">OPEN</span>'
+                                    status_ui = '<span class="status-pending">❌ Belum Ada Data</span>'
                                     is_locked_btn = False
                                     
                                     if not df_price.empty and not r_data.empty:
@@ -596,7 +615,7 @@ def vendor_dashboard(email):
                                             (df_price['route_id'].isin(r_data['route_id']))
                                         ]
                                         if not sub_p.empty:
-                                            status_ui = '<span class="status-done">TERISI</span>'
+                                            status_ui = '<span class="status-done">✅Sudah Terisi</span>'
                                             if "Locked" in sub_p['status'].values:
                                                 is_locked_btn = True
                                     
@@ -613,9 +632,9 @@ def vendor_dashboard(email):
                                     
                                     # BUTTON LOGIC (DISABLED IF LOCKED)
                                     if is_locked_btn:
-                                        c3.button("🔒 Data Locked", key=f"btn_lk_{gid}", disabled=True)
+                                        c3.button("🔒Harga Dikunci", key=f"btn_lk_{gid}", disabled=True)
                                     else:
-                                        if c3.button("Isi Harga", key=f"btn_{t_code}_{gid}", type="primary"):
+                                        if c3.button("📌Isi Harga", key=f"btn_{t_code}_{gid}", type="primary"):
                                             st.session_state.update({
                                                 'sel_origin': org, 
                                                 'sel_validity': sel_val, 
@@ -634,7 +653,7 @@ def vendor_dashboard(email):
             st.success(st.session_state['temp_success_msg'])
             st.session_state['temp_success_msg'] = None
 
-        if st.button("⬅️ Kembali", type="secondary"):
+        if st.button("⬅️ Kembali ke Menu Utama", type="secondary"):
             st.session_state['vendor_step'] = "dashboard"; st.rerun()
 
         cur_org = st.session_state.get('sel_origin')
@@ -642,7 +661,7 @@ def vendor_dashboard(email):
         cur_load = st.session_state.get('sel_load')
         focused_gid = st.session_state.get('focused_group_id')
 
-        st.markdown(f"### Input Harga: {cur_org} ({cur_load})")
+        st.markdown(f"### Input Penawaran Harga {cur_load}: {cur_org}")
         st.caption(f"Periode: {cur_val}")
 
         df_acc = get_data("Access_Rights"); df_grps = get_data("Master_Groups")
@@ -690,26 +709,26 @@ def vendor_dashboard(email):
                 with st.form(key=f"f_{gid}"):
                     # 1. SPEC
                     with st.container(border=True):
-                        st.info(f"Spesifikasi Armada - {g_name}")
+                        st.markdown(f"#### 🛻 Spesifikasi Armada")
                         sp_data = []
                         for u in u_types:
                             sp_data.append({
                                 "Jenis Unit": u,
-                                "Kapasitas Berat (Kg)": clean_numeric(ex_spec.get(u,{}).get('w')),
-                                "Kapasitas Kubikasi (CBM)": clean_numeric(ex_spec.get(u,{}).get('c'))
+                                "Kapasitas Berat Bersih (Kg)": clean_numeric(ex_spec.get(u,{}).get('w')),
+                                "Kapasitas Kubikasi Dalam (CBM)": clean_numeric(ex_spec.get(u,{}).get('c'))
                             })
                         
                         df_sp = pd.DataFrame(sp_data)
                         cf_sp = {
                             "Jenis Unit": st.column_config.TextColumn(disabled=True),
-                            "Kapasitas Berat (Kg)": st.column_config.NumberColumn(min_value=0, format="%d", step=1),
-                            "Kapasitas Kubikasi (CBM)": st.column_config.NumberColumn(min_value=0, format="%.2f", step=0.1)
+                            "Kapasitas Berat Bersih (Kg)": st.column_config.NumberColumn(min_value=0, format="%d", step=1),
+                            "Kapasitas Kubikasi Dalam (CBM)": st.column_config.NumberColumn(min_value=0, format="%.2f", step=0.1)
                         }
                         ed_sp = st.data_editor(df_sp, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_sp, height=(len(df_sp)+1)*36+30)
 
                     # 2. PRICE
                     with st.container(border=True):
-                        st.markdown(f"#### 💰 Penawaran Harga - {g_name}")
+                        st.markdown(f"#### 💰 Penawaran Harga")
                         p_data = []
                         for _, row in my_r.iterrows():
                             rid = row['route_id']
@@ -719,13 +738,13 @@ def vendor_dashboard(email):
                             }
                             # Harga
                             for u in u_types:
-                                rd[f"Harga {u} (Rp)"] = ex_price.get((rid, u), 0)
+                                rd[f"Harga {u}"] = ex_price.get((rid, u), 0)
                             
                             rd["Keterangan"] = row.get('keterangan','-')
                             p_data.append(rd)
                         
                         df_pr = pd.DataFrame(p_data)
-                        for c in [f"Harga {u} (Rp)" for u in u_types]: 
+                        for c in [f"Harga {u}" for u in u_types]: 
                             if c in df_pr.columns: df_pr[c] = pd.to_numeric(df_pr[c], errors='coerce').fillna(0)
                         
                         cf_pr = {
@@ -736,13 +755,13 @@ def vendor_dashboard(email):
                             "Lead Time (Hari)": st.column_config.NumberColumn(min_value=0, step=1)
                         }
                         for u in u_types:
-                            cf_pr[f"Harga {u} (Rp)"] = st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d")
+                            cf_pr[f"Harga {u}"] = st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d")
 
                         ed_pr = st.data_editor(df_pr, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_pr, height=(len(df_pr)+1)*36+30)
 
                     # 3. MULTIDROP
                     with st.container(border=True):
-                        st.markdown("#### 📦 Biaya Multidrop (Tambahan)")
+                        st.markdown("#### 📦 Biaya Multidrop & Buruh")
                         ic, oc, lc = 0, 0, 0
                         if not df_m.empty:
                             mr = df_m[(df_m['vendor_email']==email) & (df_m['validity']==cur_val) & (df_m['group_id']==gid)]
@@ -751,18 +770,18 @@ def vendor_dashboard(email):
                                 oc = clean_numeric(mr.iloc[0].get('outer_city_price')) or 0
                                 lc = clean_numeric(mr.iloc[0].get('labor_cost')) or 0
                         
-                        df_md = pd.DataFrame([{"Multidrop Dalam Kota (Rp)": ic, "Multidrop Luar Kota (Rp)": oc, "Biaya Buruh": lc}])
+                        df_md = pd.DataFrame([{"Multidrop Dalam Kota": ic, "Multidrop Luar Kota": oc, "Biaya Buruh": lc}])
                         cf_md = {
-                            "Multidrop Dalam Kota (Rp)": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d"),
-                            "Multidrop Luar Kota (Rp)": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d"),
+                            "Multidrop Dalam Kota": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d"),
+                            "Multidrop Luar Kota": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d"),
                             "Biaya Buruh": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d")
                         }
                         ed_md = st.data_editor(df_md, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_md)
 
                     # SAVE
                     st.write("")
-                    if st.form_submit_button(f"Simpan Data {g_name}", type="primary") and not is_lock:
-                        c_spec = {r['Jenis Unit']: {'w': r['Kapasitas Berat (Kg)'], 'c': r['Kapasitas Kubikasi (CBM)']} for _, r in ed_sp.iterrows()}
+                    if st.form_submit_button(f"Simpan Data {cur_load} {g_name}", type="primary") and not is_lock:
+                        c_spec = {r['Jenis Unit']: {'w': r['Kapasitas Berat Bersih (Kg)'], 'c': r['Kapasitas Kubikasi Dalam (CBM)']} for _, r in ed_sp.iterrows()}
                         
                         f_data = []
                         ts = (datetime.utcnow() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
@@ -770,13 +789,13 @@ def vendor_dashboard(email):
                         for _, r in ed_pr.iterrows():
                             rid = str(r['Route ID']); lt = int(r['Lead Time (Hari)'])
                             for u in u_types:
-                                pr = int(r[f"Harga {u} (Rp)"])
+                                pr = int(r[f"Harga {u}"])
                                 w = str(c_spec.get(u,{}).get('w','')); c = str(c_spec.get(u,{}).get('c',''))
                                 tid = f"{email}_{cur_val}_{rid}_{u}".replace(" ","")
                                 f_data.append([tid, email, "Open", cur_val, rid, u, lt, pr, w, c, "", ts])
                         
-                        mi = int(ed_md.iloc[0]["Multidrop Dalam Kota (Rp)"])
-                        mo = int(ed_md.iloc[0]["Multidrop Luar Kota (Rp)"])
+                        mi = int(ed_md.iloc[0]["Multidrop Dalam Kota"])
+                        mo = int(ed_md.iloc[0]["Multidrop Luar Kota"])
                         ml = int(ed_md.iloc[0]["Biaya Buruh"])
                         mid = f"M_{email}_{gid}_{cur_val}"
 
