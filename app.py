@@ -102,14 +102,40 @@ def init_style():
     """, unsafe_allow_html=True)
 
 # --- KONEKSI & CACHE ---
+# --- KONEKSI & CACHE (SMART DETECTION) ---
 @st.cache_resource
 def connect_to_gsheet():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    
     try:
-        creds = ServiceAccountCredentials.from_json_keyfile_name("kunci_rahasia.json", scope)
-        client = gspread.authorize(creds)
-        return client.open_by_key(SPREADSHEET_ID)
-    except Exception as e: return None
+        # 1. CEK APAKAH DI STREAMLIT CLOUD (SECRETS)
+        if "gcp_service_account" in st.secrets:
+            # st.write("Mendeteksi environment Cloud...") # Debugging (Boleh dihapus)
+            creds_dict = st.secrets["gcp_service_account"]
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+            client = gspread.authorize(creds)
+            return client.open_by_key(SPREADSHEET_ID)
+
+        # 2. CEK APAKAH DI LAPTOP (FILE JSON)
+        elif os.path.exists("kunci_rahasia.json"):
+            # st.write("Mendeteksi environment Lokal...") # Debugging (Boleh dihapus)
+            creds = ServiceAccountCredentials.from_json_keyfile_name("kunci_rahasia.json", scope)
+            client = gspread.authorize(creds)
+            return client.open_by_key(SPREADSHEET_ID)
+
+        # 3. JIKA KEDUANYA TIDAK ADA
+        else:
+            st.error("CRITICAL ERROR: Kredensial tidak ditemukan!")
+            st.warning("""
+            Penyebab:
+            1. Jika di Laptop: File 'kunci_rahasia.json' tidak ada di folder ini.
+            2. Jika di Cloud: Anda belum setting 'Secrets' di dashboard Streamlit.
+            """)
+            return None
+
+    except Exception as e:
+        st.error(f"GAGAL KONEKSI: {e}")
+        return None
 
 @st.cache_data(ttl=10, show_spinner=False)
 def get_data(sheet_name):
@@ -812,5 +838,6 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
