@@ -953,7 +953,7 @@ def admin_dashboard():
             # Filter Data
             df_view = df_master[(df_master['validity'] == sel_val) & (df_master['load_type'] == sel_load)].copy()
             
-            f not df_view.empty:
+            if not df_view.empty:
                 unique_origins = sorted(df_view['origin'].unique())
                 
                 for org in unique_origins:
@@ -1333,6 +1333,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
