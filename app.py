@@ -13,6 +13,7 @@ from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import nsdecls, qn  
 from docx.oxml import parse_xml, OxmlElement 
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
 
 # --- MAIN APP ---
 st.set_page_config(page_title="TACO Procurement", layout="wide", page_icon="🚛")
@@ -109,6 +110,43 @@ def init_style():
         .stTabs [data-baseweb="tab-list"] { gap: 8px; }
         .stTabs [data-baseweb="tab"] { background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 6px; padding: 4px 16px; color: #111827 !important; }
         .stTabs [data-baseweb="tab"][aria-selected="true"] { background-color: #B5B2B0 !important; color: #FFFFFF !important; border: none; }
+       
+        /* --- PERBAIKAN TAMPILAN EXPANDER (DROPDOWN) --- */
+        
+        /* 1. Target Kotak Utama Expander */
+        div[data-testid="stExpander"] {
+            background-color: #FFFFFF !important;
+            border: 1px solid #E5E7EB !important;
+            border-radius: 8px !important;
+            color: #111827 !important; /* Warna teks isi gelap */
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        /* 2. Target Bagian Detail (Isi Dalam) */
+        div[data-testid="stExpander"] details {
+            background-color: #FFFFFF !important;
+            border-radius: 8px !important;
+        }
+
+        /* 3. Target Judul (Header) Expander */
+        div[data-testid="stExpander"] summary {
+            background-color: #FFFFFF !important; /* Paksa Background Putih */
+            color: #111827 !important;            /* Paksa Teks Hitam */
+            font-weight: 600 !important;
+            border-radius: 8px !important;
+        }
+        
+        /* 4. Target Ikon Panah Kecil (Agar tidak putih/hilang) */
+        div[data-testid="stExpander"] summary svg {
+            fill: #6B7280 !important;  /* Warna panah abu tua */
+            color: #6B7280 !important;
+        }
+
+        /* 5. Efek Hover (Opsional: Garis jadi Orange) */
+        div[data-testid="stExpander"]:hover {
+            border-color: #FCA568 !important;
+        }
+        
         </style>
     """, unsafe_allow_html=True)
 
@@ -352,42 +390,42 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
         st.error(f"Gagal kirim email: {e}")
         return False
         
-# --- FUNGSI GENERATE WORD (TOP 3 & REPEAT HEADER) ---
+# --- FUNGSI GENERATE WORD (FINAL: LIST ORIGIN + TABLE RAPI) ---
 def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     doc = DocxTemplate(template_file)
     
+    # --- 1. SIAPKAN LIST NAMA ORIGIN (STRING) ---
+    # Contoh hasil: "Bekasi, Cikande, Surabaya"
+    unique_origins = sorted(df_data['origin'].unique())
+    origin_list_str = ", ".join(unique_origins) 
+
     # --- HELPER 1: WARNA BACKGROUND CELL ---
     def set_cell_background(cell, color_hex):
         shading_elm = parse_xml(r'<w:shd {} w:fill="{}"/>'.format(nsdecls('w'), color_hex))
         cell._tc.get_or_add_tcPr().append(shading_elm)
 
-    # --- HELPER 2: FORMAT PARAGRAF (FONT KECIL & RAPAT) ---
+    # --- HELPER 2: FORMAT PARAGRAF ---
     def format_paragraph(paragraph, size, bold=False, align=None):
         paragraph_format = paragraph.paragraph_format
         paragraph_format.space_after = Pt(0)
         paragraph_format.space_before = Pt(0)
         paragraph_format.line_spacing = 1
         if align is not None: paragraph.alignment = align
-            
         run = paragraph.runs[0] if paragraph.runs else paragraph.add_run()
         run.font.size = Pt(size)
         run.font.bold = bold
         run.font.name = 'Arial'
 
-    # --- HELPER 3: REPEAT HEADER ROW (MAGIC XML) ---
+    # --- HELPER 3: REPEAT HEADER ROW ---
     def set_repeat_table_header(row):
-        """Membuat baris header berulang di tiap halaman"""
         tr = row._tr
         trPr = tr.get_or_add_trPr()
         tblHeader = OxmlElement('w:tblHeader')
         tblHeader.set(qn('w:val'), "true")
         trPr.append(tblHeader)
 
-    # --- 1. MEMBUAT TABEL HARGA ---
+    # --- 2. MEMBUAT TABEL HARGA (SD) ---
     sd = doc.new_subdoc()
-    unique_origins = sorted(df_data['origin'].unique())
-    
-    # List untuk menampung vendor yang MENANG (Top 3) saja
     winning_vendors_data = [] 
     
     for org in unique_origins:
@@ -396,112 +434,92 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
         p.paragraph_format.space_after = Pt(2)
         run = p.runs[0]; run.bold = True; run.font.size = Pt(10)
         
-        # Filter Data & Ranking
+        # Filter & Top 3 Logic
         df_sub = df_data[df_data['origin'] == org].copy()
         df_sub = df_sub.sort_values(by=['kota_asal', 'kota_tujuan', 'unit_type', 'price'])
-        
-        # Hitung Ranking Ulang (Grouping per Tujuan & Unit)
         df_sub['Ranking'] = df_sub.groupby(['kota_tujuan', 'unit_type']).cumcount() + 1
-        
-        # --- FILTER HANYA TOP 3 ---
-        df_sub = df_sub[df_sub['Ranking'] <= 3].copy()
-        
-        # Simpan data pemenang untuk tabel vendor di bawah nanti
+        df_sub = df_sub[df_sub['Ranking'] <= 3].copy() # Ambil Top 3
         winning_vendors_data.append(df_sub)
         
-        # Buat Tabel
+        # Tabel
         headers = ['Asal', 'Tujuan', 'Unit', 'Rank', 'Vendor', 'Harga', 'L.Time', 'TOP']
         table = sd.add_table(rows=1, cols=len(headers))
-        table.style = 'Table Grid'
-        table.autofit = True 
+        table.style = 'Table Grid'; table.autofit = True 
         
-        # --- FORMAT HEADER ---
-        hdr_row = table.rows[0]
-        set_repeat_table_header(hdr_row) # <--- AKTIFKAN REPEAT HEADER
-        
+        # Header
+        hdr_row = table.rows[0]; set_repeat_table_header(hdr_row)
         hdr_cells = hdr_row.cells
         for i, h in enumerate(headers):
             hdr_cells[i].text = h
-            set_cell_background(hdr_cells[i], "ED7D31") # Orange
+            set_cell_background(hdr_cells[i], "ED7D31")
+            hdr_cells[i].vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER 
             format_paragraph(hdr_cells[i].paragraphs[0], size=8, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
             
-        # --- ISI DATA ---
+        # Data
         for _, row in df_sub.iterrows():
             row_cells = table.add_row().cells
-            try: harga = f"{int(row['price']):,}"
-            except: harga = "0"
+            try: harga = f"Rp {int(row['price']):,}".replace(",", ".")
+            except: harga = "Rp 0"
             
             data_map = [
-                str(row.get('kota_asal', '-')), 
-                str(row['kota_tujuan']),        
-                str(row['unit_type']),          
-                str(row['Ranking']),            
-                str(row['vendor_name']),        
-                harga,                          
-                str(row['lead_time']),          
-                str(row['top'])                 
+                str(row.get('kota_asal', '-')), str(row['kota_tujuan']), str(row['unit_type']),
+                str(row['Ranking']), str(row['vendor_name']), harga,
+                str(row['lead_time']), str(row['top'])
             ]
             
             for idx, val in enumerate(data_map):
-                cell = row_cells[idx]
-                cell.text = val
-                
-                # Alignment
+                cell = row_cells[idx]; cell.text = val
+                cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
                 if idx in [0, 1, 2, 6]: align = WD_ALIGN_PARAGRAPH.LEFT
                 elif idx == 5: align = WD_ALIGN_PARAGRAPH.RIGHT
                 else: align = WD_ALIGN_PARAGRAPH.CENTER
-                
                 format_paragraph(cell.paragraphs[0], size=7, bold=False, align=align)
-
         sd.add_paragraph("") 
 
-    # --- 2. MEMBUAT TABEL VENDOR (HANYA YANG MASUK TOP 3) ---
+    # --- 3. MEMBUAT TABEL VENDOR (SD_VEN) ---
     sd_ven = doc.new_subdoc()
-    
-    # Gabungkan semua data pemenang dari loop di atas
     if winning_vendors_data:
-        df_all_winners = pd.concat(winning_vendors_data)
-        # Ambil unik berdasarkan email vendor
-        df_unique_winners = df_all_winners.drop_duplicates(subset=['vendor_email']).sort_values('vendor_name')
-    else:
-        df_unique_winners = pd.DataFrame()
+        df_all = pd.concat(winning_vendors_data)
+        df_uniq = df_all.drop_duplicates(subset=['vendor_email']).sort_values('vendor_name')
+    else: df_uniq = pd.DataFrame()
     
-    if not df_unique_winners.empty:
+    if not df_uniq.empty:
         v_headers = ['Vendor', 'Alamat', 'Email', 'PIC', 'Telepon']
         v_table = sd_ven.add_table(rows=1, cols=len(v_headers))
-        v_table.style = 'Table Grid'
-        v_table.autofit = True
+        v_table.style = 'Table Grid'; v_table.autofit = True
         
-        # Format Header Vendor
-        v_hdr_row = v_table.rows[0]
-        set_repeat_table_header(v_hdr_row) # <--- AKTIFKAN REPEAT HEADER JUGA
-        
-        vh_cells = v_hdr_row.cells
+        v_hdr = v_table.rows[0]; set_repeat_table_header(v_hdr)
+        vh_cells = v_hdr.cells
         for i, h in enumerate(v_headers):
             vh_cells[i].text = h
-            set_cell_background(vh_cells[i], "ED7D31") 
+            set_cell_background(vh_cells[i], "ED7D31")
+            vh_cells[i].vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER 
             format_paragraph(vh_cells[i].paragraphs[0], size=8, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
             
-        # Isi Vendor
-        for _, row in df_unique_winners.iterrows():
+        for _, row in df_uniq.iterrows():
             v_cells = v_table.add_row().cells
             v_data = [
-                str(row['vendor_name']),
-                str(row.get('address', '-')),
-                str(row['vendor_email']),
-                str(row.get('contact_person', '-')),
-                str(row.get('phone', '-'))
+                str(row['vendor_name']), str(row.get('address', '-')), str(row['vendor_email']),
+                str(row.get('contact_person', '-')), str(row.get('phone', '-'))
             ]
             for idx, val in enumerate(v_data):
-                cell = v_cells[idx]
-                cell.text = val
+                cell = v_cells[idx]; cell.text = val
+                cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
                 format_paragraph(cell.paragraphs[0], size=7, bold=False, align=WD_ALIGN_PARAGRAPH.LEFT)
 
-    # --- 3. RENDER ---
+    # --- 4. RENDER CONTEXT ---
+    
+    # Tanggal Hari Ini (Indo)
+    bulan_indo = {1:'Januari', 2:'Februari', 3:'Maret', 4:'April', 5:'Mei', 6:'Juni', 7:'Juli', 8:'Agustus', 9:'September', 10:'Oktober', 11:'November', 12:'Desember'}
+    today = datetime.now()
+    tgl_str = f"{today.day} {bulan_indo[today.month]} {today.year}"
+    
     context = {
         'no_surat': nomor_surat,
         'validity': validity,
         'load_type': load_type,
+        'tanggal_sk': tgl_str,
+        'daftar_origin': origin_list_str, # <--- VARIABEL BARU
         'tabel_harga': sd,      
         'tabel_vendor': sd_ven  
     }
@@ -510,7 +528,6 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     output_filename = f"SK_Result_{int(time.time())}.docx"
     doc.save(output_filename)
     return output_filename
-
 
 def main():
     st.markdown('<div id="top-page"></div>', unsafe_allow_html=True)
@@ -1333,6 +1350,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
