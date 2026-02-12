@@ -9,10 +9,10 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-# --- KONFIGURASI ---
+# --- SHEET CONNECTION ---
 SPREADSHEET_ID = "1j9GCq8Wwm-MM8hOamsH26qlmjNwuDBuEMnbw6ORzTQk"
 
-# --- CUSTOM UI STYLE ---
+# --- UI PAGE FONT BUTTON ETC ---
 def init_style():
     st.markdown("""
         <style>
@@ -1005,6 +1005,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
