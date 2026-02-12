@@ -1074,7 +1074,7 @@ def admin_dashboard():
                         uploaded_template = st.file_uploader("Upload Template (.docx)", type="docx", key="sk_upl")
                         
                     with col_kanan:
-                        no_surat = st.text_input("Nomor Surat:", value="001/SK/LOG/2026")
+                        no_surat = st.text_input("Nomor Surat:", value="(copy nomor disini)")
                         template_path = "template_sk.docx" 
                         if uploaded_template: template_path = uploaded_template
                         
@@ -1389,6 +1389,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
