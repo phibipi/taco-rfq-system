@@ -269,7 +269,7 @@ def add_scroll_to_top():
             }
         </style>
         
-        <a href="#paling-atas" class="scroll-to-top" target="_self">
+        <a href="#top-page" class="scroll-to-top" target="_self">
             <span class="scroll-to-top-icon">↑</span>
         </a>
     """, unsafe_allow_html=True)
@@ -278,7 +278,7 @@ def add_scroll_to_top():
 st.set_page_config(page_title="TACO Procurement", layout="wide", page_icon="🚛")
 
 def main():
-    st.markdown('<div id="paling-atas"></div>', unsafe_allow_html=True)
+    st.markdown('<div id="top-page"></div>', unsafe_allow_html=True)
     init_style()
     add_scroll_to_top()
     c_logo, _ = st.columns([1, 6])
@@ -916,6 +916,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
