@@ -9,11 +9,12 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from docxtpl import DocxTemplate
-from docx.shared import Pt, Inches, RGBColor
+from docx.shared import Pt, Inches, RGBColor, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import nsdecls, qn  
 from docx.oxml import parse_xml, OxmlElement 
-from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
+
 
 # --- MAIN APP ---
 st.set_page_config(page_title="TACO Procurement", layout="wide", page_icon="🚛")
@@ -390,21 +391,28 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
         st.error(f"Gagal kirim email: {e}")
         return False
         
-# --- FUNGSI GENERATE WORD (FINAL: LIST ORIGIN + TABLE RAPI) ---
+# --- FUNGSI GENERATE WORD (FINAL: CENTER TABLE & ADJUST WIDTH) ---
 def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     doc = DocxTemplate(template_file)
     
-    # --- 1. SIAPKAN LIST NAMA ORIGIN (STRING) ---
-    # Contoh hasil: "Bekasi, Cikande, Surabaya"
+    # --- 1. SIAPKAN DATA ---
     unique_origins = sorted(df_data['origin'].unique())
     origin_list_str = ", ".join(unique_origins) 
 
-    # --- HELPER 1: WARNA BACKGROUND CELL ---
+    # --- HELPER 1: SET LEBAR KOLOM (PENTING) ---
+    def set_col_widths(table, widths):
+        """Mengatur lebar kolom tabel dalam satuan Centimeter (Cm)"""
+        for row in table.rows:
+            for idx, width in enumerate(widths):
+                if idx < len(row.cells):
+                    row.cells[idx].width = width
+
+    # --- HELPER 2: WARNA BACKGROUND CELL ---
     def set_cell_background(cell, color_hex):
         shading_elm = parse_xml(r'<w:shd {} w:fill="{}"/>'.format(nsdecls('w'), color_hex))
         cell._tc.get_or_add_tcPr().append(shading_elm)
 
-    # --- HELPER 2: FORMAT PARAGRAF ---
+    # --- HELPER 3: FORMAT PARAGRAF ---
     def format_paragraph(paragraph, size, bold=False, align=None):
         paragraph_format = paragraph.paragraph_format
         paragraph_format.space_after = Pt(0)
@@ -416,7 +424,7 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
         run.font.bold = bold
         run.font.name = 'Arial'
 
-    # --- HELPER 3: REPEAT HEADER ROW ---
+    # --- HELPER 4: REPEAT HEADER ROW ---
     def set_repeat_table_header(row):
         tr = row._tr
         trPr = tr.get_or_add_trPr()
@@ -424,7 +432,7 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
         tblHeader.set(qn('w:val'), "true")
         trPr.append(tblHeader)
 
-    # --- 2. MEMBUAT TABEL HARGA (SD) ---
+    # --- BAGIAN A: TABEL HARGA ---
     sd = doc.new_subdoc()
     winning_vendors_data = [] 
     
@@ -438,13 +446,23 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
         df_sub = df_data[df_data['origin'] == org].copy()
         df_sub = df_sub.sort_values(by=['kota_asal', 'kota_tujuan', 'unit_type', 'price'])
         df_sub['Ranking'] = df_sub.groupby(['kota_tujuan', 'unit_type']).cumcount() + 1
-        df_sub = df_sub[df_sub['Ranking'] <= 3].copy() # Ambil Top 3
+        df_sub = df_sub[df_sub['Ranking'] <= 3].copy()
         winning_vendors_data.append(df_sub)
         
-        # Tabel
-        headers = ['Asal', 'Tujuan', 'Unit', 'Rank', 'Vendor', 'Harga', 'L.Time', 'TOP']
+        # Buat Tabel (8 Kolom)
+        headers = ['Asal', 'Tujuan', 'Unit', 'Rank', 'Vendor', 'Biaya/unit', 'LeadTime', 'Term of Payment']
         table = sd.add_table(rows=1, cols=len(headers))
-        table.style = 'Table Grid'; table.autofit = True 
+        table.style = 'Table Grid'
+        
+        # 1. POSISI TABEL CENTER
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER 
+        
+        # 2. ATUR LEBAR KOLOM (TOTAL ~17-18 CM UNTUK A4)
+        # Asal(2.0), Tujuan(2.8), Unit(2.2), Rank(0.8), Vendor(3.5), Harga(2.5), L.Time(1.2), TOP(2.0)
+        col_widths = [Cm(2.0), Cm(2.8), Cm(2.2), Cm(0.8), Cm(3.5), Cm(2.5), Cm(1.2), Cm(2.0)]
+        table.autofit = False 
+        table.allow_autofit = False
+        set_col_widths(table, col_widths)
         
         # Header
         hdr_row = table.rows[0]; set_repeat_table_header(hdr_row)
@@ -462,21 +480,36 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
             except: harga = "Rp 0"
             
             data_map = [
-                str(row.get('kota_asal', '-')), str(row['kota_tujuan']), str(row['unit_type']),
-                str(row['Ranking']), str(row['vendor_name']), harga,
-                str(row['lead_time']), str(row['top'])
+                str(row.get('kota_asal', '-')), 
+                str(row['kota_tujuan']), 
+                str(row['unit_type']),
+                str(row['Ranking']), 
+                str(row['vendor_name']), 
+                harga,
+                str(row['lead_time']), 
+                str(row['top'])
             ]
+            
+            # Terapkan Data & Lebar Ulang (Untuk memastikan baris baru ikut format)
+            set_col_widths(table, col_widths) 
             
             for idx, val in enumerate(data_map):
                 cell = row_cells[idx]; cell.text = val
                 cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+                
+                # Alignment Text
+                # Left: Asal, Tujuan, Unit, Lead Time
                 if idx in [0, 1, 2, 6]: align = WD_ALIGN_PARAGRAPH.LEFT
+                # Right: Harga
                 elif idx == 5: align = WD_ALIGN_PARAGRAPH.RIGHT
+                # Center: Rank, Vendor, TOP
                 else: align = WD_ALIGN_PARAGRAPH.CENTER
+                
                 format_paragraph(cell.paragraphs[0], size=7, bold=False, align=align)
+        
         sd.add_paragraph("") 
 
-    # --- 3. MEMBUAT TABEL VENDOR (SD_VEN) ---
+    # --- BAGIAN B: TABEL VENDOR ---
     sd_ven = doc.new_subdoc()
     if winning_vendors_data:
         df_all = pd.concat(winning_vendors_data)
@@ -486,7 +519,17 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     if not df_uniq.empty:
         v_headers = ['Vendor', 'Alamat', 'Email', 'PIC', 'Telepon']
         v_table = sd_ven.add_table(rows=1, cols=len(v_headers))
-        v_table.style = 'Table Grid'; v_table.autofit = True
+        v_table.style = 'Table Grid'
+        
+        # 1. POSISI TABEL CENTER
+        v_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+        
+        # 2. ATUR LEBAR KOLOM
+        # Vendor(4.0), Alamat(5.0), Email(3.5), PIC(2.5), Telepon(2.5) -> Total 17.5 Cm
+        v_widths = [Cm(4.0), Cm(5.0), Cm(3.5), Cm(2.5), Cm(2.5)]
+        v_table.autofit = False
+        v_table.allow_autofit = False
+        set_col_widths(v_table, v_widths)
         
         v_hdr = v_table.rows[0]; set_repeat_table_header(v_hdr)
         vh_cells = v_hdr.cells
@@ -498,9 +541,14 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
             
         for _, row in df_uniq.iterrows():
             v_cells = v_table.add_row().cells
+            set_col_widths(v_table, v_widths) # Pastikan lebar terjaga
+            
             v_data = [
-                str(row['vendor_name']), str(row.get('address', '-')), str(row['vendor_email']),
-                str(row.get('contact_person', '-')), str(row.get('phone', '-'))
+                str(row['vendor_name']), 
+                str(row.get('address', '-')), 
+                str(row['vendor_email']),
+                str(row.get('contact_person', '-')), 
+                str(row.get('phone', '-'))
             ]
             for idx, val in enumerate(v_data):
                 cell = v_cells[idx]; cell.text = val
@@ -508,8 +556,6 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
                 format_paragraph(cell.paragraphs[0], size=7, bold=False, align=WD_ALIGN_PARAGRAPH.LEFT)
 
     # --- 4. RENDER CONTEXT ---
-    
-    # Tanggal Hari Ini (Indo)
     bulan_indo = {1:'Januari', 2:'Februari', 3:'Maret', 4:'April', 5:'Mei', 6:'Juni', 7:'Juli', 8:'Agustus', 9:'September', 10:'Oktober', 11:'November', 12:'Desember'}
     today = datetime.now()
     tgl_str = f"{today.day} {bulan_indo[today.month]} {today.year}"
@@ -519,7 +565,7 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
         'validity': validity,
         'load_type': load_type,
         'tanggal_sk': tgl_str,
-        'daftar_origin': origin_list_str, # <--- VARIABEL BARU
+        'daftar_origin': origin_list_str,
         'tabel_harga': sd,      
         'tabel_vendor': sd_ven  
     }
@@ -1350,6 +1396,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
