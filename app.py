@@ -9,6 +9,8 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from docxtpl import DocxTemplate
+from docx.shared import Pt, Inches, Cm
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 # --- SHEET CONNECTION ---
 SPREADSHEET_ID = "1j9GCq8Wwm-MM8hOamsH26qlmjNwuDBuEMnbw6ORzTQk"
@@ -347,73 +349,107 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
         
 # --- FUNGSI GENERATE WORD (FINAL: HARGA + VENDOR CONTACT) ---
 def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
-    # Load Template
     doc = DocxTemplate(template_file)
     
-    # --- BAGIAN 1: TABEL HARGA (GROUP BY ORIGIN) ---
-    table_groups = []
+    # --- 1. MEMBUAT TABEL HARGA (DI DALAM PYTHON) ---
+    # Kita buat 'dokumen kecil' (subdoc) di memori
+    sd = doc.new_subdoc()
     
-    # Ambil list unique origin
     unique_origins = sorted(df_data['origin'].unique())
     
     for org in unique_origins:
-        # Filter data per origin
-        df_sub = df_data[df_data['origin'] == org].copy()
+        # Tambah Judul Origin
+        p = sd.add_paragraph(f"Origin: {org}")
+        p.runs[0].bold = True
+        p.runs[0].font.size = Pt(11)
         
-        # Sortir: Kota Asal -> Tujuan -> Unit -> Ranking
+        # Filter Data
+        df_sub = df_data[df_data['origin'] == org].copy()
         df_sub = df_sub.sort_values(by=['kota_asal', 'kota_tujuan', 'unit_type', 'Ranking'])
         
-        rows = []
+        # Buat Tabel di Python
+        headers = ['Asal', 'Tujuan', 'Unit', 'Rank', 'Vendor', 'Harga', 'L.Time', 'TOP']
+        table = sd.add_table(rows=1, cols=len(headers))
+        table.style = 'Table Grid' # Agar ada garisnya
+        table.autofit = False 
+        
+        # Header
+        hdr_cells = table.rows[0].cells
+        for i, h in enumerate(headers):
+            hdr_cells[i].text = h
+            # Bold Header
+            run = hdr_cells[i].paragraphs[0].runs[0]
+            run.font.bold = True
+            run.font.size = Pt(9)
+            
+        # Isi Data
         for _, row in df_sub.iterrows():
-            # Format Harga jadi Rupiah
-            try: harga = f"Rp {int(row['price']):,}".replace(",", ".")
+            row_cells = table.add_row().cells
+            try: harga = f"{int(row['price']):,}"
             except: harga = "0"
             
-            # Masukkan data per baris
-            rows.append({
-                'asal': str(row.get('kota_asal', '-')),
-                'tujuan': str(row['kota_tujuan']),
-                'unit': str(row['unit_type']),
-                'rank': str(row['Ranking']),
-                'vendor': str(row['vendor_name']),
-                'harga': harga,
-                'lead_time': str(row['lead_time']),
-                'berat': str(row.get('weight_capacity','-')),
-                'kubik': str(row.get('cubic_capacity','-')),
-                'top': str(row['top'])
-            })
-        
-        # Masukkan ke Group Origin
-        table_groups.append({
-            'origin_name': org,
-            'rows': rows
-        })
+            # Masukkan teks
+            row_cells[0].text = str(row.get('kota_asal', '-'))
+            row_cells[1].text = str(row['kota_tujuan'])
+            row_cells[2].text = str(row['unit_type'])
+            row_cells[3].text = str(row['Ranking'])
+            row_cells[4].text = str(row['vendor_name'])
+            row_cells[5].text = harga
+            row_cells[6].text = str(row['lead_time'])
+            row_cells[7].text = str(row['top'])
+            
+            # Kecilkan font isi tabel (misal ukuran 8)
+            for cell in row_cells:
+                for paragraph in cell.paragraphs:
+                    if paragraph.runs:
+                        paragraph.runs[0].font.size = Pt(8)
+                    else:
+                        # Fallback jika sel kosong/baru
+                        run = paragraph.add_run()
+                        run.font.size = Pt(8)
 
-    # --- BAGIAN 2: TABEL DATA VENDOR (KONTAK) ---
-    # Kita hanya ambil vendor yang unik (hilangkan duplikat jika vendor menang banyak rute)
+        sd.add_paragraph("") # Spasi antar tabel origin
+
+    # --- 2. MEMBUAT TABEL VENDOR (DI DALAM PYTHON) ---
+    sd_ven = doc.new_subdoc()
+    
     df_unique_vendors = df_data.drop_duplicates(subset=['vendor_email']).sort_values('vendor_name')
     
-    vendor_list = []
+    v_headers = ['Vendor', 'Alamat', 'Email', 'PIC', 'Telepon']
+    v_table = sd_ven.add_table(rows=1, cols=len(v_headers))
+    v_table.style = 'Table Grid'
+    
+    # Header Vendor
+    vh_cells = v_table.rows[0].cells
+    for i, h in enumerate(v_headers):
+        vh_cells[i].text = h
+        run = vh_cells[i].paragraphs[0].runs[0]
+        run.font.bold = True
+        run.font.size = Pt(9)
+        
+    # Isi Vendor
     for _, row in df_unique_vendors.iterrows():
-        vendor_list.append({
-            'nama': str(row['vendor_name']),
-            'alamat': str(row.get('address', '-')),
-            'email': str(row['vendor_email']),
-            'cp': str(row.get('contact_person', '-')),
-            'phone': str(row.get('phone', '-'))
-        })
+        v_cells = v_table.add_row().cells
+        v_cells[0].text = str(row['vendor_name'])
+        v_cells[1].text = str(row.get('address', '-'))
+        v_cells[2].text = str(row['vendor_email'])
+        v_cells[3].text = str(row.get('contact_person', '-'))
+        v_cells[4].text = str(row.get('phone', '-'))
+        
+        for cell in v_cells:
+            for paragraph in cell.paragraphs:
+                if paragraph.runs: paragraph.runs[0].font.size = Pt(8)
 
-    # --- BAGIAN 3: GABUNGKAN KE CONTEXT WORD ---
+    # --- 3. MASUKKAN KE CONTEXT ---
+    # Perhatikan: Kita kirim objek 'sd' dan 'sd_ven' ke Word
     context = {
         'no_surat': nomor_surat,
         'validity': validity,
         'load_type': load_type,
-        'tanggal_sk': datetime.now().strftime("%d %B %Y"),
-        'table_groups': table_groups,  # Data untuk Tabel Harga
-        'vendor_list': vendor_list     # Data untuk Tabel Vendor di bawah
+        'tabel_harga': sd,      # <--- Ini akan mengganti {{ tabel_harga }} di Word
+        'tabel_vendor': sd_ven  # <--- Ini akan mengganti {{ tabel_vendor }} di Word
     }
     
-    # Render & Simpan
     doc.render(context)
     output_filename = f"SK_Result_{int(time.time())}.docx"
     doc.save(output_filename)
@@ -1244,6 +1280,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
