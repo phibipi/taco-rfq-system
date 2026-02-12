@@ -5,6 +5,9 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import time
 import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # --- KONFIGURASI ---
 SPREADSHEET_ID = "1j9GCq8Wwm-MM8hOamsH26qlmjNwuDBuEMnbw6ORzTQk"
@@ -273,7 +276,64 @@ def add_scroll_to_top():
             <span class="scroll-to-top-icon">↑</span>
         </a>
     """, unsafe_allow_html=True)
+    
+def send_invitation_email(to_email, vendor_name, load_type, validity, origins, password):
+    # Cek apakah config email ada
+    if "email_config" not in st.secrets:
+        st.warning("Konfigurasi email belum disetting di Secrets. Email tidak terkirim.")
+        return False
 
+    sender_email = st.secrets["email_config"]["sender_email"]
+    sender_password = st.secrets["email_config"]["sender_password"]
+    
+    subject = f"Undangan Tender Transport {load_type} - {validity} (TACO Group)"
+    
+    # Gabungkan list origin jadi string koma
+    origins_str = ", ".join(origins)
+    
+    # Desain Isi Email (HTML)
+    body = f"""
+    <html>
+    <body>
+        <h3>Halo {vendor_name},</h3>
+        <p>Anda telah diundang untuk berpartisipasi dalam Tender Transportasi <b>TACO Group</b>.</p>
+        
+        <p><b>Detail Tender:</b></p>
+        <ul>
+            <li><b>Periode:</b> {validity}</li>
+            <li><b>Tipe Armada:</b> {load_type}</li>
+            <li><b>Area/Origin:</b> {origins_str}</li>
+        </ul>
+        
+        <p>Silakan login ke sistem kami untuk memasukkan penawaran harga:</p>
+        <p>
+            <b>Link App:</b> <a href="https://taco-rfq.streamlit.app">https://taco-rfq.streamlit.app</a><br>
+            <b>Email Login:</b> {to_email}<br>
+            <b>Password:</b> {password}
+        </p>
+        
+        <p>Terima Kasih,<br>Procurement Team TACO</p>
+    </body>
+    </html>
+    """
+
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = sender_email
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'html'))
+
+        # Koneksi ke Server Gmail
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+        server.login(sender_email, sender_password)
+        server.send_message(msg)
+        server.quit()
+        return True
+    except Exception as e:
+        st.error(f"Gagal kirim email: {e}")
+        return False
+        
 # --- MAIN APP ---
 st.set_page_config(page_title="TACO Procurement", layout="wide", page_icon="🚛")
 
@@ -494,19 +554,21 @@ def admin_dashboard():
                     with c_val2:
                         val_year = st.text_input("Tahun", value=str(datetime.now().year))
                     
+                    # ... (Bagian atas Tab 5 tetap sama) ...
+                    
                     if st.form_submit_button("Grant Access", type="primary"):
                         val = f"{val_period} {val_year}"
-                        if selected_origins and val:
-                            target_groups = df_g[
-                                (df_g['load_type'] == sel_lt) & 
-                                (df_g['origin'].isin(selected_origins))
-                            ]
+                        
+                        if selected_origins and val_year:
+                            # ... (Logika filter target_groups tetap sama) ...
+                            target_groups = df_g[(df_g['load_type'] == sel_lt) & (df_g['origin'].isin(selected_origins))]
                             
                             if not target_groups.empty:
                                 target_gids = target_groups['group_id'].unique().tolist()
                                 sh = connect_to_gsheet()
                                 if sh:
                                     ws = sh.worksheet("Access_Rights")
+                                    # ... (Logika existing_keys tetap sama) ...
                                     existing_data = ws.get_all_values()
                                     existing_keys = set()
                                     if len(existing_data) > 1:
@@ -526,18 +588,35 @@ def admin_dashboard():
                                             skipped_count += 1
                                     
                                     if new_rows_to_add:
+                                        # 1. Simpan ke Google Sheet
                                         ws.append_rows(new_rows_to_add)
                                         get_data.clear()
-                                        msg = f"Sukses! {len(new_rows_to_add)} akses baru."
-                                        if skipped_count > 0: msg += f" ({skipped_count} skip)."
-                                        st.success(msg)
-                                        time.sleep(1); st.rerun()
+                                        
+                                        # 2. KIRIM EMAIL NOTIFIKASI
+                                        # Ambil password user dari df_u
+                                        try:
+                                            user_row = df_u[df_u['email'] == ven].iloc[0]
+                                            ven_name = user_row['vendor_name']
+                                            ven_pass = user_row['password']
+                                            
+                                            with st.spinner("Mengirim email undangan ke vendor..."):
+                                                email_status = send_invitation_email(ven, ven_name, sel_lt, val, selected_origins, ven_pass)
+                                                
+                                            if email_status:
+                                                st.success(f"✅ Sukses! Akses diberikan & Email undangan terkirim ke {ven}.")
+                                            else:
+                                                st.warning("⚠️ Akses tersimpan, tapi Email GAGAL terkirim.")
+                                                
+                                        except Exception as e:
+                                            st.warning(f"Akses tersimpan, tapi gagal mengambil data user untuk email: {e}")
+
+                                        time.sleep(2); st.rerun()
                                     else:
                                         st.warning(f"Semua data sudah ada ({skipped_count} skip). Tidak ada update.")
                             else:
                                 st.warning("Data Group error.")
                         else:
-                            st.warning("Pilih Origin dan isi Validity.")
+                            st.warning("Pilih Origin dan isi Tahun.")
                             
         st.dataframe(get_data("Access_Rights"), use_container_width=True)
 
@@ -916,6 +995,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
