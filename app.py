@@ -345,6 +345,80 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
         st.error(f"Gagal kirim email: {e}")
         return False
         
+# --- FUNGSI GENERATE WORD (FINAL: HARGA + VENDOR CONTACT) ---
+def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
+    # Load Template
+    doc = DocxTemplate(template_file)
+    
+    # --- BAGIAN 1: TABEL HARGA (GROUP BY ORIGIN) ---
+    table_groups = []
+    
+    # Ambil list unique origin
+    unique_origins = sorted(df_data['origin'].unique())
+    
+    for org in unique_origins:
+        # Filter data per origin
+        df_sub = df_data[df_data['origin'] == org].copy()
+        
+        # Sortir: Kota Asal -> Tujuan -> Unit -> Ranking
+        df_sub = df_sub.sort_values(by=['kota_asal', 'kota_tujuan', 'unit_type', 'Ranking'])
+        
+        rows = []
+        for _, row in df_sub.iterrows():
+            # Format Harga jadi Rupiah
+            try: harga = f"Rp {int(row['price']):,}".replace(",", ".")
+            except: harga = "0"
+            
+            # Masukkan data per baris
+            rows.append({
+                'asal': str(row.get('kota_asal', '-')),
+                'tujuan': str(row['kota_tujuan']),
+                'unit': str(row['unit_type']),
+                'rank': str(row['Ranking']),
+                'vendor': str(row['vendor_name']),
+                'harga': harga,
+                'lead_time': str(row['lead_time']),
+                'berat': str(row.get('weight_capacity','-')),
+                'kubik': str(row.get('cubic_capacity','-')),
+                'top': str(row['top'])
+            })
+        
+        # Masukkan ke Group Origin
+        table_groups.append({
+            'origin_name': org,
+            'rows': rows
+        })
+
+    # --- BAGIAN 2: TABEL DATA VENDOR (KONTAK) ---
+    # Kita hanya ambil vendor yang unik (hilangkan duplikat jika vendor menang banyak rute)
+    df_unique_vendors = df_data.drop_duplicates(subset=['vendor_email']).sort_values('vendor_name')
+    
+    vendor_list = []
+    for _, row in df_unique_vendors.iterrows():
+        vendor_list.append({
+            'nama': str(row['vendor_name']),
+            'alamat': str(row.get('address', '-')),
+            'email': str(row['vendor_email']),
+            'cp': str(row.get('contact_person', '-')),
+            'phone': str(row.get('phone', '-'))
+        })
+
+    # --- BAGIAN 3: GABUNGKAN KE CONTEXT WORD ---
+    context = {
+        'no_surat': nomor_surat,
+        'validity': validity,
+        'load_type': load_type,
+        'tanggal_sk': datetime.now().strftime("%d %B %Y"),
+        'table_groups': table_groups,  # Data untuk Tabel Harga
+        'vendor_list': vendor_list     # Data untuk Tabel Vendor di bawah
+    }
+    
+    # Render & Simpan
+    doc.render(context)
+    output_filename = f"SK_Result_{int(time.time())}.docx"
+    doc.save(output_filename)
+    return output_filename
+
 # --- MAIN APP ---
 st.set_page_config(page_title="TACO Procurement", layout="wide", page_icon="🚛")
 
@@ -428,15 +502,26 @@ def admin_dashboard():
         m3 = pd.merge(m2, df_u[['email', 'vendor_name']], left_on='vendor_email', right_on='email', how='left')
         m3['vendor_name'] = m3['vendor_name'].fillna(m3['vendor_email'])
         
-        # Merge Profil
         if not df_prof.empty:
             df_prof_clean = df_prof.sort_values('updated_at', ascending=False).drop_duplicates('email')
-            m4 = pd.merge(m3, df_prof_clean[['email', 'top', 'ppn', 'pph']], left_on='vendor_email', right_on='email', how='left')
-            m4['top'] = m4['top'].fillna("-")
-            m4['ppn_status'] = m4['ppn'].fillna("-")
-            m4['pph_status'] = m4['pph'].fillna("-")
+            
+            # Kita ambil kolom alamat & kontak juga
+            cols_to_merge = ['email', 'top', 'ppn', 'pph', 'address', 'contact_person', 'phone']
+            
+            m4 = pd.merge(m3, df_prof_clean[cols_to_merge], left_on='vendor_email', right_on='email', how='left')
+            
+            # Fill NA dengan "-"
+            fill_cols = ['top', 'ppn', 'pph', 'address', 'contact_person', 'phone']
+            for c in fill_cols:
+                if c in m4.columns: m4[c] = m4[c].fillna("-")
+                
+            m4['ppn_status'] = m4['ppn']
+            m4['pph_status'] = m4['pph']
         else:
-            m4 = m3; m4['top']="-"; m4['ppn_status']="-"; m4['pph_status']="-"
+            m4 = m3
+            for c in ['top', 'ppn_status', 'pph_status', 'address', 'contact_person', 'phone']:
+                m4[c] = "-"
+        
 
         m4['price'] = pd.to_numeric(m4['price'], errors='coerce').fillna(0)
         df_master = m4
@@ -1159,6 +1244,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
