@@ -391,7 +391,7 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
         st.error(f"Gagal kirim email: {e}")
         return False
         
-# --- FUNGSI GENERATE WORD (FINAL: CENTER TABLE & ADJUST WIDTH) ---
+# --- FUNGSI GENERATE WORD (OPTIMIZED: SUPER CEPAT & RAPI) ---
 def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     doc = DocxTemplate(template_file)
     
@@ -399,9 +399,13 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     unique_origins = sorted(df_data['origin'].unique())
     origin_list_str = ", ".join(unique_origins) 
 
-    # --- HELPER 1: SET LEBAR KOLOM (PENTING) ---
+    # --- HELPER 1: SET LEBAR KOLOM (DIPANGGIL SEKALI SAJA NANTI) ---
     def set_col_widths(table, widths):
         """Mengatur lebar kolom tabel dalam satuan Centimeter (Cm)"""
+        # Matikan autofit agar ukuran kolom patuh
+        table.autofit = False 
+        table.allow_autofit = False
+        
         for row in table.rows:
             for idx, width in enumerate(widths):
                 if idx < len(row.cells):
@@ -450,19 +454,10 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
         winning_vendors_data.append(df_sub)
         
         # Buat Tabel (8 Kolom)
-        headers = ['Asal', 'Tujuan', 'Unit', 'Rank', 'Vendor', 'Biaya/unit', 'LeadTime', 'Term of Payment']
+        headers = ['Asal', 'Tujuan', 'Unit', 'Rank', 'Vendor', 'Harga', 'LeadTime', 'TOP']
         table = sd.add_table(rows=1, cols=len(headers))
         table.style = 'Table Grid'
-        
-        # 1. POSISI TABEL CENTER
         table.alignment = WD_TABLE_ALIGNMENT.CENTER 
-        
-        # 2. ATUR LEBAR KOLOM (TOTAL ~17-18 CM UNTUK A4)
-        # Asal(2.0), Tujuan(2.8), Unit(2.2), Rank(0.8), Vendor(3.5), Harga(2.5), L.Time(1.2), TOP(2.0)
-        col_widths = [Cm(2.0), Cm(2.8), Cm(2.2), Cm(0.8), Cm(3.5), Cm(2.5), Cm(1.2), Cm(2.0)]
-        table.autofit = False 
-        table.allow_autofit = False
-        set_col_widths(table, col_widths)
         
         # Header
         hdr_row = table.rows[0]; set_repeat_table_header(hdr_row)
@@ -473,7 +468,7 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
             hdr_cells[i].vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER 
             format_paragraph(hdr_cells[i].paragraphs[0], size=8, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
             
-        # Data
+        # Data Loop
         for _, row in df_sub.iterrows():
             row_cells = table.add_row().cells
             try: harga = f"Rp {int(row['price']):,}".replace(",", ".")
@@ -490,23 +485,23 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
                 str(row['top'])
             ]
             
-            # Terapkan Data & Lebar Ulang (Untuk memastikan baris baru ikut format)
-            set_col_widths(table, col_widths) 
-            
             for idx, val in enumerate(data_map):
                 cell = row_cells[idx]; cell.text = val
                 cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
                 
-                # Alignment Text
-                # Left: Asal, Tujuan, Unit, Lead Time
+                # Alignment
                 if idx in [0, 1, 2, 6]: align = WD_ALIGN_PARAGRAPH.LEFT
-                # Right: Harga
                 elif idx == 5: align = WD_ALIGN_PARAGRAPH.RIGHT
-                # Center: Rank, Vendor, TOP
                 else: align = WD_ALIGN_PARAGRAPH.CENTER
                 
                 format_paragraph(cell.paragraphs[0], size=7, bold=False, align=align)
         
+        # --- OPTIMASI PENTING: SET LEBAR SETELAH LOOP SELESAI ---
+        # Asal(2.0), Tujuan(2.8), Unit(2.2), Rank(0.8), Vendor(3.5), Harga(2.5), L.Time(1.2), TOP(2.0)
+        col_widths = [Cm(2.0), Cm(2.8), Cm(2.2), Cm(0.8), Cm(3.5), Cm(2.5), Cm(1.2), Cm(2.0)]
+        set_col_widths(table, col_widths) 
+        # --------------------------------------------------------
+
         sd.add_paragraph("") 
 
     # --- BAGIAN B: TABEL VENDOR ---
@@ -520,16 +515,7 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
         v_headers = ['Vendor', 'Alamat', 'Email', 'PIC', 'Telepon']
         v_table = sd_ven.add_table(rows=1, cols=len(v_headers))
         v_table.style = 'Table Grid'
-        
-        # 1. POSISI TABEL CENTER
         v_table.alignment = WD_TABLE_ALIGNMENT.CENTER
-        
-        # 2. ATUR LEBAR KOLOM
-        # Vendor(4.0), Alamat(5.0), Email(3.5), PIC(2.5), Telepon(2.5) -> Total 17.5 Cm
-        v_widths = [Cm(4.0), Cm(5.0), Cm(3.5), Cm(2.5), Cm(2.5)]
-        v_table.autofit = False
-        v_table.allow_autofit = False
-        set_col_widths(v_table, v_widths)
         
         v_hdr = v_table.rows[0]; set_repeat_table_header(v_hdr)
         vh_cells = v_hdr.cells
@@ -541,8 +527,6 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
             
         for _, row in df_uniq.iterrows():
             v_cells = v_table.add_row().cells
-            set_col_widths(v_table, v_widths) # Pastikan lebar terjaga
-            
             v_data = [
                 str(row['vendor_name']), 
                 str(row.get('address', '-')), 
@@ -554,6 +538,12 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
                 cell = v_cells[idx]; cell.text = val
                 cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
                 format_paragraph(cell.paragraphs[0], size=7, bold=False, align=WD_ALIGN_PARAGRAPH.LEFT)
+
+        # --- OPTIMASI PENTING: SET LEBAR SETELAH LOOP SELESAI ---
+        # Vendor(4.0), Alamat(5.0), Email(3.5), PIC(2.5), Telepon(2.5)
+        v_widths = [Cm(4.0), Cm(5.0), Cm(3.5), Cm(2.5), Cm(2.5)]
+        set_col_widths(v_table, v_widths)
+        # --------------------------------------------------------
 
     # --- 4. RENDER CONTEXT ---
     bulan_indo = {1:'Januari', 2:'Februari', 3:'Maret', 4:'April', 5:'Mei', 6:'Juni', 7:'Juli', 8:'Agustus', 9:'September', 10:'Oktober', 11:'November', 12:'Desember'}
@@ -571,10 +561,10 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     }
     
     doc.render(context)
-    output_filename = f"SK_Result_{int(time.time())}.docx"
+    output_filename = f"SK_{sk_load}_{sk_val}.docx"
     doc.save(output_filename)
     return output_filename
-
+    
 def main():
     st.markdown('<div id="top-page"></div>', unsafe_allow_html=True)
     init_style()
@@ -1396,6 +1386,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
