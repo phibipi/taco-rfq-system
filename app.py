@@ -295,8 +295,8 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
     body = f"""
     <html>
     <body>
-        <h3>Halo {vendor_name},</h3>
-        <p>Anda telah diundang untuk berpartisipasi dalam Tender Transportasi <b>TACO Group</b>.</p>
+        <h3>Dear {vendor_name},</h3>
+        <p>Anda telah diundang untuk berpartisipasi dalam Tender Transport <b>TACO Group</b>.</p>
         
         <p><b>Detail Tender:</b></p>
         <ul>
@@ -995,6 +995,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
