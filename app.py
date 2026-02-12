@@ -8,6 +8,7 @@ import os
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from docxtpl import DocxTemplate
 
 # --- SHEET CONNECTION ---
 SPREADSHEET_ID = "1j9GCq8Wwm-MM8hOamsH26qlmjNwuDBuEMnbw6ORzTQk"
@@ -405,7 +406,7 @@ def main():
 
 # ================= ADMIN =================
 def admin_dashboard():
-    tabs = st.tabs(["📍Master Groups", "🛣️Master Routes", "🚛Master Units", "👥Users", "🔑Access Rights", "✅Monitoring & Approval"])
+    tabs = st.tabs(["📍Master Groups", "🛣️Master Routes", "🚛Master Units", "👥Users", "🔑Access Rights", "✅Monitoring & Approval", "📊Summary"])
     
     # --- TAB 1: GROUPS ---
     with tabs[0]:
@@ -726,6 +727,133 @@ def admin_dashboard():
                         if c1.button("🔒 LOCK DATA", key=f"lk_{key}", type="primary"):
                             update_status_locked(ids, "Locked")
                             st.success("Locked!"); time.sleep(0.5); st.rerun()
+    
+    # --- TAB 7: SUMMARY ---   
+    with tabs[6]:
+        st.subheader("📊 Summary & Ranking Vendor")
+        
+        # 1. LOAD SEMUA DATA
+        with st.spinner("Menggabungkan Data Big Data..."):
+            df_p = get_data("Price_Data")
+            df_r = get_data("Master_Routes")
+            df_g = get_data("Master_Groups")
+            df_u = get_data("Users")
+            df_prof = get_data("Vendor_Profile") # Ambil Data Profil untuk TOP
+
+            if df_p.empty:
+                st.info("Belum ada data harga.")
+            else:
+                # 2. DATA CLEANING & MERGING (THE BIG JOIN)
+                # Bersihkan ID agar match
+                df_p['route_id'] = df_p['route_id'].astype(str).str.strip()
+                df_r['route_id'] = df_r['route_id'].astype(str).str.strip()
+                df_g['group_id'] = df_g['group_id'].astype(str).str.strip()
+                
+                # Join 1: Harga + Rute + Group
+                m1 = pd.merge(df_p, df_r, on='route_id', how='left')
+                m2 = pd.merge(m1, df_g, on='group_id', how='left')
+                
+                # Join 2: + Nama Vendor (User)
+                m3 = pd.merge(m2, df_u[['email', 'vendor_name']], left_on='vendor_email', right_on='email', how='left')
+                m3['vendor_name'] = m3['vendor_name'].fillna(m3['vendor_email'])
+                
+                # Join 3: + Payment Term (Vendor Profile)
+                # Ambil profil terbaru per email
+                if not df_prof.empty:
+                    # Sort tanggal biar ambil yang paling update, lalu drop duplicate email
+                    df_prof_clean = df_prof.sort_values('updated_at', ascending=False).drop_duplicates('email')
+                    m4 = pd.merge(m3, df_prof_clean[['email', 'top']], left_on='vendor_email', right_on='email', how='left')
+                    m4['top'] = m4['top'].fillna("-")
+                else:
+                    m4 = m3
+                    m4['top'] = "-"
+
+                # Convert Harga ke Angka
+                m4['price'] = pd.to_numeric(m4['price'], errors='coerce').fillna(0)
+                
+                # 3. FILTER UI
+                # Ambil list Validity & Load Type yang ada di data
+                avail_val = sorted(m4['validity'].unique().tolist())
+                avail_load = sorted(m4['load_type'].unique().tolist())
+                
+                c_filter1, c_filter2 = st.columns(2)
+                sel_val = c_filter1.selectbox("Pilih Periode (Validity)", avail_val)
+                sel_load = c_filter2.selectbox("Pilih Tipe Muatan", avail_load)
+                
+                # Filter Data Utama
+                df_filtered = m4[
+                    (m4['validity'] == sel_val) & 
+                    (m4['load_type'] == sel_load)
+                ]
+                
+                if df_filtered.empty:
+                    st.warning("Tidak ada data untuk kombinasi filter ini.")
+                else:
+                    st.markdown("---")
+                    
+                    # 4. GROUPING LOGIC (Origin -> Route Group)
+                    unique_origins = sorted(df_filtered['origin'].dropna().unique().tolist())
+                    
+                    for org in unique_origins:
+                        st.markdown(f"### 📍 Origin: {org}")
+                        
+                        # Filter per Origin
+                        df_org = df_filtered[df_filtered['origin'] == org]
+                        unique_groups = sorted(df_org['route_group'].dropna().unique().tolist())
+                        
+                        for grp in unique_groups:
+                            # Filter per Route Group
+                            df_grp = df_org[df_org['route_group'] == grp]
+                            
+                            # Buat Expander per Route Group
+                            with st.expander(f"📦 Group: {grp} ({len(df_grp)} Data)"):
+                                
+                                # 5. RANKING LOGIC
+                                # Kita urutkan berdasarkan: Kota Tujuan -> Unit Type -> Harga (Termurah)
+                                df_grp = df_grp.sort_values(by=['kota_tujuan', 'unit_type', 'price'], ascending=[True, True, True])
+                                
+                                # Buat Kolom Ranking Manual (1, 2, 3 per grup tujuan+unit)
+                                df_grp['Ranking'] = df_grp.groupby(['kota_tujuan', 'unit_type']).cumcount() + 1
+                                
+                                # 6. FORMATTING TABEL FINAL
+                                # Pilih kolom yang mau ditampilkan
+                                display_df = df_grp[[
+                                    'kota_tujuan', 'unit_type', 'Ranking', 'vendor_name', 
+                                    'price', 'lead_time', 'weight_capacity', 'cubic_capacity', 'top'
+                                ]].copy()
+                                
+                                # Rename Kolom Bahasa Indonesia
+                                display_df.columns = [
+                                    "Kota Tujuan", "Jenis Unit", "Rank", "Nama Vendor", 
+                                    "Harga Trip", "Lead Time (Hari)", "Kapasitas (Kg)", "Kubikasi (CBM)", "Payment Term"
+                                ]
+                                
+                                # Format Rupiah
+                                display_df['Harga Trip'] = display_df['Harga Trip'].apply(lambda x: f"Rp {int(x):,}".replace(",", "."))
+                                
+                                # Tampilkan Tabel
+                                st.dataframe(
+                                    display_df, 
+                                    use_container_width=True, 
+                                    hide_index=True,
+                                    column_config={
+                                        "Rank": st.column_config.NumberColumn(format="#%d", width="small"),
+                                        "Nama Vendor": st.column_config.TextColumn(width="medium"),
+                                        "Harga Trip": st.column_config.TextColumn(width="medium"),
+                                    }
+                                )
+                                
+                                # Tombol Download Excel Kecil per Group
+                                csv = display_df.to_csv(index=False).encode('utf-8')
+                                st.download_button(
+                                    label=f"⬇️ Download CSV ({grp})",
+                                    data=csv,
+                                    file_name=f"Summary_{grp}_{sel_val}.csv",
+                                    mime='text/csv',
+                                    key=f"dl_{grp}_{org}"
+                                )
+                        
+                        st.divider() # Garis pemisah antar Origin     
 
 # ================= VENDOR =================
 def vendor_dashboard(email):
@@ -1005,6 +1133,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
