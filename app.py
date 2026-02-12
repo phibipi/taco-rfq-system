@@ -740,121 +740,117 @@ def admin_dashboard():
             df_u = get_data("Users")
             df_prof = get_data("Vendor_Profile") # Ambil Data Profil untuk TOP
 
-            if df_p.empty:
-                st.info("Belum ada data harga.")
-            else:
-                # 2. DATA CLEANING & MERGING (THE BIG JOIN)
-                # Bersihkan ID agar match
+            if not df_p.empty:
+                # Cleaning & Merge
                 df_p['route_id'] = df_p['route_id'].astype(str).str.strip()
                 df_r['route_id'] = df_r['route_id'].astype(str).str.strip()
                 df_g['group_id'] = df_g['group_id'].astype(str).str.strip()
                 
-                # Join 1: Harga + Rute + Group
                 m1 = pd.merge(df_p, df_r, on='route_id', how='left')
                 m2 = pd.merge(m1, df_g, on='group_id', how='left')
-                
-                # Join 2: + Nama Vendor (User)
                 m3 = pd.merge(m2, df_u[['email', 'vendor_name']], left_on='vendor_email', right_on='email', how='left')
                 m3['vendor_name'] = m3['vendor_name'].fillna(m3['vendor_email'])
                 
-                # Join 3: + Payment Term (Vendor Profile)
-                # Ambil profil terbaru per email
+                # Merge Profil
                 if not df_prof.empty:
-                    # Sort tanggal biar ambil yang paling update, lalu drop duplicate email
                     df_prof_clean = df_prof.sort_values('updated_at', ascending=False).drop_duplicates('email')
-                    m4 = pd.merge(m3, df_prof_clean[['email', 'top']], left_on='vendor_email', right_on='email', how='left')
+                    m4 = pd.merge(m3, df_prof_clean[['email', 'top', 'ppn', 'pph']], left_on='vendor_email', right_on='email', how='left')
                     m4['top'] = m4['top'].fillna("-")
+                    m4['ppn_status'] = m4['ppn'].fillna("-")
+                    m4['pph_status'] = m4['pph'].fillna("-")
                 else:
-                    m4 = m3
-                    m4['top'] = "-"
+                    m4 = m3; m4['top']="-"; m4['ppn_status']="-"; m4['pph_status']="-"
 
-                # Convert Harga ke Angka
                 m4['price'] = pd.to_numeric(m4['price'], errors='coerce').fillna(0)
                 
-                # 3. FILTER UI
-                # Ambil list Validity & Load Type yang ada di data
+                # --- UI FILTER TAHAP 1: PERIODE & MUATAN ---
+                c_filter1, c_filter2 = st.columns(2)
                 avail_val = sorted(m4['validity'].unique().tolist())
                 avail_load = sorted(m4['load_type'].unique().tolist())
                 
-                c_filter1, c_filter2 = st.columns(2)
                 sel_val = c_filter1.selectbox("Pilih Periode (Validity)", avail_val)
                 sel_load = c_filter2.selectbox("Pilih Tipe Muatan", avail_load)
                 
-                # Filter Data Utama
-                df_filtered = m4[
-                    (m4['validity'] == sel_val) & 
-                    (m4['load_type'] == sel_load)
-                ]
+                # Filter Awal
+                df_step1 = m4[(m4['validity'] == sel_val) & (m4['load_type'] == sel_load)].copy()
                 
-                if df_filtered.empty:
-                    st.warning("Tidak ada data untuk kombinasi filter ini.")
-                else:
-                    st.markdown("---")
+                if not df_step1.empty:
+                    # --- UI FILTER TAHAP 2: PILIH ORIGIN (BARU) ---
+                    available_origins = sorted(df_step1['origin'].unique().tolist())
                     
-                    # 4. GROUPING LOGIC (Origin -> Route Group)
-                    unique_origins = sorted(df_filtered['origin'].dropna().unique().tolist())
+                    st.markdown("##### Pilih Area/Origin:")
+                    # Default: Terpilih Semua
+                    sel_origins = st.multiselect(
+                        "Pilih Origin yang akan dicetak dalam SK:",
+                        available_origins,
+                        default=available_origins
+                    )
                     
-                    for org in unique_origins:
-                        st.markdown(f"### 📍 Origin: {org}")
+                    # Filter Final berdasarkan Origin yang dipilih
+                    df_filtered = df_step1[df_step1['origin'].isin(sel_origins)].copy()
+                    
+                    if not df_filtered.empty:
+                        # Ranking Logic
+                        df_filtered = df_filtered.sort_values(by=['route_group', 'kota_tujuan', 'unit_type', 'price'])
+                        df_filtered['Ranking'] = df_filtered.groupby(['route_group', 'kota_tujuan', 'unit_type']).cumcount() + 1
                         
-                        # Filter per Origin
-                        df_org = df_filtered[df_filtered['origin'] == org]
-                        unique_groups = sorted(df_org['route_group'].dropna().unique().tolist())
+                        st.divider()
                         
-                        for grp in unique_groups:
-                            # Filter per Route Group
-                            df_grp = df_org[df_org['route_group'] == grp]
+                        # --- BAGIAN CETAK SURAT KEPUTUSAN (WORD) ---
+                        st.markdown("### 🖨️ Cetak Surat Keputusan (Word)")
+                        
+                        col_kiri, col_kanan = st.columns([1, 1])
+                        
+                        with col_kiri:
+                            st.info("1. Upload Template Word (.docx)")
+                            uploaded_template = st.file_uploader("Upload Template SK", type="docx", key="upl_sk")
+                        
+                        with col_kanan:
+                            st.info("2. Isi Nomor Surat & Generate")
+                            no_surat = st.text_input("Nomor Surat Keputusan:", value="188/PROC-TCO/SK/VIII/2025")
                             
-                            # Buat Expander per Route Group
-                            with st.expander(f"📦 Group: {grp} ({len(df_grp)} Data)"):
-                                
-                                # 5. RANKING LOGIC
-                                # Kita urutkan berdasarkan: Kota Tujuan -> Unit Type -> Harga (Termurah)
-                                df_grp = df_grp.sort_values(by=['kota_tujuan', 'unit_type', 'price'], ascending=[True, True, True])
-                                
-                                # Buat Kolom Ranking Manual (1, 2, 3 per grup tujuan+unit)
-                                df_grp['Ranking'] = df_grp.groupby(['kota_tujuan', 'unit_type']).cumcount() + 1
-                                
-                                # 6. FORMATTING TABEL FINAL
-                                # Pilih kolom yang mau ditampilkan
-                                display_df = df_grp[[
-                                    'kota_tujuan', 'unit_type', 'Ranking', 'vendor_name', 
-                                    'price', 'lead_time', 'weight_capacity', 'cubic_capacity', 'top'
-                                ]].copy()
-                                
-                                # Rename Kolom Bahasa Indonesia
-                                display_df.columns = [
-                                    "Kota Tujuan", "Jenis Unit", "Rank", "Nama Vendor", 
-                                    "Harga Trip", "Lead Time (Hari)", "Kapasitas (Kg)", "Kubikasi (CBM)", "Payment Term"
-                                ]
-                                
-                                # Format Rupiah
-                                display_df['Harga Trip'] = display_df['Harga Trip'].apply(lambda x: f"Rp {int(x):,}".replace(",", "."))
-                                
-                                # Tampilkan Tabel
-                                st.dataframe(
-                                    display_df, 
-                                    use_container_width=True, 
-                                    hide_index=True,
-                                    column_config={
-                                        "Rank": st.column_config.NumberColumn(format="#%d", width="small"),
-                                        "Nama Vendor": st.column_config.TextColumn(width="medium"),
-                                        "Harga Trip": st.column_config.TextColumn(width="medium"),
-                                    }
-                                )
-                                
-                                # Tombol Download Excel Kecil per Group
-                                csv = display_df.to_csv(index=False).encode('utf-8')
-                                st.download_button(
-                                    label=f"⬇️ Download CSV ({grp})",
-                                    data=csv,
-                                    file_name=f"Summary_{grp}_{sel_val}.csv",
-                                    mime='text/csv',
-                                    key=f"dl_{grp}_{org}"
-                                )
-                        
-                        st.divider() # Garis pemisah antar Origin     
+                            template_to_use = None
+                            if uploaded_template is not None:
+                                template_to_use = uploaded_template
+                            elif os.path.exists("template_sk.docx"):
+                                template_to_use = "template_sk.docx"
+                            
+                            st.write("")
+                            # Tombol hanya aktif jika ada template dan nomor surat
+                            btn_disabled = (template_to_use is None) or (no_surat == "")
+                            
+                            if st.button("Generate SK (.docx)", type="primary", disabled=btn_disabled):
+                                with st.spinner("Sedang membuat dokumen..."):
+                                    # Panggil fungsi generate dengan DATA FINAL YANG SUDAH DIFILTER ORIGINNYA
+                                    file_path = create_docx_sk(template_to_use, no_surat, sel_val, sel_load, df_filtered)
+                                    
+                                    if file_path:
+                                        with open(file_path, "rb") as f:
+                                            docx_bytes = f.read()
+                                            
+                                        st.download_button(
+                                            label="⬇️ Download Hasil SK (Word)",
+                                            data=docx_bytes,
+                                            file_name=f"SK_{sel_load}_{sel_val}.docx",
+                                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                        )
+                                        os.remove(file_path)
+                                    else:
+                                        st.error("Template tidak valid.")
 
+                        # --- PREVIEW TABEL DI BAWAH ---
+                        st.divider()
+                        st.markdown(f"#### Preview Data ({len(df_filtered)} Baris):")
+                        st.caption("Data di bawah ini yang akan masuk ke tabel Word.")
+                        st.dataframe(
+                            df_filtered[['origin', 'kota_tujuan', 'unit_type', 'Ranking', 'vendor_name', 'price', 'top', 'ppn_status']],
+                            use_container_width=True
+                        )
+                    else:
+                        st.warning("⚠️ Silakan pilih minimal satu Origin.")
+                else:
+                    st.warning("Tidak ada data untuk filter Periode/Muatan tersebut.")
+                    
 # ================= VENDOR =================
 def vendor_dashboard(email):
     step = st.session_state['vendor_step']
@@ -1133,6 +1129,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
