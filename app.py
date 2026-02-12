@@ -277,8 +277,9 @@ def add_scroll_to_top():
         </a>
     """, unsafe_allow_html=True)
     
+# --- FUNGSI KIRIM EMAIL (UPDATED: WITH DUE DATE) ---
 def send_invitation_email(to_email, vendor_name, load_type, validity, origins, password):
-    # Cek apakah config email ada
+    # 1. Cek Config
     if "email_config" not in st.secrets:
         st.warning("Konfigurasi email belum disetting di Secrets. Email tidak terkirim.")
         return False
@@ -286,12 +287,21 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
     sender_email = st.secrets["email_config"]["sender_email"]
     sender_password = st.secrets["email_config"]["sender_password"]
     
-    subject = f"Undangan Tender Transport {load_type} - {validity} (TACO Group)"
+    # 2. Hitung Due Date (Hari ini + 14 Hari)
+    today = datetime.now()
+    due_date = today + timedelta(days=14)
     
-    # Gabungkan list origin jadi string koma
+    # 3. Format Tanggal ke Indonesia (dd MMMM yyyy)
+    months_id = {
+        1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni",
+        7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"
+    }
+    due_date_str = f"{due_date.day} {months_id[due_date.month]} {due_date.year}"
+
+    subject = f"Undangan Tender Transport {load_type} - {validity} (TACO Group)"
     origins_str = ", ".join(origins)
     
-    # Desain Isi Email (HTML)
+    # 4. Desain Isi Email (HTML) - Ditambahkan Due Date
     body = f"""
     <html>
     <body>
@@ -303,6 +313,7 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
             <li><b>Periode:</b> {validity}</li>
             <li><b>Tipe Armada:</b> {load_type}</li>
             <li><b>Area/Origin:</b> {origins_str}</li>
+            <li style="color: #d9534f;"><b>Batas Akhir Pengisian Penawaran Harga: {due_date_str}</b></li>
         </ul>
         
         <p>Silakan login ke sistem kami untuk memasukkan penawaran harga:</p>
@@ -324,7 +335,6 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'html'))
 
-        # Koneksi ke Server Gmail
         server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
         server.login(sender_email, sender_password)
         server.send_message(msg)
@@ -995,6 +1005,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
