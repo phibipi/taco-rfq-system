@@ -9,8 +9,13 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from docxtpl import DocxTemplate
-from docx.shared import Pt, Inches, Cm
+from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.ns import nsdecls, qn  
+from docx.oxml import parse_xml, OxmlElement 
+
+# --- MAIN APP ---
+st.set_page_config(page_title="TACO Procurement", layout="wide", page_icon="🚛")
 
 # --- SHEET CONNECTION ---
 SPREADSHEET_ID = "1j9GCq8Wwm-MM8hOamsH26qlmjNwuDBuEMnbw6ORzTQk"
@@ -347,107 +352,158 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
         st.error(f"Gagal kirim email: {e}")
         return False
         
-# --- FUNGSI GENERATE WORD (FINAL: HARGA + VENDOR CONTACT) ---
+# --- FUNGSI GENERATE WORD (TOP 3 & REPEAT HEADER) ---
 def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     doc = DocxTemplate(template_file)
     
-    # --- 1. MEMBUAT TABEL HARGA (DI DALAM PYTHON) ---
-    # Kita buat 'dokumen kecil' (subdoc) di memori
+    # --- HELPER 1: WARNA BACKGROUND CELL ---
+    def set_cell_background(cell, color_hex):
+        shading_elm = parse_xml(r'<w:shd {} w:fill="{}"/>'.format(nsdecls('w'), color_hex))
+        cell._tc.get_or_add_tcPr().append(shading_elm)
+
+    # --- HELPER 2: FORMAT PARAGRAF (FONT KECIL & RAPAT) ---
+    def format_paragraph(paragraph, size, bold=False, align=None):
+        paragraph_format = paragraph.paragraph_format
+        paragraph_format.space_after = Pt(0)
+        paragraph_format.space_before = Pt(0)
+        paragraph_format.line_spacing = 1
+        if align is not None: paragraph.alignment = align
+            
+        run = paragraph.runs[0] if paragraph.runs else paragraph.add_run()
+        run.font.size = Pt(size)
+        run.font.bold = bold
+        run.font.name = 'Arial'
+
+    # --- HELPER 3: REPEAT HEADER ROW (MAGIC XML) ---
+    def set_repeat_table_header(row):
+        """Membuat baris header berulang di tiap halaman"""
+        tr = row._tr
+        trPr = tr.get_or_add_trPr()
+        tblHeader = OxmlElement('w:tblHeader')
+        tblHeader.set(qn('w:val'), "true")
+        trPr.append(tblHeader)
+
+    # --- 1. MEMBUAT TABEL HARGA ---
     sd = doc.new_subdoc()
-    
     unique_origins = sorted(df_data['origin'].unique())
     
+    # List untuk menampung vendor yang MENANG (Top 3) saja
+    winning_vendors_data = [] 
+    
     for org in unique_origins:
-        # Tambah Judul Origin
+        # Judul Origin
         p = sd.add_paragraph(f"Origin: {org}")
-        p.runs[0].bold = True
-        p.runs[0].font.size = Pt(11)
+        p.paragraph_format.space_after = Pt(2)
+        run = p.runs[0]; run.bold = True; run.font.size = Pt(10)
         
-        # Filter Data
+        # Filter Data & Ranking
         df_sub = df_data[df_data['origin'] == org].copy()
-        df_sub = df_sub.sort_values(by=['kota_asal', 'kota_tujuan', 'unit_type', 'Ranking'])
+        df_sub = df_sub.sort_values(by=['kota_asal', 'kota_tujuan', 'unit_type', 'price'])
         
-        # Buat Tabel di Python
+        # Hitung Ranking Ulang (Grouping per Tujuan & Unit)
+        df_sub['Ranking'] = df_sub.groupby(['kota_tujuan', 'unit_type']).cumcount() + 1
+        
+        # --- FILTER HANYA TOP 3 ---
+        df_sub = df_sub[df_sub['Ranking'] <= 3].copy()
+        
+        # Simpan data pemenang untuk tabel vendor di bawah nanti
+        winning_vendors_data.append(df_sub)
+        
+        # Buat Tabel
         headers = ['Asal', 'Tujuan', 'Unit', 'Rank', 'Vendor', 'Harga', 'L.Time', 'TOP']
         table = sd.add_table(rows=1, cols=len(headers))
-        table.style = 'Table Grid' # Agar ada garisnya
-        table.autofit = False 
+        table.style = 'Table Grid'
+        table.autofit = True 
         
-        # Header
-        hdr_cells = table.rows[0].cells
+        # --- FORMAT HEADER ---
+        hdr_row = table.rows[0]
+        set_repeat_table_header(hdr_row) # <--- AKTIFKAN REPEAT HEADER
+        
+        hdr_cells = hdr_row.cells
         for i, h in enumerate(headers):
             hdr_cells[i].text = h
-            # Bold Header
-            run = hdr_cells[i].paragraphs[0].runs[0]
-            run.font.bold = True
-            run.font.size = Pt(9)
+            set_cell_background(hdr_cells[i], "ED7D31") # Orange
+            format_paragraph(hdr_cells[i].paragraphs[0], size=8, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
             
-        # Isi Data
+        # --- ISI DATA ---
         for _, row in df_sub.iterrows():
             row_cells = table.add_row().cells
             try: harga = f"{int(row['price']):,}"
             except: harga = "0"
             
-            # Masukkan teks
-            row_cells[0].text = str(row.get('kota_asal', '-'))
-            row_cells[1].text = str(row['kota_tujuan'])
-            row_cells[2].text = str(row['unit_type'])
-            row_cells[3].text = str(row['Ranking'])
-            row_cells[4].text = str(row['vendor_name'])
-            row_cells[5].text = harga
-            row_cells[6].text = str(row['lead_time'])
-            row_cells[7].text = str(row['top'])
+            data_map = [
+                str(row.get('kota_asal', '-')), 
+                str(row['kota_tujuan']),        
+                str(row['unit_type']),          
+                str(row['Ranking']),            
+                str(row['vendor_name']),        
+                harga,                          
+                str(row['lead_time']),          
+                str(row['top'])                 
+            ]
             
-            # Kecilkan font isi tabel (misal ukuran 8)
-            for cell in row_cells:
-                for paragraph in cell.paragraphs:
-                    if paragraph.runs:
-                        paragraph.runs[0].font.size = Pt(8)
-                    else:
-                        # Fallback jika sel kosong/baru
-                        run = paragraph.add_run()
-                        run.font.size = Pt(8)
+            for idx, val in enumerate(data_map):
+                cell = row_cells[idx]
+                cell.text = val
+                
+                # Alignment
+                if idx in [0, 1, 2, 6]: align = WD_ALIGN_PARAGRAPH.LEFT
+                elif idx == 5: align = WD_ALIGN_PARAGRAPH.RIGHT
+                else: align = WD_ALIGN_PARAGRAPH.CENTER
+                
+                format_paragraph(cell.paragraphs[0], size=7, bold=False, align=align)
 
-        sd.add_paragraph("") # Spasi antar tabel origin
+        sd.add_paragraph("") 
 
-    # --- 2. MEMBUAT TABEL VENDOR (DI DALAM PYTHON) ---
+    # --- 2. MEMBUAT TABEL VENDOR (HANYA YANG MASUK TOP 3) ---
     sd_ven = doc.new_subdoc()
     
-    df_unique_vendors = df_data.drop_duplicates(subset=['vendor_email']).sort_values('vendor_name')
+    # Gabungkan semua data pemenang dari loop di atas
+    if winning_vendors_data:
+        df_all_winners = pd.concat(winning_vendors_data)
+        # Ambil unik berdasarkan email vendor
+        df_unique_winners = df_all_winners.drop_duplicates(subset=['vendor_email']).sort_values('vendor_name')
+    else:
+        df_unique_winners = pd.DataFrame()
     
-    v_headers = ['Vendor', 'Alamat', 'Email', 'PIC', 'Telepon']
-    v_table = sd_ven.add_table(rows=1, cols=len(v_headers))
-    v_table.style = 'Table Grid'
-    
-    # Header Vendor
-    vh_cells = v_table.rows[0].cells
-    for i, h in enumerate(v_headers):
-        vh_cells[i].text = h
-        run = vh_cells[i].paragraphs[0].runs[0]
-        run.font.bold = True
-        run.font.size = Pt(9)
+    if not df_unique_winners.empty:
+        v_headers = ['Vendor', 'Alamat', 'Email', 'PIC', 'Telepon']
+        v_table = sd_ven.add_table(rows=1, cols=len(v_headers))
+        v_table.style = 'Table Grid'
+        v_table.autofit = True
         
-    # Isi Vendor
-    for _, row in df_unique_vendors.iterrows():
-        v_cells = v_table.add_row().cells
-        v_cells[0].text = str(row['vendor_name'])
-        v_cells[1].text = str(row.get('address', '-'))
-        v_cells[2].text = str(row['vendor_email'])
-        v_cells[3].text = str(row.get('contact_person', '-'))
-        v_cells[4].text = str(row.get('phone', '-'))
+        # Format Header Vendor
+        v_hdr_row = v_table.rows[0]
+        set_repeat_table_header(v_hdr_row) # <--- AKTIFKAN REPEAT HEADER JUGA
         
-        for cell in v_cells:
-            for paragraph in cell.paragraphs:
-                if paragraph.runs: paragraph.runs[0].font.size = Pt(8)
+        vh_cells = v_hdr_row.cells
+        for i, h in enumerate(v_headers):
+            vh_cells[i].text = h
+            set_cell_background(vh_cells[i], "ED7D31") 
+            format_paragraph(vh_cells[i].paragraphs[0], size=8, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
+            
+        # Isi Vendor
+        for _, row in df_unique_winners.iterrows():
+            v_cells = v_table.add_row().cells
+            v_data = [
+                str(row['vendor_name']),
+                str(row.get('address', '-')),
+                str(row['vendor_email']),
+                str(row.get('contact_person', '-')),
+                str(row.get('phone', '-'))
+            ]
+            for idx, val in enumerate(v_data):
+                cell = v_cells[idx]
+                cell.text = val
+                format_paragraph(cell.paragraphs[0], size=7, bold=False, align=WD_ALIGN_PARAGRAPH.LEFT)
 
-    # --- 3. MASUKKAN KE CONTEXT ---
-    # Perhatikan: Kita kirim objek 'sd' dan 'sd_ven' ke Word
+    # --- 3. RENDER ---
     context = {
         'no_surat': nomor_surat,
         'validity': validity,
         'load_type': load_type,
-        'tabel_harga': sd,      # <--- Ini akan mengganti {{ tabel_harga }} di Word
-        'tabel_vendor': sd_ven  # <--- Ini akan mengganti {{ tabel_vendor }} di Word
+        'tabel_harga': sd,      
+        'tabel_vendor': sd_ven  
     }
     
     doc.render(context)
@@ -455,8 +511,6 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     doc.save(output_filename)
     return output_filename
 
-# --- MAIN APP ---
-st.set_page_config(page_title="TACO Procurement", layout="wide", page_icon="🚛")
 
 def main():
     st.markdown('<div id="top-page"></div>', unsafe_allow_html=True)
@@ -899,22 +953,21 @@ def admin_dashboard():
             # Filter Data
             df_view = df_master[(df_master['validity'] == sel_val) & (df_master['load_type'] == sel_load)].copy()
             
-            if not df_view.empty:
-                # Grouping per Origin untuk tampilan dashboard
+            f not df_view.empty:
                 unique_origins = sorted(df_view['origin'].unique())
                 
                 for org in unique_origins:
                     with st.expander(f"📍 Origin: {org}", expanded=True):
-                        sub_df = df_view[df_view['origin'] == org]
+                        sub_df = df_view[df_view['origin'] == org].copy() # Pakai .copy()
                         
                         # Ranking Logic
                         sub_df = sub_df.sort_values(by=['kota_tujuan', 'unit_type', 'price'])
                         sub_df['Ranking'] = sub_df.groupby(['kota_tujuan', 'unit_type']).cumcount() + 1
                         
-                        # Tampilkan Data
-                        disp_cols = ['kota_tujuan', 'unit_type', 'Ranking', 'vendor_name', 'price', 'lead_time', 'top']
+                        # ▼▼▼ FILTER HANYA TOP 3 ▼▼▼
+                        sub_df = sub_df[sub_df['Ranking'] <= 3]
+                        # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
                         
-                        # Format Rupiah untuk tampilan
                         sub_df['price_fmt'] = sub_df['price'].apply(lambda x: f"Rp {int(x):,}".replace(",", "."))
                         
                         st.dataframe(
@@ -931,9 +984,9 @@ def admin_dashboard():
             else:
                 st.warning("Data tidak ditemukan.")
 
-    # --- TAB 8: CETAK SK (ADMINISTRASI) ---
+    # --- TAB 8: PRINT SK ---
     with tabs[7]:
-        st.subheader("🖨️ Cetak Surat Keputusan (SK)")
+        st.subheader("🖨️ Print Surat Keputusan (SK)")
         
         if df_master.empty:
             st.info("Data belum tersedia.")
