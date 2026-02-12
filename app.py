@@ -1037,22 +1037,23 @@ def admin_dashboard():
             else:
                 st.warning("Data tidak ditemukan.")
 
-    # --- TAB 8: PRINT SK (FULL CODE FIXED) ---
+   # --- TAB 8: PRINT SK (GANTI BAGIAN INI SAJA) ---
     with tabs[7]:
         st.subheader("🖨️ Print Surat Keputusan (SK)")
         
         if df_master.empty:
             st.info("Data belum tersedia.")
         else:
-            # 1. DEFINISI VARIABEL (WAJIB DI SINI)
+            # 1. Pastikan Variabel Didefinisikan di Level Awal 'else'
             c1, c2 = st.columns(2)
             avail_val = sorted(df_master['validity'].unique().tolist())
             avail_load = sorted(df_master['load_type'].unique().tolist())
             
+            # Ini mendefinisikan sk_load agar terbaca oleh tombol
             sk_val = c1.selectbox("Pilih Periode SK", avail_val, key="sk_val")
             sk_load = c2.selectbox("Pilih Muatan SK", avail_load, key="sk_load")
             
-            # 2. FILTER DATA
+            # 2. Filter Data Berdasarkan Pilihan
             df_sk = df_master[(df_master['validity'] == sk_val) & (df_master['load_type'] == sk_load)].copy()
             
             if not df_sk.empty:
@@ -1065,7 +1066,7 @@ def admin_dashboard():
                     # Filter Tahap 2 (Origin)
                     df_final_sk = df_sk[df_sk['origin'].isin(sel_orgs)].copy()
                     
-                    # Beri Ranking Dulu
+                    # Beri Ranking Dulu Sebelum Di-Print
                     df_final_sk = df_final_sk.sort_values(by=['origin', 'kota_tujuan', 'unit_type', 'price'])
                     df_final_sk['Ranking'] = df_final_sk.groupby(['origin', 'kota_tujuan', 'unit_type']).cumcount() + 1
                     
@@ -1079,13 +1080,13 @@ def admin_dashboard():
                     with col_kanan:
                         no_surat = st.text_input("Nomor Surat:", value="001/SK/LOG/2026")
                         
-                        # Cek Template
                         template_path = "template_sk.docx" 
                         if uploaded_template: template_path = uploaded_template
                         
                         st.write("")
                         
                         # --- TOMBOL GENERATE ---
+                        # Pastikan tombol ini menjorok ke dalam (di dalam blok if sel_orgs)
                         if st.button("📄 Generate SK Word", type="primary"):
                             if (isinstance(template_path, str) and not os.path.exists(template_path)) and not uploaded_template:
                                 st.error("Template tidak ditemukan! Upload dulu.")
@@ -1094,15 +1095,16 @@ def admin_dashboard():
                             else:
                                 with st.spinner("Membuat dokumen..."):
                                     try:
-                                        # Generate File
+                                        # Panggil Fungsi Generate
                                         file_docx = create_docx_sk(template_path, no_surat, sk_val, sk_load, df_final_sk)
                                         
-                                        # Custom Nama File: SK_FTL_Juli-Desember_2026.docx
+                                        # Buat Nama File Custom: SK_FTL_Juli-Desember_2026.docx
+                                        # Menggunakan str() untuk memastikan aman
                                         safe_validity = str(sk_val).replace(" - ", "-").replace(" ", "_")
                                         safe_load = str(sk_load).replace(" ", "")
                                         custom_filename = f"SK_{safe_load}_{safe_validity}.docx"
                                         
-                                        # Download Button
+                                        # Tombol Download
                                         with open(file_docx, "rb") as f:
                                             st.download_button(
                                                 label="⬇️ Download File SK",
@@ -1116,7 +1118,7 @@ def admin_dashboard():
                 else:
                     st.warning("Pilih minimal 1 origin.")
             else:
-                st.warning("Tidak ada data")
+                st.warning("Tidak ada data untuk kombinasi ini.")
                 
 # ================= VENDOR =================
 def vendor_dashboard(email):
@@ -1396,6 +1398,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
