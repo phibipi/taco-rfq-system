@@ -230,11 +230,57 @@ def clean_numeric(val):
     try: return float(str(val).replace(",", ""))
     except: return None
 
+# --- TOMBOL SCROLL TO TOP (VERSI MANUAL ANCHOR) ---
+def add_scroll_to_top():
+    st.markdown("""
+        <style>
+            .scroll-to-top {
+                position: fixed;
+                bottom: 25px;
+                right: 25px;
+                background-color: #2563EB;
+                color: white !important;
+                width: 50px;
+                height: 50px;
+                border-radius: 50%;
+                border: 2px solid #1D4ED8;
+                text-align: center;
+                box-shadow: 2px 2px 10px rgba(0,0,0,0.3);
+                cursor: pointer;
+                z-index: 99999;
+                transition: all 0.3s ease-in-out;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                text-decoration: none; /* Hilangkan garis bawah link */
+            }
+            .scroll-to-top:hover {
+                background-color: #FCA568; 
+                border-color: #e38d4a;
+                transform: translateY(-5px);
+                box-shadow: 2px 5px 15px rgba(252, 165, 104, 0.5);
+                color: white !important;
+            }
+            .scroll-to-top-icon {
+                font-size: 24px;
+                font-weight: 900;
+                line-height: 1;
+                margin-bottom: 4px; 
+            }
+        </style>
+        
+        <a href="#paling-atas" class="scroll-to-top" target="_self">
+            <span class="scroll-to-top-icon">↑</span>
+        </a>
+    """, unsafe_allow_html=True)
+
 # --- MAIN APP ---
 st.set_page_config(page_title="TACO Procurement", layout="wide", page_icon="🚛")
 
 def main():
+    st.markdown('<div id="paling-atas"></div>', unsafe_allow_html=True)
     init_style()
+    add_scroll_to_top()
     c_logo, _ = st.columns([1, 6])
     with c_logo:
         if os.path.exists("image_2.png"): st.image("image_2.png", width=120)
@@ -870,6 +916,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
