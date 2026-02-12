@@ -1037,7 +1037,7 @@ def admin_dashboard():
             else:
                 st.warning("Data tidak ditemukan.")
 
-    # --- TAB 8: PRINT SK ---
+    # --- TAB 8: PRINT SK (FULL CODE) ---
     with tabs[7]:
         st.subheader("🖨️ Print Surat Keputusan (SK)")
         
@@ -1048,6 +1048,7 @@ def admin_dashboard():
             avail_val = sorted(df_master['validity'].unique().tolist())
             avail_load = sorted(df_master['load_type'].unique().tolist())
             
+            # Definisi Variabel sk_val dan sk_load (HARUS ADA DISINI)
             sk_val = c1.selectbox("Pilih Periode SK", avail_val, key="sk_val")
             sk_load = c2.selectbox("Pilih Muatan SK", avail_load, key="sk_load")
             
@@ -1083,7 +1084,7 @@ def admin_dashboard():
                         if uploaded_template: template_path = uploaded_template
                         
                         st.write("")
-                        # Tombol Print                        
+                        # Tombol Print
                         if st.button("📄 Generate SK Word", type="primary"):
                             if (isinstance(template_path, str) and not os.path.exists(template_path)) and not uploaded_template:
                                 st.error("Template tidak ditemukan! Upload dulu.")
@@ -1095,13 +1096,10 @@ def admin_dashboard():
                                         # 1. Generate File Sementara
                                         file_docx = create_docx_sk(template_path, no_surat, sk_val, sk_load, df_final_sk)
                                         
-                                        # 2. CUSTOM NAMA FILE (SESUAI REQUEST)
-                                        # Format: SK_LoadType_PeriodeTahun.docx
-                                        # Contoh sk_val: "Juli - Desember 2026" -> Kita rapikan spasi
-                                        safe_validity = sk_val.replace(" - ", "-").replace(" ", "_")
-                                        safe_load = sk_load.replace(" ", "")
+                                        # 2. CUSTOM NAMA FILE (SK_Load_Periode.docx)
+                                        safe_validity = str(sk_val).replace(" - ", "-").replace(" ", "_")
+                                        safe_load = str(sk_load).replace(" ", "")
                                         
-                                        # Hasil: SK_FTL_Juli-Desember_2026.docx
                                         custom_filename = f"SK_{safe_load}_{safe_validity}.docx"
                                         
                                         # 3. Tombol Download
@@ -1109,7 +1107,7 @@ def admin_dashboard():
                                             btn = st.download_button(
                                                 label="⬇️ Download File SK",
                                                 data=f,
-                                                file_name=custom_filename,  # <--- SUDAH DIGANTI
+                                                file_name=custom_filename,
                                                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                                             )
                                         os.remove(file_docx) # Hapus temp file
@@ -1119,6 +1117,7 @@ def admin_dashboard():
                     st.warning("Pilih minimal 1 origin.")
             else:
                 st.warning("Tidak ada data.")
+                
 # ================= VENDOR =================
 def vendor_dashboard(email):
     step = st.session_state['vendor_step']
@@ -1397,6 +1396,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
