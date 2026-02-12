@@ -392,6 +392,7 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
         return False
         
 # --- FUNGSI GENERATE WORD (OPTIMIZED: SUPER CEPAT & RAPI) ---
+# --- FUNGSI GENERATE WORD (OPTIMIZED: SUPER CEPAT & RAPI) ---
 def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     doc = DocxTemplate(template_file)
     
@@ -454,7 +455,7 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
         winning_vendors_data.append(df_sub)
         
         # Buat Tabel (8 Kolom)
-        headers = ['Asal', 'Tujuan', 'Unit', 'Rank', 'Vendor', 'Harga', 'LeadTime', 'TOP']
+        headers = ['Asal', 'Tujuan', 'Unit', 'Rank', 'Vendor', 'Biaya/unit', 'LeadTime', 'Term of Payment']
         table = sd.add_table(rows=1, cols=len(headers))
         table.style = 'Table Grid'
         table.alignment = WD_TABLE_ALIGNMENT.CENTER 
@@ -561,7 +562,7 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     }
     
     doc.render(context)
-    output_filename = f"SK_{sk_load}_{sk_val}.docx"
+    output_filename = f"SK_{load_type}_{velidity}.docx"
     doc.save(output_filename)
     return output_filename
     
@@ -1098,18 +1099,12 @@ def admin_dashboard():
                                         # Panggil Fungsi Generate
                                         file_docx = create_docx_sk(template_path, no_surat, sk_val, sk_load, df_final_sk)
                                         
-                                        # Buat Nama File Custom: SK_FTL_Juli-Desember_2026.docx
-                                        # Menggunakan str() untuk memastikan aman
-                                        safe_validity = str(sk_val).replace(" - ", "-").replace(" ", "_")
-                                        safe_load = str(sk_load).replace(" ", "")
-                                        custom_filename = f"SK_{safe_load}_{safe_validity}.docx"
-                                        
                                         # Tombol Download
                                         with open(file_docx, "rb") as f:
                                             st.download_button(
                                                 label="⬇️ Download File SK",
                                                 data=f,
-                                                file_name=custom_filename,
+                                                file_name=f"SK_{sk_load}_{sk_val}.docx",
                                                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                                             )
                                         os.remove(file_docx)
@@ -1398,6 +1393,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
