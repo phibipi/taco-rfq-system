@@ -1048,8 +1048,8 @@ def admin_dashboard():
             avail_val = sorted(df_master['validity'].unique().tolist())
             avail_load = sorted(df_master['load_type'].unique().tolist())
             
-            sk_val = c1.selectbox("Pilih Periode SK", avail_val, key="sk_val")
-            sk_load = c2.selectbox("Pilih Muatan SK", avail_load, key="sk_load")
+            sk_val = c1.selectbox("Pilih Periode", avail_val, key="sk_val")
+            sk_load = c2.selectbox("Pilih Muatan", avail_load, key="sk_load")
             
             # 2. Filter Data
             df_sk = df_master[(df_master['validity'] == sk_val) & (df_master['load_type'] == sk_load)].copy()
@@ -1058,7 +1058,7 @@ def admin_dashboard():
                 st.divider()
                 st.markdown("##### 1. Pilih Origin")
                 avail_org = sorted(df_sk['origin'].unique())
-                sel_orgs = st.multiselect("Centang Origin yang akan masuk ke SK:", avail_org, default=avail_org, key="sk_orgs")
+                sel_orgs = st.multiselect("Pilih Origin yang akan masuk ke SK:", avail_org, default=avail_org, key="sk_orgs")
                 
                 if sel_orgs:
                     # Filter
@@ -1067,7 +1067,7 @@ def admin_dashboard():
                     df_final_sk['Ranking'] = df_final_sk.groupby(['origin', 'kota_tujuan', 'unit_type']).cumcount() + 1
                     
                     st.divider()
-                    st.markdown("##### 2. Konfigurasi Dokumen")
+                    st.markdown("##### 2. Dokumen Process")
                     
                     col_kiri, col_kanan = st.columns(2)
                     with col_kiri:
@@ -1081,7 +1081,7 @@ def admin_dashboard():
                         st.write("")
                         
                         # 3. Tombol Generate
-                        if st.button("📄 Generate SK Word", type="primary"):
+                        if st.button("📄 Generate File SK", type="primary"):
                             if (isinstance(template_path, str) and not os.path.exists(template_path)) and not uploaded_template:
                                 st.error("Template tidak ditemukan! Upload dulu.")
                             elif not no_surat:
@@ -1389,6 +1389,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
