@@ -561,10 +561,10 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
         'tabel_vendor': sd_ven  
     }
     
-    doc.render(context)
-    output_filename = f"SK_{load_type}_{velidity}.docx"
-    doc.save(output_filename)
-    return output_filename
+    doc.render(context)
+    output_filename = f"SK_Result_{int(time.time())}.docx"
+    doc.save(output_filename)
+    return output_filename
     
 def main():
     st.markdown('<div id="top-page"></div>', unsafe_allow_html=True)
@@ -1393,6 +1393,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
