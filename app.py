@@ -910,6 +910,15 @@ def admin_dashboard():
             if not df_g.empty:
                 merged_pr = pd.merge(merged_pr, df_g[['group_id', 'route_group']], on='group_id', how='left')
             else: merged_pr['route_group'] = 'Unknown Group'
+
+            # ▼▼▼ LOGIKA BARU: GABUNGKAN NAMA VENDOR ▼▼▼
+            if not df_users.empty:
+                # Merge berdasarkan email untuk dapat vendor_name
+                merged_pr = pd.merge(merged_pr, df_users[['email', 'vendor_name']], left_on='vendor_email', right_on='email', how='left')
+                # Jika nama tidak ketemu, pakai email sebagai cadangan
+                merged_pr['vendor_name'] = merged_pr['vendor_name'].fillna(merged_pr['vendor_email'])
+            else:
+                merged_pr['vendor_name'] = merged_pr['vendor_email']
                 
             merged_pr['route_group'] = merged_pr['route_group'].fillna('Unknown Group')
             merged_pr['kota_asal'] = merged_pr['kota_asal'].fillna('Unknown')
@@ -923,11 +932,13 @@ def admin_dashboard():
                 vendor, validity, g_name, g_id = parts[0], parts[1], parts[2], parts[3]
                 subset_pr = merged_pr[merged_pr['key_group'] == key]
                 if subset_pr.empty: continue
+
+                display_name = subset_pr['vendor_name'].iloc[0]
                 
                 is_locked = "Locked" in subset_pr['status'].values
                 status_icon = "🔒 LOCKED" if is_locked else "🟢 OPEN"
                 
-                with st.expander(f"{status_icon} - {vendor} ({validity}) - {g_name}"):
+                with st.expander(f"{status_icon} - {display_name} ({validity}) - {g_name}"):
                     st.markdown("**A. Spesifikasi Armada**")
                     if {'unit_type', 'weight_capacity', 'cubic_capacity'}.issubset(subset_pr.columns):
                         df_specs = subset_pr[['unit_type', 'weight_capacity', 'cubic_capacity']].drop_duplicates().reset_index(drop=True)
@@ -1389,6 +1400,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
