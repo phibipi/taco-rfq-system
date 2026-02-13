@@ -450,7 +450,7 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
         run = paragraph.runs[0] if paragraph.runs else paragraph.add_run()
         run.font.size = Pt(size)
         run.font.bold = bold
-        run.font.name = 'Arial'
+        run.font.name = 'Calibri'
 
     # --- HELPER 4: REPEAT HEADER ROW ---
     def set_repeat_table_header(row):
@@ -596,13 +596,10 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     doc.save(output_filename)
     return output_filename
     
-# --- FUNGSI GENERATE SPK (UPDATE: ALAMAT DARI SHEET) ---
-def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic_vendor, vendor_pass, alamat_gudang, df_data):
+# --- FUNGSI GENERATE SPK (UPDATE: MULTI ORIGIN & LEBAR KOLOM) ---
+def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic_vendor, vendor_pass, origin_name_str, alamat_gudang, df_data):
     doc = DocxTemplate(template_file)
     
-    # Ambil Origin Utama untuk Judul
-    origin_utama = df_data.iloc[0]['origin'] if not df_data.empty else "-"
-
     # Format Tanggal
     bulan_indo = {1:'Januari', 2:'Februari', 3:'Maret', 4:'April', 5:'Mei', 6:'Juni', 7:'Juli', 8:'Agustus', 9:'September', 10:'Oktober', 11:'November', 12:'Desember'}
     today = datetime.now()
@@ -629,12 +626,12 @@ def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic
         p.paragraph_format.space_after = Pt(0)
         run = p.runs[0] if p.runs else p.add_run()
         run.font.size = Pt(size)
-        run.font.name = 'Arial'
+        run.font.name = 'Calibri'
         run.font.bold = bold
 
     # --- TABEL DATA ---
     sd = doc.new_subdoc()
-    headers = ['Asal', 'Tujuan', 'Unit', 'Rank', 'Biaya/Unit', 'MD Inner', 'MD Outer', 'Buruh', 'LeadTime']
+    headers = ['Asal', 'Tujuan', 'Unit', 'Rank', 'Biaya/Unit', 'Multidrop dalam Kota', 'Multidrop luar Kota', 'Biaya Buruh', 'Lead Time']
     table = sd.add_table(rows=1, cols=len(headers))
     table.style = 'Table Grid'
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
@@ -670,7 +667,11 @@ def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic
             if i in [4, 5, 6, 7]: align = WD_ALIGN_PARAGRAPH.RIGHT
             format_cell(row_cells[i], v, align, size=6.5)
 
-    col_widths = [Cm(2.0), Cm(3.0), Cm(1.8), Cm(0.8), Cm(2.2), Cm(2.0), Cm(2.0), Cm(1.5), Cm(1.5)]
+    # --- UPDATE LEBAR KOLOM (Tujuan dikecilkan, Unit dilebarkan) ---
+    # Lama: Tujuan(3.0), Unit(1.8)
+    # Baru: Tujuan(2.5), Unit(2.3)
+    # Asal(2.0), Tujuan(2.5), Unit(2.3), Rank(0.8), Biaya(2.2), MD_In(2.0), MD_Out(2.0), Buruh(1.5), LT(1.5)
+    col_widths = [Cm(2.0), Cm(2.5), Cm(2.3), Cm(0.8), Cm(2.2), Cm(2.0), Cm(2.0), Cm(1.5), Cm(1.5)]
     set_col_widths(table, col_widths)
 
     # Context Mapping
@@ -682,8 +683,8 @@ def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic
         'vendor_name': vendor_name, 
         'contact_person': pic_vendor, 
         'password_vendor': vendor_pass,
-        'origin_name': origin_utama,
-        'alamat_gudang': alamat_gudang, # <--- Diambil dari parameter
+        'origin_name': origin_name_str, 
+        'alamat_gudang': alamat_gudang,
         'tabel_harga_vendor': sd
     }
     doc.render(context)
@@ -1451,7 +1452,7 @@ def admin_dashboard():
                         upl_spk = col_c.file_uploader("Upload Template SPK", type="docx", key="upl_spk")
                         no_spk = col_d.text_input("Nomor Surat SPK:", f"001/SPK/{sel_ven[:3].upper()}/2026", key="no_spk")
                         
-                    if st.button("📄 Generate File SPK", type="primary"):
+                   if st.button("📄 Generate File SPK", type="primary"):
                             tpl_spk = "template_spk.docx"
                             if upl_spk: tpl_spk = upl_spk
                             elif not os.path.exists(tpl_spk): st.error("Template SPK tidak ditemukan."); st.stop()
@@ -1469,28 +1470,40 @@ def admin_dashboard():
                                 else: final_pass = "XXXXX"
                             except: final_pass = "XXXXX"
 
-                            # 3. AMBIL ALAMAT GUDANG DARI SHEET 'Gudang'
-                            alamat_gudang_text = "Alamat Gudang Belum Disetting"
-                            current_origin = df_final_spk.iloc[0]['origin']
+                            # 3. KUMPULKAN SEMUA ORIGIN & ALAMAT
+                            # Ambil list semua origin unik dari data vendor ini
+                            list_origin = sorted(df_final_spk['origin'].unique().tolist())
                             
+                            # Gabungkan nama origin (Misal: "Jakarta, Surabaya")
+                            origin_str_combined = ", ".join(list_origin)
+                            
+                            alamat_list = []
                             try:
-                                df_gudang = get_data("Gudang") # Load sheet Gudang
+                                df_gudang = get_data("Gudang") 
                                 if not df_gudang.empty:
-                                    # Cari baris yang origin-nya cocok (case insensitive)
-                                    # Pastikan di sheet Gudang ada kolom 'origin' dan 'alamat'
-                                    res_addr = df_gudang[df_gudang['origin'].astype(str).str.lower() == str(current_origin).lower()]
-                                    if not res_addr.empty:
-                                        alamat_gudang_text = res_addr.iloc[0]['alamat']
-                                    else:
-                                        st.warning(f"Origin '{current_origin}' tidak ditemukan di sheet Gudang.")
+                                    for org in list_origin:
+                                        # Cari alamat per origin
+                                        res_addr = df_gudang[df_gudang['origin'].astype(str).str.lower() == str(org).lower()]
+                                        if not res_addr.empty:
+                                            # Format: "Jakarta: Jl. Industri..."
+                                            alamat_found = res_addr.iloc[0]['alamat']
+                                            # Jika origin cuma 1, langsung alamat. Jika banyak, pakai prefix nama kota.
+                                            if len(list_origin) > 1:
+                                                alamat_list.append(f"{org}: {alamat_found}")
+                                            else:
+                                                alamat_list.append(alamat_found)
+                                        else:
+                                            alamat_list.append(f"{org}: (Alamat tidak ditemukan)")
                                 else:
-                                    st.warning("Sheet 'Gudang' kosong/tidak ditemukan.")
+                                    alamat_list.append("Data sheet Gudang kosong.")
                             except Exception as e:
-                                st.warning(f"Gagal mengambil data Gudang: {e}")
+                                alamat_list.append(f"Error ambil alamat: {e}")
+                            
+                            # Gabungkan alamat dengan baris baru (Enter)
+                            alamat_str_combined = "\n".join(alamat_list)
 
                             # 4. MERGE DATA MULTIDROP
                             df_spk_merged = df_final_spk.copy()
-                            # (Default value)
                             df_spk_merged['inner_city_price'] = 0
                             df_spk_merged['outer_city_price'] = 0
                             df_spk_merged['labor_cost'] = 0
@@ -1516,13 +1529,15 @@ def admin_dashboard():
                                     df_spk_merged['labor_cost'] = df_spk_merged.apply(lambda x: get_md_val(x, 'lab'), axis=1)
                                 except Exception as e: st.warning(f"Gagal merge multidrop: {e}")
 
-                            # 5. Generate Docx
+                            # 5. GENERATE DOCX
                             with st.spinner(f"Memproses SPK {sel_ven}..."):
                                 try:
-                                    # Pass alamat_gudang_text ke fungsi
-                                    f_spk = create_docx_spk(tpl_spk, no_spk, spk_val, spk_load, sel_ven, pic, final_pass, alamat_gudang_text, df_spk_merged)
+                                    # Pass variable origin dan alamat yang sudah digabung
+                                    f_spk = create_docx_spk(
+                                        tpl_spk, no_spk, spk_val, spk_load, sel_ven, pic, final_pass, 
+                                        origin_str_combined, alamat_str_combined, df_spk_merged
+                                    )
                                     
-                                    # Custom Filename
                                     safe_val = str(spk_val).replace(" - ", "-").replace(" ", "_")
                                     safe_load = str(spk_load).replace(" ", "")
                                     safe_ven_file = str(sel_ven).replace(" ", "_").replace(".", "").replace(",", "")
@@ -1830,6 +1845,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
