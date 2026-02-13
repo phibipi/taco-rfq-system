@@ -587,6 +587,81 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     doc.save(output_filename)
     return output_filename
     
+# --- FUNGSI GENERATE SPK (BARU) ---
+def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic_vendor, df_data):
+    doc = DocxTemplate(template_file)
+    
+    # Format Tanggal Indonesia
+    bulan_indo = {1:'Januari', 2:'Februari', 3:'Maret', 4:'April', 5:'Mei', 6:'Juni', 7:'Juli', 8:'Agustus', 9:'September', 10:'Oktober', 11:'November', 12:'Desember'}
+    today = datetime.now()
+    tgl_spk = f"{today.day} {bulan_indo[today.month]} {today.year}"
+
+    # Helper: Format Rupiah
+    def fmt_rp(x):
+        try: return f"Rp {int(x):,}".replace(",", ".")
+        except: return "Rp 0"
+
+    # Helper: Set Lebar Kolom
+    def set_col_widths(table, widths):
+        table.autofit = False 
+        table.allow_autofit = False
+        for row in table.rows:
+            for idx, width in enumerate(widths):
+                if idx < len(row.cells):
+                    row.cells[idx].width = width
+
+    # Helper: Format Paragraf Cell
+    def format_cell(cell, text, align=WD_ALIGN_PARAGRAPH.CENTER, bold=False):
+        cell.text = str(text)
+        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+        p = cell.paragraphs[0]
+        p.alignment = align
+        p.paragraph_format.space_after = Pt(0)
+        run = p.runs[0] if p.runs else p.add_run()
+        run.font.size = Pt(9)
+        run.font.name = 'Arial'
+        run.font.bold = bold
+
+    # --- BUAT TABEL SPK ---
+    sd = doc.new_subdoc()
+    headers = ['No', 'Kota Asal', 'Kota Tujuan', 'Jenis Unit', 'Rank', 'Biaya / Trip']
+    table = sd.add_table(rows=1, cols=len(headers))
+    table.style = 'Table Grid'
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    
+    # Header Row
+    hdr_cells = table.rows[0].cells
+    for i, h in enumerate(headers):
+        shading_elm = parse_xml(r'<w:shd {} w:fill="E7E6E6"/>'.format(nsdecls('w')))
+        hdr_cells[i]._tc.get_or_add_tcPr().append(shading_elm)
+        format_cell(hdr_cells[i], h, bold=True)
+
+    # Data Rows
+    for idx, row in df_data.iterrows():
+        row_cells = table.add_row().cells
+        vals = [idx+1, row.get('kota_asal','-'), row['kota_tujuan'], row['unit_type'], row['Ranking'], fmt_rp(row['price'])]
+        for i, v in enumerate(vals):
+            align = WD_ALIGN_PARAGRAPH.LEFT if i in [1,2,3] else WD_ALIGN_PARAGRAPH.CENTER
+            if i == 5: align = WD_ALIGN_PARAGRAPH.RIGHT
+            format_cell(row_cells[i], v, align)
+
+    # Set Lebar (Cm)
+    set_col_widths(table, [Cm(1.0), Cm(3.5), Cm(4.5), Cm(3.0), Cm(1.5), Cm(3.5)])
+
+    # Render
+    context = {
+        'no_spk': no_spk, 'tanggal_spk': tgl_spk, 'validity': validity,
+        'load_type': load_type, 'vendor_name': vendor_name, 
+        'contact_person': pic_vendor, 'tabel_harga_vendor': sd
+    }
+    doc.render(context)
+    
+    # Save
+    safe_ven = "".join(x for x in vendor_name if x.isalnum())
+    fn = f"SPK_{safe_ven}_{int(time.time())}.docx"
+    doc.save(fn)
+    return fn
+
 def main():
     st.markdown('<div id="top-page"></div>', unsafe_allow_html=True)
     init_style()
@@ -1259,80 +1334,112 @@ def admin_dashboard():
             else:
                 st.warning("Data tidak ditemukan.")
 
-   # --- TAB 8: PRINT SK (REPLACE BAGIAN INI SAJA) ---
+# --- TAB 8: PRINT FILE (SK & SPK TERPISAH) ---
     with tabs[7]:
-        st.subheader("🖨️ Print Surat Keputusan (SK)")
+        st.subheader("🖨️ Print Dokumen")
         
         if df_master.empty:
             st.info("Data belum tersedia.")
         else:
-            # 1. Definisi Variabel
-            c1, c2 = st.columns(2)
             avail_val = sorted(df_master['validity'].unique().tolist())
             avail_load = sorted(df_master['load_type'].unique().tolist())
-            
-            sk_val = c1.selectbox("Pilih Periode", avail_val, key="sk_val")
-            sk_load = c2.selectbox("Pilih Muatan", avail_load, key="sk_load")
-            
-            # 2. Filter Data
-            df_sk = df_master[(df_master['validity'] == sk_val) & (df_master['load_type'] == sk_load)].copy()
-            
-            if not df_sk.empty:
-                st.divider()
-                st.markdown("##### 1. Pilih Origin")
-                avail_org = sorted(df_sk['origin'].unique())
-                sel_orgs = st.multiselect("Pilih Origin yang akan masuk ke SK:", avail_org, default=avail_org, key="sk_orgs")
+
+            # ==========================================
+            # BAGIAN 1: SURAT KEPUTUSAN (SK)
+            # ==========================================
+            with st.container(border=True):
+                st.markdown("### 1. Surat Keputusan (SK)")
+                st.caption("Dokumen rekapitulasi pemenang tender (Top 3).")
                 
-                if sel_orgs:
-                    # Filter
-                    df_final_sk = df_sk[df_sk['origin'].isin(sel_orgs)].copy()
-                    df_final_sk = df_final_sk.sort_values(by=['origin', 'kota_tujuan', 'unit_type', 'price'])
-                    df_final_sk['Ranking'] = df_final_sk.groupby(['origin', 'kota_tujuan', 'unit_type']).cumcount() + 1
+                c1, c2 = st.columns(2)
+                sk_val = c1.selectbox("Periode SK", avail_val, key="sk_val")
+                sk_load = c2.selectbox("Muatan SK", avail_load, key="sk_load")
+                
+                # Filter Data SK
+                df_sk = df_master[(df_master['validity'] == sk_val) & (df_master['load_type'] == sk_load)].copy()
+                
+                if not df_sk.empty:
+                    avail_org = sorted(df_sk['origin'].unique())
+                    sel_orgs = st.multiselect("Pilih Origin (SK):", avail_org, default=avail_org, key="sk_orgs")
                     
-                    st.divider()
-                    st.markdown("##### 2. Dokumen Process")
-                    
-                    col_kiri, col_kanan = st.columns(2)
-                    with col_kiri:
-                        uploaded_template = st.file_uploader("Upload Template (.docx)", type="docx", key="sk_upl")
+                    if sel_orgs:
+                        df_final_sk = df_sk[df_sk['origin'].isin(sel_orgs)].copy()
+                        df_final_sk = df_final_sk.sort_values(by=['origin', 'kota_tujuan', 'unit_type', 'price'])
+                        df_final_sk['Ranking'] = df_final_sk.groupby(['origin', 'kota_tujuan', 'unit_type']).cumcount() + 1
                         
-                    with col_kanan:
-                        no_surat = st.text_input("Nomor Surat:", value="(copy nomor disini)")
-                        template_path = "template_sk.docx" 
-                        if uploaded_template: template_path = uploaded_template
+                        col_a, col_b = st.columns(2)
+                        upl_sk = col_a.file_uploader("Upload Template SK", type="docx", key="upl_sk")
+                        no_sk = col_b.text_input("Nomor Surat SK:", "001/SK/LOG/2026", key="no_sk")
                         
-                        st.write("")
-                        
-                        # 3. Tombol Generate
                         if st.button("📄 Generate File SK", type="primary"):
-                            if (isinstance(template_path, str) and not os.path.exists(template_path)) and not uploaded_template:
-                                st.error("Template tidak ditemukan! Upload dulu.")
-                            elif not no_surat:
-                                st.warning("Isi nomor surat.")
-                            else:
-                                with st.spinner("Membuat dokumen..."):
-                                    try:
-                                        file_docx = create_docx_sk(template_path, no_surat, sk_val, sk_load, df_final_sk)
-                                        
-                                        # Custom Nama File
-                                        safe_validity = str(sk_val).replace(" - ", "-").replace(" ", "_")
-                                        safe_load = str(sk_load).replace(" ", "")
-                                        custom_filename = f"SK_{safe_load}_{safe_validity}.docx"
-                                        
-                                        with open(file_docx, "rb") as f:
-                                            st.download_button(
-                                                label="⬇️ Download File SK",
-                                                data=f,
-                                                file_name=custom_filename,
-                                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                                            )
-                                        os.remove(file_docx) 
-                                    except Exception as e:
-                                        st.error(f"Gagal generate: {e}")
-                else:
-                    st.warning("Pilih minimal 1 origin.")
-            else:
-                st.warning("Tidak ada data.")
+                            tpl_sk = "template_sk.docx"
+                            if upl_sk: tpl_sk = upl_sk
+                            elif not os.path.exists(tpl_sk): st.error("Template SK tidak ditemukan."); st.stop()
+                            
+                            try:
+                                f_sk = create_docx_sk(tpl_sk, no_sk, sk_val, sk_load, df_final_sk)
+                                fn_sk = f"SK_{sk_load}_{sk_val}.docx"
+                                with open(f_sk, "rb") as f:
+                                    st.download_button("⬇️ Download SK", f, file_name=fn_sk)
+                                os.remove(f_sk)
+                            except Exception as e: st.error(f"Gagal: {e}")
+                    else: st.warning("Pilih minimal 1 origin.")
+                else: st.warning("Data tidak ditemukan.")
+
+            st.write("") # Jarak
+
+            # ==========================================
+            # BAGIAN 2: SURAT PERINTAH KERJA (SPK)
+            # ==========================================
+            with st.container(border=True):
+                st.markdown("### 2. Surat Perintah Kerja (SPK)")
+                st.caption("Dokumen perintah kerja spesifik untuk satu vendor.")
+                
+                c3, c4 = st.columns(2)
+                spk_val = c3.selectbox("Periode SPK", avail_val, key="spk_val")
+                spk_load = c4.selectbox("Muatan SPK", avail_load, key="spk_load")
+                
+                # Filter Data SPK
+                df_spk_raw = df_master[(df_master['validity'] == spk_val) & (df_master['load_type'] == spk_load)].copy()
+                
+                if not df_spk_raw.empty:
+                    # Pilih Vendor
+                    avail_vens = sorted(df_spk_raw['vendor_name'].unique().tolist())
+                    sel_ven = st.selectbox("Pilih Vendor (SPK):", avail_vens, key="spk_ven")
+                    
+                    # Filter Data Vendor
+                    df_final_spk = df_spk_raw[df_spk_raw['vendor_name'] == sel_ven].copy()
+                    
+                    if not df_final_spk.empty:
+                        # Preview kecil
+                        st.info(f"Vendor **{sel_ven}** memiliki **{len(df_final_spk)}** rute di periode ini.")
+                        
+                        # Hitung Ranking Ulang (Just in case)
+                        df_final_spk = df_final_spk.sort_values(by=['kota_asal', 'kota_tujuan', 'unit_type', 'price'])
+                        if 'Ranking' not in df_final_spk.columns: df_final_spk['Ranking'] = 1
+
+                        col_c, col_d = st.columns(2)
+                        upl_spk = col_c.file_uploader("Upload Template SPK", type="docx", key="upl_spk")
+                        no_spk = col_d.text_input("Nomor Surat SPK:", f"001/SPK/{sel_ven[:3].upper()}/2026", key="no_spk")
+                        
+                        if st.button("📄 Generate File SPK", type="primary"):
+                            tpl_spk = "template_spk.docx"
+                            if upl_spk: tpl_spk = upl_spk
+                            elif not os.path.exists(tpl_spk): st.error("Template SPK tidak ditemukan."); st.stop()
+                            
+                            # Ambil PIC
+                            pic = df_final_spk.iloc[0].get('contact_person', 'Pimpinan Perusahaan')
+                            if pd.isna(pic) or pic == "-": pic = "Pimpinan Perusahaan"
+                            
+                            try:
+                                f_spk = create_docx_spk(tpl_spk, no_spk, spk_val, spk_load, sel_ven, pic, df_final_spk)
+                                fn_spk = f"SPK_{sel_ven}_{spk_load}.docx"
+                                with open(f_spk, "rb") as f:
+                                    st.download_button("⬇️ Download SPK", f, file_name=fn_spk)
+                                os.remove(f_spk)
+                            except Exception as e: st.error(f"Gagal: {e}")
+                    else: st.warning("Vendor ini tidak memiliki data.")
+                else: st.warning("Data tidak ditemukan.")
                 
 # ================= VENDOR DASHBOARD (FULL FIX) =================
 def vendor_dashboard(email):
@@ -1627,6 +1734,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
