@@ -1401,7 +1401,7 @@ def admin_dashboard():
                         
                         col_a, col_b = st.columns(2)
                         upl_sk = col_a.file_uploader("Upload Template SK", type="docx", key="upl_sk")
-                        no_sk = col_b.text_input("Nomor Surat SK:", "001/SK/LOG/2026", key="no_sk")
+                        no_sk = col_b.text_input("Nomor Surat SK:", "", key="no_sk")
                         
                         if st.button("📄 Generate File SK", type="primary"):
                             tpl_sk = "template_sk.docx"
@@ -1452,7 +1452,7 @@ def admin_dashboard():
 
                         col_c, col_d = st.columns(2)
                         upl_spk = col_c.file_uploader("Upload Template SPK", type="docx", key="upl_spk")
-                        no_spk = col_d.text_input("Nomor Surat SPK:", f"001/SPK/{sel_ven[:3].upper()}/2026", key="no_spk")
+                        no_spk = col_d.text_input("Nomor Surat SPK:", f"", key="no_spk")
                         
                         # --- START BUTTON BLOCK ---
                         if st.button("📄 Generate File SPK", type="primary"):
@@ -1828,6 +1828,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
