@@ -1182,57 +1182,6 @@ def vendor_dashboard(email):
                     if st.form_submit_button("Simpan Data", type="primary"):
                         save_data("Vendor_Profile", [[email, ad, cp, ph, top, ppn, pph, datetime.now().strftime("%Y-%m-%d")]])
                         st.success("Saved")
-            # --- TOMBOL SUBMIT (DI LUAR FORM) ---
-                    st.divider()
-                    st.markdown("#### 🚀 Submit Penawaran")
-                    st.caption("Klik tombol ini jika Anda sudah yakin dengan harga yang diisi. Data akan dikirim ke Manager untuk direview.")
-
-                    # 1. GENERATE ULANG ID TRANSAKSI (SAMA SEPERTI SAAT SAVE)
-                    # Kita butuh list semua ID yang ada di grup ini untuk diubah statusnya
-                    ids_to_submit = []
-                    
-                    # Loop Rute
-                    for _, r_row in my_r.iterrows():
-                        rid = str(r_row['route_id'])
-                        # Loop Unit
-                        for u in u_types:
-                            # Rumus ID Transaksi (HARUS SAMA PERSIS dengan fungsi Save)
-                            tid = f"{email}_{cur_val}_{rid}_{u}".replace(" ","")
-                            ids_to_submit.append(tid)
-
-                    # 2. LOGIKA TOMBOL
-                    if st.button(f"Kirim ke Approval ({g_name})", key=f"sub_{gid}", type="primary"):
-                        if not ids_to_submit:
-                            st.warning("Tidak ada rute untuk disubmit.")
-                        else:
-                            with st.spinner("Mengirim data ke Manager..."):
-                                # A. Update Status di Google Sheet
-                                success = update_status_batch(ids_to_submit, "Waiting Approval 1")
-                                
-                                if success:
-                                    # B. Kirim Email Notifikasi ke Approver 1 (Manager)
-                                    subject = f"New Submission: {st.session_state['user_info'].get('vendor_name')}"
-                                    msg_body = f"""
-                                    <h3>Penawaran Baru Masuk</h3>
-                                    <p>Vendor <b>{st.session_state['user_info'].get('vendor_name')}</b> telah melakukan submit harga.</p>
-                                    <p><b>Grup:</b> {g_name}<br>
-                                    <b>Periode:</b> {cur_val}</p>
-                                    <p>Silakan login ke aplikasi untuk melakukan Approval Tahap 1.</p>
-                                    <a href="https://taco-rfq.streamlit.app">Buka Aplikasi</a>
-                                    """
-                                    # Pastikan fungsi send_invitation_email atau fungsi email notifikasi generik tersedia
-                                    # Disini kita pakai fungsi send_notification_email yang baru kita buat (jika ada)
-                                    # Atau pakai logika email sederhana
-                                    try:
-                                        send_invitation_email(EMAIL_APPROVER_1, "Manager Logistik", "FTL/FCL", cur_val, [cur_org], "Login Admin")
-                                        # Note: Idealnya pakai fungsi email notifikasi khusus yg lebih simpel, 
-                                        # tapi pakai yg ada dulu gpp biar ga error.
-                                    except:
-                                        pass
-
-                                    st.success("✅ Berhasil! Data telah dikirim ke Manager untuk direview.")
-                                    time.sleep(2)
-                                    st.rerun()
                                 else:
                                     st.error("Gagal mengupdate status. Pastikan data sudah Disimpan (Save) terlebih dahulu sebelum Submit.")
 
@@ -1461,6 +1410,7 @@ def vendor_dashboard(email):
 
                     # SAVE
                     st.write("")
+                    # Tombol Simpan (Draft)
                     if st.form_submit_button(f"Simpan Data {cur_load} {g_name}", type="primary") and not is_lock:
                         c_spec = {r['Jenis Unit']: {'w': r['Kapasitas Berat Bersih (Kg)'], 'c': r['Kapasitas Kubikasi Dalam (CBM)']} for _, r in ed_sp.iterrows()}
                         
@@ -1487,39 +1437,38 @@ def vendor_dashboard(email):
                         st.cache_data.clear()
                         st.rerun()
 
+                # --- TOMBOL SUBMIT KE MANAGER (DI LUAR FORM, DI DALAM TAB) ---
+                st.divider()
+                st.markdown("#### 🚀 Submit Penawaran")
+                st.caption("Klik tombol ini jika harga sudah fix. Data akan dikirim ke Manager.")
+
+                # 1. Generate ID untuk update status
+                ids_to_submit = []
+                for _, r_row in my_r.iterrows():
+                    rid = str(r_row['route_id'])
+                    for u in u_types:
+                        tid = f"{email}_{cur_val}_{rid}_{u}".replace(" ","")
+                        ids_to_submit.append(tid)
+
+                # 2. Tombol Eksekusi
+                if st.button(f"Kirim ke Approval ({g_name})", key=f"sub_{gid}", type="primary", disabled=is_lock):
+                    if not ids_to_submit:
+                        st.warning("Tidak ada rute.")
+                    else:
+                        with st.spinner("Mengirim..."):
+                            if update_status_batch(ids_to_submit, "Waiting Approval 1"):
+                                try:
+                                    send_invitation_email(EMAIL_APPROVER_1, "Manager Logistik", "FTL/FCL", cur_val, [cur_org], "Login Admin")
+                                except: pass
+                                
+                                st.success("✅ Terkirim ke Manager!")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error("Gagal submit. Simpan data dulu.")
+
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
