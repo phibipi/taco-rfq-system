@@ -596,16 +596,19 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     doc.save(output_filename)
     return output_filename
     
-# --- FUNGSI GENERATE SPK (UPDATE: FORMAT SK & FILE NAME) ---
-def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic_vendor, vendor_pass, df_data):
+# --- FUNGSI GENERATE SPK (UPDATE: ALAMAT DARI SHEET) ---
+def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic_vendor, vendor_pass, alamat_gudang, df_data):
     doc = DocxTemplate(template_file)
     
+    # Ambil Origin Utama untuk Judul
+    origin_utama = df_data.iloc[0]['origin'] if not df_data.empty else "-"
+
     # Format Tanggal
     bulan_indo = {1:'Januari', 2:'Februari', 3:'Maret', 4:'April', 5:'Mei', 6:'Juni', 7:'Juli', 8:'Agustus', 9:'September', 10:'Oktober', 11:'November', 12:'Desember'}
     today = datetime.now()
     tgl_spk = f"{today.day} {bulan_indo[today.month]} {today.year}"
 
-    # Helper Format
+    # Helper Format Rupiah
     def fmt_rp(x):
         try: return f"Rp {int(x):,}".replace(",", ".")
         except: return "Rp 0"
@@ -618,7 +621,7 @@ def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic
                 if idx < len(row.cells):
                     row.cells[idx].width = width
 
-    def format_cell(cell, text, align=WD_ALIGN_PARAGRAPH.CENTER, bold=False, size=8):
+    def format_cell(cell, text, align=WD_ALIGN_PARAGRAPH.CENTER, bold=False, size=7):
         cell.text = str(text)
         cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
         p = cell.paragraphs[0]
@@ -631,8 +634,7 @@ def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic
 
     # --- TABEL DATA ---
     sd = doc.new_subdoc()
-    # Header disamakan dengan SK (Vendor diganti No agar rapi, ditambah LeadTime & TOP)
-    headers = ['No', 'Asal', 'Tujuan', 'Unit', 'Rank', 'Biaya/unit', 'LeadTime', 'TOP']
+    headers = ['Asal', 'Tujuan', 'Unit', 'Rank', 'Biaya/Unit', 'MD Inner', 'MD Outer', 'Buruh', 'LeadTime']
     table = sd.add_table(rows=1, cols=len(headers))
     table.style = 'Table Grid'
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
@@ -640,43 +642,35 @@ def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic
     # Header Styling
     hdr_cells = table.rows[0].cells
     for i, h in enumerate(headers):
-        shading_elm = parse_xml(r'<w:shd {} w:fill="ED7D31"/>'.format(nsdecls('w'))) # Warna Orange SK
+        shading_elm = parse_xml(r'<w:shd {} w:fill="ED7D31"/>'.format(nsdecls('w')))
         hdr_cells[i]._tc.get_or_add_tcPr().append(shading_elm)
-        format_cell(hdr_cells[i], h, bold=True, size=8)
+        format_cell(hdr_cells[i], h, bold=True, size=7)
 
     # Isi Data
     for idx, row in df_data.iterrows():
         row_cells = table.add_row().cells
         
-        # Logic LeadTime + " Hari"
         lt_raw = str(row['lead_time'])
-        if lt_raw.isdigit() or (lt_raw.replace('.','',1).isdigit()):
-            lt_fmt = f"{lt_raw} Hari"
-        elif lt_raw in ["-", "", "0"]:
-            lt_fmt = "-"
-        else:
-            lt_fmt = f"{lt_raw} Hari"
+        lt_fmt = f"{lt_raw} Hari" if (lt_raw.isdigit() or lt_raw.replace('.','',1).isdigit()) and lt_raw not in ["-","0",""] else "-"
 
         vals = [
-            idx+1, 
             row.get('kota_asal','-'), 
             row['kota_tujuan'], 
             row['unit_type'], 
-            row['Ranking'], 
+            str(row['Ranking']), 
             fmt_rp(row['price']),
-            lt_fmt,          # <--- Lead Time + Hari
-            str(row['top'])  # <--- TOP
+            fmt_rp(row.get('inner_city_price', 0)),
+            fmt_rp(row.get('outer_city_price', 0)),
+            fmt_rp(row.get('labor_cost', 0)),
+            lt_fmt
         ]
         
         for i, v in enumerate(vals):
-            # Asal, Tujuan, Unit rata kiri
-            align = WD_ALIGN_PARAGRAPH.LEFT if i in [1,2,3] else WD_ALIGN_PARAGRAPH.CENTER
-            if i == 5: align = WD_ALIGN_PARAGRAPH.RIGHT # Harga rata kanan
-            format_cell(row_cells[i], v, align, size=7)
+            align = WD_ALIGN_PARAGRAPH.LEFT if i in [0,1] else WD_ALIGN_PARAGRAPH.CENTER
+            if i in [4, 5, 6, 7]: align = WD_ALIGN_PARAGRAPH.RIGHT
+            format_cell(row_cells[i], v, align, size=6.5)
 
-    # Set Lebar Kolom (Total ~16-17cm)
-    # No(0.8), Asal(2.5), Tujuan(3.5), Unit(2.0), Rank(1.0), Biaya(2.5), LT(1.5), TOP(2.0)
-    col_widths = [Cm(0.8), Cm(2.5), Cm(3.5), Cm(2.0), Cm(1.0), Cm(2.5), Cm(1.5), Cm(2.0)]
+    col_widths = [Cm(2.0), Cm(3.0), Cm(1.8), Cm(0.8), Cm(2.2), Cm(2.0), Cm(2.0), Cm(1.5), Cm(1.5)]
     set_col_widths(table, col_widths)
 
     # Context Mapping
@@ -688,11 +682,12 @@ def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic
         'vendor_name': vendor_name, 
         'contact_person': pic_vendor, 
         'password_vendor': vendor_pass,
+        'origin_name': origin_utama,
+        'alamat_gudang': alamat_gudang, # <--- Diambil dari parameter
         'tabel_harga_vendor': sd
     }
     doc.render(context)
     
-    # Simpan File Sementara (Nama file final diatur di dashboard)
     safe_ven = "".join(x for x in vendor_name if x.isalnum())
     fn = f"temp_spk_{safe_ven}_{int(time.time())}.docx"
     doc.save(fn)
@@ -1456,7 +1451,7 @@ def admin_dashboard():
                         upl_spk = col_c.file_uploader("Upload Template SPK", type="docx", key="upl_spk")
                         no_spk = col_d.text_input("Nomor Surat SPK:", f"001/SPK/{sel_ven[:3].upper()}/2026", key="no_spk")
                         
-                        if st.button("📄 Generate File SPK", type="primary"):
+if st.button("📄 Generate File SPK", type="primary"):
                             tpl_spk = "template_spk.docx"
                             if upl_spk: tpl_spk = upl_spk
                             elif not os.path.exists(tpl_spk): st.error("Template SPK tidak ditemukan."); st.stop()
@@ -1474,12 +1469,60 @@ def admin_dashboard():
                                 else: final_pass = "XXXXX"
                             except: final_pass = "XXXXX"
 
-                            # 3. Generate
+                            # 3. AMBIL ALAMAT GUDANG DARI SHEET 'Gudang'
+                            alamat_gudang_text = "Alamat Gudang Belum Disetting"
+                            current_origin = df_final_spk.iloc[0]['origin']
+                            
+                            try:
+                                df_gudang = get_data("Gudang") # Load sheet Gudang
+                                if not df_gudang.empty:
+                                    # Cari baris yang origin-nya cocok (case insensitive)
+                                    # Pastikan di sheet Gudang ada kolom 'origin' dan 'alamat'
+                                    res_addr = df_gudang[df_gudang['origin'].astype(str).str.lower() == str(current_origin).lower()]
+                                    if not res_addr.empty:
+                                        alamat_gudang_text = res_addr.iloc[0]['alamat']
+                                    else:
+                                        st.warning(f"Origin '{current_origin}' tidak ditemukan di sheet Gudang.")
+                                else:
+                                    st.warning("Sheet 'Gudang' kosong/tidak ditemukan.")
+                            except Exception as e:
+                                st.warning(f"Gagal mengambil data Gudang: {e}")
+
+                            # 4. MERGE DATA MULTIDROP
+                            df_spk_merged = df_final_spk.copy()
+                            # (Default value)
+                            df_spk_merged['inner_city_price'] = 0
+                            df_spk_merged['outer_city_price'] = 0
+                            df_spk_merged['labor_cost'] = 0
+
+                            if not df_md.empty:
+                                try:
+                                    md_dict = {}
+                                    for _, rmd in df_md.iterrows():
+                                        k = (str(rmd['vendor_email']).strip(), str(rmd['validity']).strip(), str(rmd['group_id']).strip())
+                                        md_dict[k] = {
+                                            'in': rmd.get('inner_city_price', 0),
+                                            'out': rmd.get('outer_city_price', 0),
+                                            'lab': rmd.get('labor_cost', 0)
+                                        }
+                                    
+                                    def get_md_val(row, kind):
+                                        key = (str(row['vendor_email']).strip(), str(row['validity']).strip(), str(row['group_id']).strip())
+                                        res = md_dict.get(key, {'in':0, 'out':0, 'lab':0})
+                                        return res[kind]
+
+                                    df_spk_merged['inner_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'in'), axis=1)
+                                    df_spk_merged['outer_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'out'), axis=1)
+                                    df_spk_merged['labor_cost'] = df_spk_merged.apply(lambda x: get_md_val(x, 'lab'), axis=1)
+                                except Exception as e: st.warning(f"Gagal merge multidrop: {e}")
+
+                            # 5. Generate Docx
                             with st.spinner(f"Memproses SPK {sel_ven}..."):
                                 try:
-                                    f_spk = create_docx_spk(tpl_spk, no_spk, spk_val, spk_load, sel_ven, pic, final_pass, df_final_spk)
+                                    # Pass alamat_gudang_text ke fungsi
+                                    f_spk = create_docx_spk(tpl_spk, no_spk, spk_val, spk_load, sel_ven, pic, final_pass, alamat_gudang_text, df_spk_merged)
                                     
-                                    # CUSTOM NAMA FILE: SPK_loadtype_periode_vendor.docx
+                                    # Custom Filename
                                     safe_val = str(spk_val).replace(" - ", "-").replace(" ", "_")
                                     safe_load = str(spk_load).replace(" ", "")
                                     safe_ven_file = str(sel_ven).replace(" ", "_").replace(".", "").replace(",", "")
@@ -1787,6 +1830,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
