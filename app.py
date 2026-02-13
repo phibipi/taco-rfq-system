@@ -891,13 +891,16 @@ def admin_dashboard():
                             
         st.dataframe(get_data("Access_Rights"), use_container_width=True)
 
-    # --- TAB 6: MONITORING ---
+   # --- TAB 6: MONITORING (UPDATED: SHOW VENDOR NAME) ---
     with tabs[5]:
         st.subheader("Monitoring Harga & Approval")
         df_price = get_data("Price_Data")
         df_routes = get_data("Master_Routes")
         df_md = get_data("Multidrop_Data")
         df_g = get_data("Master_Groups")
+        
+        # 1. Ambil Data User untuk dapat Nama Vendor
+        df_users = get_data("Users")
         
         if df_price.empty:
             st.info("Belum ada data harga masuk.")
@@ -907,6 +910,7 @@ def admin_dashboard():
             
             merged_pr = pd.merge(df_price, df_routes[['route_id', 'group_id', 'kota_asal', 'kota_tujuan']], on='route_id', how='left')
             merged_pr['group_id'] = merged_pr['group_id'].fillna('Unknown')
+            
             if not df_g.empty:
                 merged_pr = pd.merge(merged_pr, df_g[['group_id', 'route_group']], on='group_id', how='left')
             else: merged_pr['route_group'] = 'Unknown Group'
@@ -919,25 +923,30 @@ def admin_dashboard():
                 merged_pr['vendor_name'] = merged_pr['vendor_name'].fillna(merged_pr['vendor_email'])
             else:
                 merged_pr['vendor_name'] = merged_pr['vendor_email']
+            # ▲▲▲ LOGIKA BARU SELESAI ▲▲▲
                 
             merged_pr['route_group'] = merged_pr['route_group'].fillna('Unknown Group')
             merged_pr['kota_asal'] = merged_pr['kota_asal'].fillna('Unknown')
             merged_pr['kota_tujuan'] = merged_pr['kota_tujuan'].fillna('Unknown')
 
+            # Key Group tetap pakai EMAIL agar unik (karena Nama PT mungkin ada yang sama/mirip)
             merged_pr['key_group'] = merged_pr['vendor_email'] + " | " + merged_pr['validity'] + " | " + merged_pr['route_group'] + " | " + merged_pr['group_id']
             unique_keys = merged_pr['key_group'].unique()
             
             for key in unique_keys:
                 parts = key.split(" | ")
-                vendor, validity, g_name, g_id = parts[0], parts[1], parts[2], parts[3]
+                vendor_email, validity, g_name, g_id = parts[0], parts[1], parts[2], parts[3]
+                
                 subset_pr = merged_pr[merged_pr['key_group'] == key]
                 if subset_pr.empty: continue
-
+                
+                # Ambil Nama Vendor dari hasil merge tadi
                 display_name = subset_pr['vendor_name'].iloc[0]
                 
                 is_locked = "Locked" in subset_pr['status'].values
                 status_icon = "🔒 LOCKED" if is_locked else "🟢 OPEN"
                 
+                # TAMPILAN JUDUL: Pakai Nama Vendor, bukan Email
                 with st.expander(f"{status_icon} - {display_name} ({validity}) - {g_name}"):
                     st.markdown("**A. Spesifikasi Armada**")
                     if {'unit_type', 'weight_capacity', 'cubic_capacity'}.issubset(subset_pr.columns):
@@ -953,17 +962,15 @@ def admin_dashboard():
 
                     st.markdown("**C. Biaya Lain (Multidrop & Buruh)**")
                     if not df_md.empty:
-                        # 1. Bersihkan Data Sumber (Di DataFrame) - Paksa jadi String & Hapus Spasi
+                        # Membersihkan data agar pencarian Multidrop akurat (menggunakan Email sebagai kunci)
                         df_md['vendor_email'] = df_md['vendor_email'].astype(str).str.strip()
                         df_md['validity'] = df_md['validity'].astype(str).str.strip()
                         df_md['group_id'] = df_md['group_id'].astype(str).str.strip()
                         
-                        # 2. Bersihkan Data Target (Variable Loop)
-                        curr_ven = str(vendor).strip()
+                        curr_ven = str(vendor_email).strip()
                         curr_val = str(validity).strip()
                         curr_gid = str(g_id).strip()
 
-                        # 3. Filter Data (Pencocokan yang pasti akurat)
                         sub_md = df_md[
                             (df_md['vendor_email'] == curr_ven) &
                             (df_md['validity'] == curr_val) &
@@ -972,9 +979,8 @@ def admin_dashboard():
 
                         if not sub_md.empty:
                             cols_to_show = ['inner_city_price', 'outer_city_price']
-                            header_names = ["Multidrop Dalam Kota", " Multidrop Luar Kota"]
+                            header_names = ["Dalam Kota", "Luar Kota"]
                             
-                            # Cek otomatis apakah ada kolom labor_cost di Google Sheet
                             if 'labor_cost' in sub_md.columns:
                                 cols_to_show.append('labor_cost')
                                 header_names.append("Biaya Buruh")
@@ -1400,6 +1406,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
