@@ -912,8 +912,10 @@ def admin_dashboard():
             merged_pr['group_id'] = merged_pr['group_id'].fillna('Unknown')
             
             if not df_g.empty:
-                merged_pr = pd.merge(merged_pr, df_g[['group_id', 'route_group']], on='group_id', how='left')
-            else: merged_pr['route_group'] = 'Unknown Group'
+                merged_pr = pd.merge(merged_pr, df_g[['group_id', 'route_group', 'load_type']], on='group_id', how='left')
+            else: 
+                merged_pr['route_group'] = 'Unknown Group'
+                merged_pr['load_type'] = '-'
 
             # ▼▼▼ LOGIKA BARU: GABUNGKAN NAMA VENDOR ▼▼▼
             if not df_users.empty:
@@ -927,9 +929,10 @@ def admin_dashboard():
                 
             merged_pr['route_group'] = merged_pr['route_group'].fillna('Unknown Group')
             merged_pr['kota_asal'] = merged_pr['kota_asal'].fillna('Unknown')
+            merged_pr['load_type'] = merged_pr['load_type'].fillna('-')
             merged_pr['kota_tujuan'] = merged_pr['kota_tujuan'].fillna('Unknown')
 
-            # Key Group tetap pakai EMAIL agar unik (karena Nama PT mungkin ada yang sama/mirip)
+           
             merged_pr['key_group'] = merged_pr['vendor_email'] + " | " + merged_pr['validity'] + " | " + merged_pr['route_group'] + " | " + merged_pr['group_id']
             unique_keys = merged_pr['key_group'].unique()
             
@@ -945,9 +948,9 @@ def admin_dashboard():
                 
                 is_locked = "Locked" in subset_pr['status'].values
                 status_icon = "🔒 LOCKED" if is_locked else "🟢 OPEN"
-                
+                l_type = subset_pr.iloc[0]['load_type']
                 # TAMPILAN JUDUL: Pakai Nama Vendor, bukan Email
-                with st.expander(f"{status_icon} - {display_name} ({validity}) - {g_name}"):
+                with st.expander(f"{status_icon} - {l_type} - {display_name} ({validity}) - {g_name}"):
                     st.markdown("**A. Spesifikasi Armada**")
                     if {'unit_type', 'weight_capacity', 'cubic_capacity'}.issubset(subset_pr.columns):
                         df_specs = subset_pr[['unit_type', 'weight_capacity', 'cubic_capacity']].drop_duplicates().reset_index(drop=True)
@@ -1406,6 +1409,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
