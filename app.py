@@ -497,6 +497,15 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
             row_cells = table.add_row().cells
             try: harga = f"Rp {int(row['price']):,}".replace(",", ".")
             except: harga = "Rp 0"
+              
+            # --- LOGIC LEAD TIME (+ Hari) ---
+            lt_raw = str(row['lead_time'])
+            if lt_raw.isdigit() or (lt_raw.replace('.','',1).isdigit()):
+                lt_fmt = f"{lt_raw} Hari"
+            elif lt_raw in ["-", "", "0"]:
+                lt_fmt = "-"
+            else:
+                lt_fmt = f"{lt_raw} Hari"
             
             data_map = [
                 str(row.get('kota_asal', '-')), 
@@ -505,7 +514,7 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
                 str(row['Ranking']), 
                 str(row['vendor_name']), 
                 harga,
-                str(row['lead_time']), 
+                lt_fmt,
                 str(row['top'])
             ]
             
@@ -587,7 +596,7 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     doc.save(output_filename)
     return output_filename
     
-# --- FUNGSI GENERATE SPK (REVISI PASSWORD) ---
+# --- FUNGSI GENERATE SPK (UPDATE: FORMAT SK & FILE NAME) ---
 def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic_vendor, vendor_pass, df_data):
     doc = DocxTemplate(template_file)
     
@@ -609,41 +618,68 @@ def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic
                 if idx < len(row.cells):
                     row.cells[idx].width = width
 
-    def format_cell(cell, text, align=WD_ALIGN_PARAGRAPH.CENTER, bold=False):
+    def format_cell(cell, text, align=WD_ALIGN_PARAGRAPH.CENTER, bold=False, size=8):
         cell.text = str(text)
         cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
         p = cell.paragraphs[0]
         p.alignment = align
         p.paragraph_format.space_after = Pt(0)
         run = p.runs[0] if p.runs else p.add_run()
-        run.font.size = Pt(9)
+        run.font.size = Pt(size)
         run.font.name = 'Arial'
         run.font.bold = bold
 
-    # Tabel Data
+    # --- TABEL DATA ---
     sd = doc.new_subdoc()
-    headers = ['No', 'Kota Asal', 'Kota Tujuan', 'Jenis Unit', 'Rank', 'Biaya / Trip']
+    # Header disamakan dengan SK (Vendor diganti No agar rapi, ditambah LeadTime & TOP)
+    headers = ['No', 'Asal', 'Tujuan', 'Unit', 'Rank', 'Biaya/unit', 'LeadTime', 'TOP']
     table = sd.add_table(rows=1, cols=len(headers))
     table.style = 'Table Grid'
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     
+    # Header Styling
     hdr_cells = table.rows[0].cells
     for i, h in enumerate(headers):
-        shading_elm = parse_xml(r'<w:shd {} w:fill="E7E6E6"/>'.format(nsdecls('w')))
+        shading_elm = parse_xml(r'<w:shd {} w:fill="ED7D31"/>'.format(nsdecls('w'))) # Warna Orange SK
         hdr_cells[i]._tc.get_or_add_tcPr().append(shading_elm)
-        format_cell(hdr_cells[i], h, bold=True)
+        format_cell(hdr_cells[i], h, bold=True, size=8)
 
+    # Isi Data
     for idx, row in df_data.iterrows():
         row_cells = table.add_row().cells
-        vals = [idx+1, row.get('kota_asal','-'), row['kota_tujuan'], row['unit_type'], row['Ranking'], fmt_rp(row['price'])]
+        
+        # Logic LeadTime + " Hari"
+        lt_raw = str(row['lead_time'])
+        if lt_raw.isdigit() or (lt_raw.replace('.','',1).isdigit()):
+            lt_fmt = f"{lt_raw} Hari"
+        elif lt_raw in ["-", "", "0"]:
+            lt_fmt = "-"
+        else:
+            lt_fmt = f"{lt_raw} Hari"
+
+        vals = [
+            idx+1, 
+            row.get('kota_asal','-'), 
+            row['kota_tujuan'], 
+            row['unit_type'], 
+            row['Ranking'], 
+            fmt_rp(row['price']),
+            lt_fmt,          # <--- Lead Time + Hari
+            str(row['top'])  # <--- TOP
+        ]
+        
         for i, v in enumerate(vals):
+            # Asal, Tujuan, Unit rata kiri
             align = WD_ALIGN_PARAGRAPH.LEFT if i in [1,2,3] else WD_ALIGN_PARAGRAPH.CENTER
-            if i == 5: align = WD_ALIGN_PARAGRAPH.RIGHT
-            format_cell(row_cells[i], v, align)
+            if i == 5: align = WD_ALIGN_PARAGRAPH.RIGHT # Harga rata kanan
+            format_cell(row_cells[i], v, align, size=7)
 
-    set_col_widths(table, [Cm(1.0), Cm(3.5), Cm(4.5), Cm(3.0), Cm(1.5), Cm(3.5)])
+    # Set Lebar Kolom (Total ~16-17cm)
+    # No(0.8), Asal(2.5), Tujuan(3.5), Unit(2.0), Rank(1.0), Biaya(2.5), LT(1.5), TOP(2.0)
+    col_widths = [Cm(0.8), Cm(2.5), Cm(3.5), Cm(2.0), Cm(1.0), Cm(2.5), Cm(1.5), Cm(2.0)]
+    set_col_widths(table, col_widths)
 
-    # Context Mapping (Perhatikan 'password_vendor')
+    # Context Mapping
     context = {
         'no_spk': no_spk, 
         'tanggal_spk': tgl_spk, 
@@ -651,13 +687,14 @@ def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic
         'load_type': load_type, 
         'vendor_name': vendor_name, 
         'contact_person': pic_vendor, 
-        'password_vendor': vendor_pass, # <--- VARIABEL INI YANG DIPANGGIL DI WORD
+        'password_vendor': vendor_pass,
         'tabel_harga_vendor': sd
     }
     doc.render(context)
     
+    # Simpan File Sementara (Nama file final diatur di dashboard)
     safe_ven = "".join(x for x in vendor_name if x.isalnum())
-    fn = f"SPK_{safe_ven}_{int(time.time())}.docx"
+    fn = f"temp_spk_{safe_ven}_{int(time.time())}.docx"
     doc.save(fn)
     return fn
 
@@ -1428,28 +1465,32 @@ def admin_dashboard():
                             pic = df_final_spk.iloc[0].get('contact_person', 'Pimpinan Perusahaan')
                             if pd.isna(pic) or pic == "-": pic = "Pimpinan Perusahaan"
                             
-                            # 2. Ambil Password (5 Digit Terakhir)
-                            # Kita cari di df_u (Users) berdasarkan nama vendor
+                            # 2. Ambil Password
                             try:
-                                # df_u harus sudah diload di awal admin_dashboard
                                 user_row = df_u[df_u['vendor_name'] == sel_ven]
                                 if not user_row.empty:
                                     raw_pass = str(user_row.iloc[0]['password'])
-                                    # Ambil 5 karakter terakhir
                                     final_pass = raw_pass[-5:] if len(raw_pass) >= 5 else raw_pass
-                                else:
-                                    final_pass = "XXXXX"
-                            except:
-                                final_pass = "XXXXX"
+                                else: final_pass = "XXXXX"
+                            except: final_pass = "XXXXX"
 
                             # 3. Generate
-                            try:
-                                f_spk = create_docx_spk(tpl_spk, no_spk, spk_val, spk_load, sel_ven, pic, final_pass, df_final_spk)
-                                fn_spk = f"SPK_{sel_ven}_{spk_load}.docx"
-                                with open(f_spk, "rb") as f:
-                                    st.download_button("⬇️ Download SPK", f, file_name=fn_spk)
-                                os.remove(f_spk)
-                            except Exception as e: st.error(f"Gagal generate: {e}")
+                            with st.spinner(f"Memproses SPK {sel_ven}..."):
+                                try:
+                                    f_spk = create_docx_spk(tpl_spk, no_spk, spk_val, spk_load, sel_ven, pic, final_pass, df_final_spk)
+                                    
+                                    # CUSTOM NAMA FILE: SPK_loadtype_periode_vendor.docx
+                                    safe_val = str(spk_val).replace(" - ", "-").replace(" ", "_")
+                                    safe_load = str(spk_load).replace(" ", "")
+                                    safe_ven_file = str(sel_ven).replace(" ", "_").replace(".", "").replace(",", "")
+                                    
+                                    custom_filename = f"SPK_{safe_load}_{safe_val}_{safe_ven_file}.docx"
+                                    
+                                    with open(f_spk, "rb") as f:
+                                        st.download_button("⬇️ Download SPK", f, file_name=custom_filename)
+                                    os.remove(f_spk)
+                                except Exception as e: st.error(f"Gagal generate: {e}")
+                                    
                     else: st.warning("Vendor ini tidak memiliki data.")
                 else: st.warning("Data tidak ditemukan.")
                 
@@ -1746,6 +1787,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
