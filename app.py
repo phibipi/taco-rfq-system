@@ -1157,18 +1157,22 @@ def admin_dashboard():
             else:
                 st.warning("Tidak ada data.")
                 
-# ================= VENDOR =================
+# ================= VENDOR DASHBOARD (FULL FIX) =================
 def vendor_dashboard(email):
     step = st.session_state['vendor_step']
     
+    # --- STEP 1: DASHBOARD / PROFIL ---
     if step == "dashboard":
-        t1, t2 = st.tabs(["🛣️Pilih Rute & Isi Harga", "📋Isi Data Perusahaan"])
+        t1, t2 = st.tabs(["🛣️ Pilih Rute & Isi Harga", "📋 Isi Data Perusahaan"])
+        
+        # Tab 2: Profil
         with t2:
             df_p = get_data("Vendor_Profile")
             curr = {}
             if not df_p.empty:
                 m = df_p[df_p['email']==email]
                 if not m.empty: curr = m.iloc[-1].to_dict()
+            
             with st.container(border=True):
                 with st.form("prof"):
                     c1, c2 = st.columns(2)
@@ -1178,23 +1182,29 @@ def vendor_dashboard(email):
                     with c2:
                         ph = st.text_input("No. Telepon", value=curr.get('phone',''))
                         top = st.selectbox("Term of Payment", ["7 hari","14 Hari", "30 Hari"])
-                    ppn = st.selectbox("PPN", ["11%", "1,1%","0%"]); pph = st.selectbox("PPh", ["Include", "Exclude"])
+                    
+                    ppn = st.selectbox("PPN", ["11%", "1,1%","0%"])
+                    pph = st.selectbox("PPh", ["Include", "Exclude"])
+                    
                     if st.form_submit_button("Simpan Data", type="primary"):
                         save_data("Vendor_Profile", [[email, ad, cp, ph, top, ppn, pph, datetime.now().strftime("%Y-%m-%d")]])
                         st.success("Saved")
-                                else:
-                                    st.error("Gagal mengupdate status. Pastikan data sudah Disimpan (Save) terlebih dahulu sebelum Submit.")
-
         
+        # Tab 1: List Rute
         with t1:
             df_acc = get_data("Access_Rights")
             df_grps = get_data("Master_Groups")
             df_routes = get_data("Master_Routes")
             df_price = get_data("Price_Data")
 
-            if df_acc.empty: st.warning("Belum ada akses."); return
+            if df_acc.empty: 
+                st.warning("Belum ada akses.")
+                return
+            
             my_access = df_acc[df_acc['vendor_email'] == email]
-            if my_access.empty: st.info("Anda belum diberikan akses ke project manapun."); return
+            if my_access.empty: 
+                st.info("Anda belum diberikan akses ke project manapun.")
+                return
 
             data_list = []
             for _, acc in my_access.iterrows():
@@ -1206,20 +1216,25 @@ def vendor_dashboard(email):
                     data_list.append({'validity': val, 'group_id': gid, 'origin': row.get('origin','-'), 'route_group': row.get('route_group','-'), 'load_type': row.get('load_type','-')})
             
             df_disp = pd.DataFrame(data_list)
-            if df_disp.empty: st.warning("Konfigurasi Group tidak ditemukan."); return
+            if df_disp.empty: 
+                st.warning("Konfigurasi Group tidak ditemukan.")
+                return
 
             avail_validity = sorted(df_disp['validity'].unique().tolist())
             sel_val = st.selectbox("Pilih Periode / Validity:", avail_validity)
             df_view = df_disp[df_disp['validity'] == sel_val]
             
-            if df_view.empty: st.info("Tidak ada rute."); return
+            if df_view.empty: 
+                st.info("Tidak ada rute.")
+                return
             
             t_ftl, t_fcl = st.tabs(["🚛 FTL (Full Truck Load)", "🚢 FCL (Full Container Load)"])
             
             for t_code, t_ui in [('FTL', t_ftl), ('FCL', t_fcl)]:
                 with t_ui:
                     df_sub = df_view[df_view['load_type'] == t_code]
-                    if df_sub.empty: st.caption(f"Tidak ada akses {t_code}.")
+                    if df_sub.empty: 
+                        st.caption(f"Tidak ada akses {t_code}.")
                     else:
                         for org in sorted(df_sub['origin'].unique()):
                             with st.container(border=True):
@@ -1233,7 +1248,7 @@ def vendor_dashboard(email):
                                     gid = row['group_id']
                                     grp_name = row['route_group']
                                     
-                                    # CHECK STATUS PER VALIDITY
+                                    # Status Check
                                     r_data = df_routes[df_routes['group_id'] == gid] if not df_routes.empty else pd.DataFrame()
                                     status_ui = '<span class="status-pending">❌ Belum Ada Data</span>'
                                     is_locked_btn = False
@@ -1246,25 +1261,20 @@ def vendor_dashboard(email):
                                         ]
                                         if not sub_p.empty:
                                             status_ui = '<span class="status-done">✅Sudah Terisi</span>'
-                                            if "Locked" in sub_p['status'].values:
+                                            if "Locked" in sub_p['status'].values or "Waiting" in sub_p['status'].values:
                                                 is_locked_btn = True
                                     
                                     c1, c2, c3, c4 = st.columns([3, 4, 2, 2])
                                     c1.write(f"**{grp_name}**")
                                     dests = r_data['kota_tujuan'].unique().tolist() if not r_data.empty else []
-                                    # LOGIC PREVIEW KOTA (+X LAINNYA)
-                                    if len(dests) > 5:
-                                        preview_txt = f"{', '.join(dests[:5])}, +{len(dests)-5} kota lainnya"
-                                    else:
-                                        preview_txt = ", ".join(dests)
+                                    if len(dests) > 5: preview_txt = f"{', '.join(dests[:5])}, +{len(dests)-5} kota lainnya"
+                                    else: preview_txt = ", ".join(dests)
                                     c2.markdown(f"<span class='route-dest-list'>{preview_txt}</span>", unsafe_allow_html=True)
 
-                                    
-                                    # BUTTON LOGIC (DISABLED IF LOCKED)
                                     if is_locked_btn:
-                                        c3.button("🔒Harga Dikunci", key=f"btn_lk_{gid}", disabled=True)
+                                        c3.button("🔒 Locked", key=f"btn_lk_{gid}", disabled=True)
                                     else:
-                                        if c3.button("📌Isi Harga", key=f"btn_{t_code}_{gid}", type="primary"):
+                                        if c3.button("📌 Isi Harga", key=f"btn_{t_code}_{gid}", type="primary"):
                                             st.session_state.update({
                                                 'sel_origin': org, 
                                                 'sel_validity': sel_val, 
@@ -1277,7 +1287,7 @@ def vendor_dashboard(email):
                                     c4.markdown(status_ui, unsafe_allow_html=True)
                                     st.markdown("<hr>", unsafe_allow_html=True)
 
-    # --- INPUT PAGE ---
+    # --- STEP 2: INPUT HARGA ---
     elif step == "input":
         if st.session_state.get('temp_success_msg'):
             st.success(st.session_state['temp_success_msg'])
@@ -1306,7 +1316,9 @@ def vendor_dashboard(email):
                 if rr['origin']==cur_org and rr['load_type']==cur_load:
                     target_gids.append(gid); grp_names[gid]=rr['route_group']
         
-        if not target_gids: st.error("Data error."); return
+        if not target_gids: 
+            st.error("Data error.")
+            return
 
         target_gids = sorted(target_gids)
         if focused_gid and focused_gid in target_gids:
@@ -1324,14 +1336,16 @@ def vendor_dashboard(email):
                 my_u = df_u[df_u['group_id']==gid]
                 u_types = my_u['unit_type'].unique().tolist()
                 
-                if my_r.empty or not u_types: st.warning("Data belum lengkap."); continue
+                if my_r.empty or not u_types: 
+                    st.warning("Data belum lengkap.")
+                    continue
 
                 ex_price = {}; ex_spec = {}
                 is_lock = False
                 if not df_p.empty:
                     my_p = df_p[(df_p['vendor_email']==email) & (df_p['validity']==cur_val) & (df_p['route_id'].isin(my_r['route_id']))]
                     if not my_p.empty:
-                        if "Locked" in my_p['status'].values: is_lock = True
+                        if "Locked" in my_p['status'].values or "Waiting" in my_p['status'].values: is_lock = True
                         for _, row in my_p.iterrows():
                             ex_price[(row['route_id'], row['unit_type'])] = row['price']
                             ex_spec[row['unit_type']] = {'w': row.get('weight_capacity'), 'c': row.get('cubic_capacity')}
@@ -1364,12 +1378,9 @@ def vendor_dashboard(email):
                             rid = row['route_id']
                             rd = {
                                 "Route ID": rid, "Kota Asal": row['kota_asal'], "Kota Tujuan": row['kota_tujuan'],
-                                "Lead Time (Hari)": 0 # Lead time
+                                "Lead Time (Hari)": 0
                             }
-                            # Harga
-                            for u in u_types:
-                                rd[f"Harga {u}"] = ex_price.get((rid, u), 0)
-                            
+                            for u in u_types: rd[f"Harga {u}"] = ex_price.get((rid, u), 0)
                             rd["Keterangan"] = row.get('keterangan','-')
                             p_data.append(rd)
                         
@@ -1408,9 +1419,8 @@ def vendor_dashboard(email):
                         }
                         ed_md = st.data_editor(df_md, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_md)
 
-                    # SAVE
+                    # SAVE BUTTON
                     st.write("")
-                    # Tombol Simpan (Draft)
                     if st.form_submit_button(f"Simpan Data {cur_load} {g_name}", type="primary") and not is_lock:
                         c_spec = {r['Jenis Unit']: {'w': r['Kapasitas Berat Bersih (Kg)'], 'c': r['Kapasitas Kubikasi Dalam (CBM)']} for _, r in ed_sp.iterrows()}
                         
@@ -1437,38 +1447,26 @@ def vendor_dashboard(email):
                         st.cache_data.clear()
                         st.rerun()
 
-                # --- TOMBOL SUBMIT KE MANAGER (DI LUAR FORM, DI DALAM TAB) ---
+                # --- TOMBOL SUBMIT KE APPROVER (DI LUAR FORM, DI DALAM TAB) ---
                 st.divider()
-                st.markdown("#### 🚀 Submit Penawaran")
-                st.caption("Klik tombol ini jika harga sudah fix. Data akan dikirim ke Manager.")
-
-                # 1. Generate ID untuk update status
-                ids_to_submit = []
-                for _, r_row in my_r.iterrows():
-                    rid = str(r_row['route_id'])
-                    for u in u_types:
-                        tid = f"{email}_{cur_val}_{rid}_{u}".replace(" ","")
-                        ids_to_submit.append(tid)
-
-                # 2. Tombol Eksekusi
-                if st.button(f"Kirim ke Approval ({g_name})", key=f"sub_{gid}", type="primary", disabled=is_lock):
-                    if not ids_to_submit:
-                        st.warning("Tidak ada rute.")
-                    else:
-                        with st.spinner("Mengirim..."):
-                            if update_status_batch(ids_to_submit, "Waiting Approval 1"):
-                                try:
-                                    send_invitation_email(EMAIL_APPROVER_1, "Manager Logistik", "FTL/FCL", cur_val, [cur_org], "Login Admin")
-                                except: pass
-                                
-                                st.success("✅ Terkirim ke Manager!")
-                                time.sleep(1)
-                                st.rerun()
-                            else:
-                                st.error("Gagal submit. Simpan data dulu.")
+                if st.button(f"🚀 Kirim ke Approval ({g_name})", key=f"sub_{gid}", disabled=is_lock):
+                    ids_sub = []
+                    for _, r in my_r.iterrows():
+                        rid = str(r['route_id'])
+                        for u in u_types:
+                            tid = f"{email}_{cur_val}_{rid}_{u}".replace(" ","")
+                            ids_sub.append(tid)
+                    
+                    if update_status_batch(ids_sub, "Waiting Approval 1"):
+                        try:
+                            send_invitation_email(EMAIL_APPROVER_1, "Manager Logistik", "FTL/FCL", cur_val, [cur_org], "Login Admin")
+                        except: pass
+                        st.success("Terkirim ke Manager!"); time.sleep(1); st.rerun()
+                    else: st.error("Gagal submit.")
 
 if __name__ == "__main__":
     main()
+
 
 
 
