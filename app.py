@@ -233,24 +233,34 @@ def save_data(sheet_name, new_data_list):
             return False
     return False
 
-# --- FUNGSI UPDATE STATUS (BATCH) ---
-def update_status_batch(ids_to_update, new_status):
+# --- FUNGSI UPDATE STATUS LOCK/UNLOCK (OPTIMIZED) ---
+def update_status_locked(ids_to_lock, status_value="Locked"):
     sh = connect_to_gsheet()
     if sh:
         try:
             ws = sh.worksheet("Price_Data")
             vals = ws.get_all_values()
             
+            if not vals: return False
+
             # Cari index kolom
             header = vals[0]
-            id_idx = header.index("id_transaksi")
-            status_idx = header.index("status")
+            try:
+                id_idx = header.index("id_transaksi")
+                status_idx = header.index("status")
+            except ValueError:
+                return False
             
-            for i, row in enumerate(vals):
-                if i == 0: continue
-                if row[id_idx] in ids_to_update:
-                    # Update status
-                    ws.update_cell(i+1, status_idx+1, new_status)
+            # Modifikasi di memori
+            is_changed = False
+            for i in range(1, len(vals)):
+                if vals[i][id_idx] in ids_to_lock:
+                    vals[i][status_idx] = status_value
+                    is_changed = True
+            
+            # Upload ulang jika ada perubahan (Batch Update)
+            if is_changed:
+                ws.update(vals)
             
             get_data.clear()
             return True
@@ -1422,6 +1432,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
