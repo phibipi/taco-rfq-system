@@ -1420,7 +1420,7 @@ def admin_dashboard():
 
             st.write("") # Jarak
 
-# ==========================================
+            # ==========================================
             # BAGIAN 2: SURAT PERINTAH KERJA (SPK)
             # ==========================================
             with st.container(border=True):
@@ -1443,8 +1443,10 @@ def admin_dashboard():
                     df_final_spk = df_spk_raw[df_spk_raw['vendor_name'] == sel_ven].copy()
                     
                     if not df_final_spk.empty:
+                        # Preview kecil
                         st.info(f"Vendor **{sel_ven}** memiliki **{len(df_final_spk)}** rute di periode ini.")
                         
+                        # Hitung Ranking Ulang (Just in case)
                         df_final_spk = df_final_spk.sort_values(by=['kota_asal', 'kota_tujuan', 'unit_type', 'price'])
                         if 'Ranking' not in df_final_spk.columns: df_final_spk['Ranking'] = 1
 
@@ -1452,7 +1454,8 @@ def admin_dashboard():
                         upl_spk = col_c.file_uploader("Upload Template SPK", type="docx", key="upl_spk")
                         no_spk = col_d.text_input("Nomor Surat SPK:", f"001/SPK/{sel_ven[:3].upper()}/2026", key="no_spk")
                         
-                       if st.button("📄 Generate File SPK", type="primary"):
+                        # --- START BUTTON BLOCK ---
+                        if st.button("📄 Generate File SPK", type="primary"):
                             tpl_spk = "template_spk.docx"
                             if upl_spk: tpl_spk = upl_spk
                             elif not os.path.exists(tpl_spk): st.error("Template SPK tidak ditemukan."); st.stop()
@@ -1470,11 +1473,8 @@ def admin_dashboard():
                                 else: final_pass = "XXXXX"
                             except: final_pass = "XXXXX"
 
-                            # 3. KUMPULKAN SEMUA ORIGIN & ALAMAT
-                            # Ambil list semua origin unik dari data vendor ini
+                            # 3. KUMPULKAN ORIGIN & ALAMAT (Multi Origin Logic)
                             list_origin = sorted(df_final_spk['origin'].unique().tolist())
-                            
-                            # Gabungkan nama origin (Misal: "Jakarta, Surabaya")
                             origin_str_combined = ", ".join(list_origin)
                             
                             alamat_list = []
@@ -1482,28 +1482,20 @@ def admin_dashboard():
                                 df_gudang = get_data("Gudang") 
                                 if not df_gudang.empty:
                                     for org in list_origin:
-                                        # Cari alamat per origin
                                         res_addr = df_gudang[df_gudang['origin'].astype(str).str.lower() == str(org).lower()]
                                         if not res_addr.empty:
-                                            # Format: "Jakarta: Jl. Industri..."
                                             alamat_found = res_addr.iloc[0]['alamat']
-                                            # Jika origin cuma 1, langsung alamat. Jika banyak, pakai prefix nama kota.
-                                            if len(list_origin) > 1:
-                                                alamat_list.append(f"{org}: {alamat_found}")
-                                            else:
-                                                alamat_list.append(alamat_found)
-                                        else:
-                                            alamat_list.append(f"{org}: (Alamat tidak ditemukan)")
-                                else:
-                                    alamat_list.append("Data sheet Gudang kosong.")
-                            except Exception as e:
-                                alamat_list.append(f"Error ambil alamat: {e}")
+                                            if len(list_origin) > 1: alamat_list.append(f"{org}: {alamat_found}")
+                                            else: alamat_list.append(alamat_found)
+                                        else: alamat_list.append(f"{org}: -")
+                                else: alamat_list.append("(Sheet Gudang Kosong)")
+                            except Exception as e: alamat_list.append(f"Error: {e}")
                             
-                            # Gabungkan alamat dengan baris baru (Enter)
                             alamat_str_combined = "\n".join(alamat_list)
 
-                            # 4. MERGE DATA MULTIDROP
+                            # 4. MERGE MULTIDROP
                             df_spk_merged = df_final_spk.copy()
+                            # Default columns
                             df_spk_merged['inner_city_price'] = 0
                             df_spk_merged['outer_city_price'] = 0
                             df_spk_merged['labor_cost'] = 0
@@ -1513,11 +1505,7 @@ def admin_dashboard():
                                     md_dict = {}
                                     for _, rmd in df_md.iterrows():
                                         k = (str(rmd['vendor_email']).strip(), str(rmd['validity']).strip(), str(rmd['group_id']).strip())
-                                        md_dict[k] = {
-                                            'in': rmd.get('inner_city_price', 0),
-                                            'out': rmd.get('outer_city_price', 0),
-                                            'lab': rmd.get('labor_cost', 0)
-                                        }
+                                        md_dict[k] = {'in': rmd.get('inner_city_price',0), 'out': rmd.get('outer_city_price',0), 'lab': rmd.get('labor_cost',0)}
                                     
                                     def get_md_val(row, kind):
                                         key = (str(row['vendor_email']).strip(), str(row['validity']).strip(), str(row['group_id']).strip())
@@ -1527,28 +1515,23 @@ def admin_dashboard():
                                     df_spk_merged['inner_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'in'), axis=1)
                                     df_spk_merged['outer_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'out'), axis=1)
                                     df_spk_merged['labor_cost'] = df_spk_merged.apply(lambda x: get_md_val(x, 'lab'), axis=1)
-                                except Exception as e: st.warning(f"Gagal merge multidrop: {e}")
+                                except: pass
 
-                            # 5. GENERATE DOCX
+                            # 5. GENERATE
                             with st.spinner(f"Memproses SPK {sel_ven}..."):
                                 try:
-                                    # Pass variable origin dan alamat yang sudah digabung
-                                    f_spk = create_docx_spk(
-                                        tpl_spk, no_spk, spk_val, spk_load, sel_ven, pic, final_pass, 
-                                        origin_str_combined, alamat_str_combined, df_spk_merged
-                                    )
+                                    f_spk = create_docx_spk(tpl_spk, no_spk, spk_val, spk_load, sel_ven, pic, final_pass, origin_str_combined, alamat_str_combined, df_spk_merged)
                                     
                                     safe_val = str(spk_val).replace(" - ", "-").replace(" ", "_")
                                     safe_load = str(spk_load).replace(" ", "")
                                     safe_ven_file = str(sel_ven).replace(" ", "_").replace(".", "").replace(",", "")
-                                    
                                     custom_filename = f"SPK_{safe_load}_{safe_val}_{safe_ven_file}.docx"
                                     
                                     with open(f_spk, "rb") as f:
                                         st.download_button("⬇️ Download SPK", f, file_name=custom_filename)
                                     os.remove(f_spk)
                                 except Exception as e: st.error(f"Gagal generate: {e}")
-                                    
+                        # --- END BUTTON BLOCK ---
                     else: st.warning("Vendor ini tidak memiliki data.")
                 else: st.warning("Data tidak ditemukan.")
                 
@@ -1845,6 +1828,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
