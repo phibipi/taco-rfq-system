@@ -638,11 +638,206 @@ def main():
                     st.session_state['vendor_step'] = "dashboard"
                     st.cache_data.clear()
                     st.rerun()
+        
         st.markdown("---")
 
-        if role == 'admin': admin_dashboard()
-        else: vendor_dashboard(user['email'])
+        if role == 'admin':
+            admin_dashboard()
+        elif role == 'vendor':
+            vendor_dashboard(user['email'])
+        else:
+            user_dashboard()
 
+# ================= INTERNAL USER DASHBOARD =================
+def user_dashboard():
+    st.subheader("🔍 Portal Pencarian Tarif")
+    
+    # --- LOAD DATA ---
+    df_p = get_data("Price_Data")
+    df_r = get_data("Master_Routes")
+    df_g = get_data("Master_Groups")
+    df_u = get_data("Users")
+    df_prof = get_data("Vendor_Profile")
+    df_md = get_data("Multidrop_Data") # Load Multidrop untuk Tab Search
+
+    # --- PREPARE MASTER DATA ---
+    df_master = pd.DataFrame()
+    if not df_p.empty:
+        # Cleaning ID
+        df_p['route_id'] = df_p['route_id'].astype(str).str.strip()
+        df_r['route_id'] = df_r['route_id'].astype(str).str.strip()
+        df_g['group_id'] = df_g['group_id'].astype(str).str.strip()
+        if not df_md.empty:
+            df_md['vendor_email'] = df_md['vendor_email'].astype(str).str.strip()
+            df_md['group_id'] = df_md['group_id'].astype(str).str.strip()
+            df_md['validity'] = df_md['validity'].astype(str).str.strip()
+
+        # Merge 1: Price + Routes
+        m1 = pd.merge(df_p, df_r, on='route_id', how='left')
+        # Merge 2: + Groups
+        m2 = pd.merge(m1, df_g, on='group_id', how='left')
+        # Merge 3: + User (Vendor Name)
+        m3 = pd.merge(m2, df_u[['email', 'vendor_name']], left_on='vendor_email', right_on='email', how='left')
+        m3['vendor_name'] = m3['vendor_name'].fillna(m3['vendor_email'])
+        
+        # Merge 4: + Vendor Profile (TOP, Address, etc)
+        if not df_prof.empty:
+            df_prof_clean = df_prof.sort_values('updated_at', ascending=False).drop_duplicates('email')
+            m4 = pd.merge(m3, df_prof_clean[['email', 'top']], left_on='vendor_email', right_on='email', how='left')
+            m4['top'] = m4['top'].fillna("-")
+        else:
+            m4 = m3
+            m4['top'] = "-"
+
+        m4['price'] = pd.to_numeric(m4['price'], errors='coerce').fillna(0)
+        
+        # Filter hanya data yang sudah Locked (Final) agar user tidak melihat harga draft? 
+        # Opsional: Jika ingin semua harga tampil, hapus baris ini.
+        # df_master = m4[m4['status'] == 'Locked'].copy() 
+        df_master = m4.copy() # Tampilkan semua status (Open/Locked)
+    
+    # --- TABS ---
+    tab1, tab2 = st.tabs(["📊 Summary & Ranking", "🔎 Cari Vendor per Rute"])
+
+    # === TAB 1: SUMMARY RANKING (Mirip Admin) ===
+    with tab1:
+        if df_master.empty:
+            st.info("Data harga belum tersedia.")
+        else:
+            c1, c2 = st.columns(2)
+            # Filter
+            avail_val = sorted(df_master['validity'].unique().tolist())
+            avail_load = sorted(df_master['load_type'].unique().tolist())
+            
+            sel_val = c1.selectbox("Filter Periode", avail_val, key="sum_val")
+            sel_load = c2.selectbox("Filter Tipe Muatan", avail_load, key="sum_load")
+            
+            df_view = df_master[(df_master['validity'] == sel_val) & (df_master['load_type'] == sel_load)].copy()
+            
+            if not df_view.empty:
+                unique_origins = sorted(df_view['origin'].unique())
+                for org in unique_origins:
+                    with st.expander(f"📍 Origin: {org}", expanded=False):
+                        sub_df = df_view[df_view['origin'] == org].copy()
+                        # Ranking Logic
+                        sub_df = sub_df.sort_values(by=['kota_tujuan', 'unit_type', 'price'])
+                        sub_df['Ranking'] = sub_df.groupby(['kota_tujuan', 'unit_type']).cumcount() + 1
+                        
+                        # Filter Top 3
+                        sub_df = sub_df[sub_df['Ranking'] <= 3]
+                        
+                        sub_df['price_fmt'] = sub_df['price'].apply(lambda x: f"Rp {int(x):,}".replace(",", "."))
+                        
+                        st.dataframe(
+                            sub_df[['kota_tujuan', 'unit_type', 'Ranking', 'vendor_name', 'price_fmt', 'lead_time', 'top']],
+                            use_container_width=True,
+                            hide_index=True,
+                            column_config={"kota_tujuan": "Tujuan", "price_fmt": "Harga", "vendor_name": "Vendor", "top": "TOP"}
+                        )
+            else:
+                st.warning("Data tidak ditemukan untuk filter ini.")
+
+    # === TAB 2: SEARCH VENDOR BY ROUTE ===
+    with tab2:
+        if df_master.empty:
+            st.info("Data belum tersedia.")
+        else:
+            # 1. Filter Utama
+            c1, c2, c3 = st.columns(3)
+            # Filter Periode
+            avail_val_s = sorted(df_master['validity'].unique().tolist())
+            s_val = c1.selectbox("1. Pilih Periode", avail_val_s, key="s_val")
+            
+            # Filter Load Type
+            avail_load_s = sorted(df_master['load_type'].unique().tolist())
+            s_load = c2.selectbox("2. Pilih Muatan", avail_load_s, key="s_load")
+            
+            # Filter Origin (Dinamis berdasarkan 2 filter sebelumnya)
+            filtered_1 = df_master[(df_master['validity'] == s_val) & (df_master['load_type'] == s_load)]
+            avail_org_s = sorted(filtered_1['origin'].unique().tolist())
+            s_org = c3.selectbox("3. Pilih Origin", avail_org_s, key="s_org")
+            
+            # 2. Input Search Kota Tujuan
+            st.write("")
+            search_dest = st.text_input("🔍 Cari Kota Tujuan (Ketik nama kota...)", placeholder="Contoh: Surabaya").strip()
+            
+            if search_dest:
+                # Filter Data
+                df_search = filtered_1[filtered_1['origin'] == s_org].copy()
+                # Filter Fuzzy / Contains untuk Kota Tujuan
+                df_search = df_search[df_search['kota_tujuan'].str.contains(search_dest, case=False, na=False)]
+                
+                if not df_search.empty:
+                    # GABUNGKAN DATA MULTIDROP & BURUH
+                    # Kita perlu merge df_search dengan df_md berdasarkan (vendor_email, validity, group_id)
+                    
+                    if not df_md.empty:
+                        # Rename kolom agar tidak bentrok saat merge atau lebih jelas
+                        md_subset = df_md[['vendor_email', 'validity', 'group_id', 'inner_city_price', 'outer_city_price', 'labor_cost']].copy()
+                        
+                        # Merge
+                        df_result = pd.merge(
+                            df_search, 
+                            md_subset, 
+                            on=['vendor_email', 'validity', 'group_id'], 
+                            how='left'
+                        )
+                        
+                        # Fill NaN (Jika vendor belum isi multidrop)
+                        for c in ['inner_city_price', 'outer_city_price', 'labor_cost']:
+                            df_result[c] = pd.to_numeric(df_result[c], errors='coerce').fillna(0)
+                    else:
+                        df_result = df_search.copy()
+                        df_result['inner_city_price'] = 0
+                        df_result['outer_city_price'] = 0
+                        df_result['labor_cost'] = 0
+
+                    # Sorting: Harga Termurah -> Termahal
+                    df_result = df_result.sort_values(by=['unit_type', 'price'])
+                    
+                    # Format Rupiah
+                    def fmt_rp(x): return f"Rp {int(x):,}".replace(",", ".")
+                    
+                    df_result['Harga Unit'] = df_result['price'].apply(fmt_rp)
+                    df_result['Multidrop Dalam'] = df_result['inner_city_price'].apply(fmt_rp)
+                    df_result['Multidrop Luar'] = df_result['outer_city_price'].apply(fmt_rp)
+                    df_result['Biaya Buruh'] = df_result['labor_cost'].apply(fmt_rp)
+                    
+                    # Tampilkan Hasil
+                    # Grouping per Unit Type agar rapi
+                    unique_units = df_result['unit_type'].unique()
+                    
+                    st.success(f"Ditemukan {len(df_result)} penawaran untuk tujuan '{search_dest}'.")
+                    
+                    for unit in unique_units:
+                        st.markdown(f"##### 🚛 Unit: {unit}")
+                        sub_res = df_result[df_result['unit_type'] == unit]
+                        
+                        # Kolom yang diminta: Urutan Vendor, Harga, TOP, Biaya Multidrop, Biaya Buruh, Leadtime
+                        # Kita buat tabel ranking
+                        sub_res['Rank'] = range(1, len(sub_res) + 1)
+                        
+                        display_cols = [
+                            'Rank', 'vendor_name', 'Harga Unit', 'top', 
+                            'lead_time', 'Multidrop Dalam', 'Multidrop Luar', 'Biaya Buruh'
+                        ]
+                        
+                        st.dataframe(
+                            sub_res[display_cols],
+                            use_container_width=True,
+                            hide_index=True,
+                            column_config={
+                                "vendor_name": "Vendor",
+                                "top": "TOP (Term of Payment)",
+                                "lead_time": "Lead Time (Hari)"
+                            }
+                        )
+                        st.markdown("---")
+                else:
+                    st.warning(f"Tidak ditemukan rute ke '{search_dest}' dari {s_org}.")
+            else:
+                st.info("Silakan ketik nama kota tujuan di atas untuk mulai mencari.")
+                
 # ================= ADMIN =================
 def admin_dashboard():
     tabs = st.tabs(["📍Master Groups", "🛣️Master Routes", "🚛Master Units", "👥Users", "🔑Access Rights", "✅Monitoring & Approval", "📊Summary", "🖨️Print File"])
@@ -1432,6 +1627,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
