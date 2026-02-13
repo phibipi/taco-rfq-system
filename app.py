@@ -22,9 +22,6 @@ st.set_page_config(page_title="TACO Procurement", layout="wide", page_icon="🚛
 # --- SHEET CONNECTION ---
 SPREADSHEET_ID = "1j9GCq8Wwm-MM8hOamsH26qlmjNwuDBuEMnbw6ORzTQk"
 
-# --- KONFIGURASI APPROVER (Ganti dengan email asli) ---
-EMAIL_APPROVER_1 = "phoebechairunisa@gmail.com"  # Pejabat Tahap 1 (Manager)
-EMAIL_APPROVER_2 = "phoewecha@gmail.com" # Pejabat Tahap 2 (Final/Direktur)
 
 # --- UI PAGE FONT BUTTON ETC ---
 def init_style():
@@ -407,7 +404,7 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
         st.error(f"Gagal kirim email: {e}")
         return False
         
-# --- FUNGSI GENERATE WORD (OPTIMIZED: SUPER CEPAT & RAPI) ---
+
 # --- FUNGSI GENERATE WORD (OPTIMIZED: SUPER CEPAT & RAPI) ---
 def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     doc = DocxTemplate(template_file)
@@ -907,22 +904,17 @@ def admin_dashboard():
                             
         st.dataframe(get_data("Access_Rights"), use_container_width=True)
 
-# --- TAB 6: MONITORING (FINAL: APPROVAL LEVEL) ---
+# --- TAB 6: MONITORING (UPDATE: ADA LOAD TYPE DI JUDUL) ---
     with tabs[5]:
         st.subheader("Monitoring Harga & Approval")
         df_price = get_data("Price_Data")
         df_routes = get_data("Master_Routes")
         df_md = get_data("Multidrop_Data")
         df_g = get_data("Master_Groups")
-        df_users = get_data("Users") # Butuh ini untuk nama vendor
-        
-        # Ambil email user yang login
-        current_login_email = st.session_state['user_info']['email'] if st.session_state['user_info'] else ""
         
         if df_price.empty:
             st.info("Belum ada data harga masuk.")
         else:
-            # --- PREPROCESS DATA ---
             df_price['route_id'] = df_price['route_id'].astype(str).str.strip()
             df_routes['route_id'] = df_routes['route_id'].astype(str).str.strip()
             
@@ -930,40 +922,34 @@ def admin_dashboard():
             merged_pr['group_id'] = merged_pr['group_id'].fillna('Unknown')
             
             if not df_g.empty:
+                # UPDATE 1: Ambil kolom 'load_type' juga dari Master Group
                 merged_pr = pd.merge(merged_pr, df_g[['group_id', 'route_group', 'load_type']], on='group_id', how='left')
             else: 
-                merged_pr['route_group'] = 'Unknown Group'; merged_pr['load_type'] = '-'
-
-            if not df_users.empty:
-                merged_pr = pd.merge(merged_pr, df_users[['email', 'vendor_name']], left_on='vendor_email', right_on='email', how='left')
-                merged_pr['vendor_name'] = merged_pr['vendor_name'].fillna(merged_pr['vendor_email'])
-            else: merged_pr['vendor_name'] = merged_pr['vendor_email']
+                merged_pr['route_group'] = 'Unknown Group'
+                merged_pr['load_type'] = '-'
                 
-            merged_pr = merged_pr.fillna('Unknown') # Safety fillna
+            merged_pr['route_group'] = merged_pr['route_group'].fillna('Unknown Group')
+            merged_pr['load_type'] = merged_pr['load_type'].fillna('-') # Handle jika kosong
+            merged_pr['kota_asal'] = merged_pr['kota_asal'].fillna('Unknown')
+            merged_pr['kota_tujuan'] = merged_pr['kota_tujuan'].fillna('Unknown')
 
             merged_pr['key_group'] = merged_pr['vendor_email'] + " | " + merged_pr['validity'] + " | " + merged_pr['route_group'] + " | " + merged_pr['group_id']
             unique_keys = merged_pr['key_group'].unique()
             
-            # --- LOOP EXPANDER ---
             for key in unique_keys:
                 parts = key.split(" | ")
-                vendor_email, validity, g_name, g_id = parts[0], parts[1], parts[2], parts[3]
+                vendor, validity, g_name, g_id = parts[0], parts[1], parts[2], parts[3]
                 subset_pr = merged_pr[merged_pr['key_group'] == key]
                 if subset_pr.empty: continue
                 
-                # Cek Status
-                current_status = subset_pr.iloc[0]['status']
-                display_name = subset_pr.iloc[0]['vendor_name']
+                is_locked = "Locked" in subset_pr['status'].values
+                status_icon = "🔒 LOCKED" if is_locked else "🟢 OPEN"
+                
+                # UPDATE 2: Ambil Load Type dari data baris pertama grup ini
                 l_type = subset_pr.iloc[0]['load_type']
                 
-                # Icon Status
-                if current_status == "Locked": status_icon = "🔒 FINAL"
-                elif "Waiting" in current_status: status_icon = "⏳ WAITING"
-                elif "Revision" in current_status: status_icon = "⚠️ REVISI"
-                else: status_icon = "🟢 OPEN"
-                
-                with st.expander(f"{status_icon} - {l_type} - {display_name} ({validity}) - {g_name}"):
-                    # ... (Kode tabel A, B, C sama seperti sebelumnya) ...
+                # Masukkan ke judul Expander
+                with st.expander(f"{status_icon} - {l_type} - {vendor} ({validity}) - {g_name}"):
                     st.markdown("**A. Spesifikasi Armada**")
                     if {'unit_type', 'weight_capacity', 'cubic_capacity'}.issubset(subset_pr.columns):
                         df_specs = subset_pr[['unit_type', 'weight_capacity', 'cubic_capacity']].drop_duplicates().reset_index(drop=True)
@@ -978,61 +964,47 @@ def admin_dashboard():
 
                     st.markdown("**C. Biaya Lain (Multidrop & Buruh)**")
                     if not df_md.empty:
-                        # ... (Logic filter multidrop sama) ...
                         df_md['vendor_email'] = df_md['vendor_email'].astype(str).str.strip()
-                        curr_ven = str(vendor_email).strip(); curr_val = str(validity).strip(); curr_gid = str(g_id).strip()
-                        sub_md = df_md[(df_md['vendor_email'] == curr_ven) & (df_md['validity'] == curr_val) & (df_md['group_id'] == curr_gid)]
+                        df_md['validity'] = df_md['validity'].astype(str).str.strip()
+                        df_md['group_id'] = df_md['group_id'].astype(str).str.strip()
+                        
+                        curr_ven = str(vendor).strip()
+                        curr_val = str(validity).strip()
+                        curr_gid = str(g_id).strip()
+
+                        sub_md = df_md[
+                            (df_md['vendor_email'] == curr_ven) &
+                            (df_md['validity'] == curr_val) &
+                            (df_md['group_id'] == curr_gid)
+                        ]
 
                         if not sub_md.empty:
-                            cols = ['inner_city_price', 'outer_city_price']
-                            if 'labor_cost' in sub_md.columns: cols.append('labor_cost')
-                            st.dataframe(sub_md[cols], use_container_width=True, hide_index=True)
-                        else: st.info("Data Multidrop kosong.")
-                    else: st.info("Data Multidrop kosong.")
-                    
-                    # --- ACTION BUTTONS (APPROVAL FLOW) ---
-                    st.divider()
-                    st.write(f"**Status Saat Ini:** `{current_status}`")
-                    
-                    all_ids = subset_pr['id_transaksi'].tolist()
-                    c_act1, c_act2 = st.columns(2)
-
-                    # 1. TAHAP MANAGER
-                    if current_status == "Waiting Approval 1":
-                        if current_login_email == EMAIL_APPROVER_1:
-                            with c_act1:
-                                if st.button("✅ Approve (ke Tahap 2)", key=f"app1_{key}"):
-                                    update_status_batch(all_ids, "Waiting Approval 2")
-                                    st.success("Approved -> Tahap 2"); st.rerun()
-                            with c_act2:
-                                if st.button("❌ Reject (Revisi)", key=f"rej1_{key}"):
-                                    update_status_batch(all_ids, "Revision Needed")
-                                    st.warning("Direject ke Vendor"); st.rerun()
+                            cols_to_show = ['inner_city_price', 'outer_city_price']
+                            header_names = ["Multidrop Dalam Kota", " Multidrop Luar Kota"]
+                            
+                            if 'labor_cost' in sub_md.columns:
+                                cols_to_show.append('labor_cost')
+                                header_names.append("Biaya Buruh")
+                            
+                            disp_md = sub_md[cols_to_show].reset_index(drop=True)
+                            disp_md.columns = header_names
+                            st.dataframe(disp_md, use_container_width=True, hide_index=True)
                         else:
-                            st.info(f"⏳ Menunggu persetujuan Manager ({EMAIL_APPROVER_1})")
-
-                    # 2. TAHAP DIREKTUR
-                    elif current_status == "Waiting Approval 2":
-                        if current_login_email == EMAIL_APPROVER_2:
-                            with c_act1:
-                                if st.button("🔒 Approve & LOCK (Final)", key=f"app2_{key}"):
-                                    update_status_batch(all_ids, "Locked")
-                                    st.success("Data Locked (Final)"); st.rerun()
-                            with c_act2:
-                                if st.button("❌ Reject (Revisi)", key=f"rej2_{key}"):
-                                    update_status_batch(all_ids, "Revision Needed")
-                                    st.warning("Direject ke Vendor"); st.rerun()
-                        else:
-                            st.info(f"⏳ Menunggu persetujuan Direktur ({EMAIL_APPROVER_2})")
-                    
-                    # 3. JIKA SUDAH LOCKED / OPEN
-                    elif current_status == "Locked":
-                        st.success("✅ Dokumen Final (Locked).")
-                        if st.button("🔓 Unlock (Emergency)", key=f"unl_{key}"):
-                             update_status_batch(all_ids, "Open")
-                             st.warning("Dibuka kembali."); st.rerun()
+                            st.info("Data Multidrop belum diinput oleh vendor.")
                     else:
-                        st.info("Menunggu Vendor submit harga.")
+                        st.info("Database Multidrop masih kosong.")
+                    
+                    st.divider()
+                    c1, c2 = st.columns([1, 4])
+                    ids = subset_pr['id_transaksi'].tolist()
+                    if is_locked:
+                        if c1.button("🔓 UNLOCK DATA", key=f"ul_{key}"):
+                            update_status_locked(ids, "Open")
+                            st.success("Unlocked!"); time.sleep(0.5); st.rerun()
+                    else:
+                        if c1.button("🔒 LOCK DATA", key=f"lk_{key}", type="primary"):
+                            update_status_locked(ids, "Locked")
+                            st.success("Locked!"); time.sleep(0.5); st.rerun()
     
     # --- TAB 7: SUMMARY ---   
     with tabs[6]:
@@ -1419,7 +1391,7 @@ def vendor_dashboard(email):
                         }
                         ed_md = st.data_editor(df_md, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_md)
 
-                    # SAVE BUTTON
+# SAVE
                     st.write("")
                     if st.form_submit_button(f"Simpan Data {cur_load} {g_name}", type="primary") and not is_lock:
                         c_spec = {r['Jenis Unit']: {'w': r['Kapasitas Berat Bersih (Kg)'], 'c': r['Kapasitas Kubikasi Dalam (CBM)']} for _, r in ed_sp.iterrows()}
@@ -1447,25 +1419,10 @@ def vendor_dashboard(email):
                         st.cache_data.clear()
                         st.rerun()
 
-                # --- TOMBOL SUBMIT KE APPROVER (DI LUAR FORM, DI DALAM TAB) ---
-                st.divider()
-                if st.button(f"🚀 Kirim ke Approval ({g_name})", key=f"sub_{gid}", disabled=is_lock):
-                    ids_sub = []
-                    for _, r in my_r.iterrows():
-                        rid = str(r['route_id'])
-                        for u in u_types:
-                            tid = f"{email}_{cur_val}_{rid}_{u}".replace(" ","")
-                            ids_sub.append(tid)
-                    
-                    if update_status_batch(ids_sub, "Waiting Approval 1"):
-                        try:
-                            send_invitation_email(EMAIL_APPROVER_1, "Manager Logistik", "FTL/FCL", cur_val, [cur_org], "Login Admin")
-                        except: pass
-                        st.success("Terkirim ke Manager!"); time.sleep(1); st.rerun()
-                    else: st.error("Gagal submit.")
 
 if __name__ == "__main__":
     main()
+
 
 
 
