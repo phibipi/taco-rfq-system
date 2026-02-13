@@ -1451,7 +1451,7 @@ def admin_dashboard():
                         upl_spk = col_c.file_uploader("Upload Template SPK", type="docx", key="upl_spk")
                         no_spk = col_d.text_input("Nomor Surat SPK:", f"001/SPK/{sel_ven[:3].upper()}/2026", key="no_spk")
                         
-if st.button("📄 Generate File SPK", type="primary"):
+                    if st.button("📄 Generate File SPK", type="primary"):
                             tpl_spk = "template_spk.docx"
                             if upl_spk: tpl_spk = upl_spk
                             elif not os.path.exists(tpl_spk): st.error("Template SPK tidak ditemukan."); st.stop()
@@ -1830,6 +1830,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
