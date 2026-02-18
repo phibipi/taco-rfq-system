@@ -1578,7 +1578,7 @@ def admin_dashboard():
                     else: st.warning("Vendor ini tidak memiliki data.")
                 else: st.warning("Data tidak ditemukan.")
                 
-# ================= VENDOR DASHBOARD (UPDATE: URUTAN KOLOM, FORMAT RIBUAN, LEBAR KOLOM) =================
+# ================= VENDOR DASHBOARD (UPDATE: DYNAMIC TABS) =================
 def vendor_dashboard(email):
     step = st.session_state['vendor_step']
     
@@ -1653,14 +1653,32 @@ def vendor_dashboard(email):
                 st.info("Tidak ada rute.")
                 return
             
-            t_ftl, t_fcl = st.tabs(["🚛 FTL (Full Truck Load)", "🚢 FCL (Full Container Load)"])
+            # --- LOGIKA TAB DINAMIS (UPDATE) ---
+            # 1. Cek tipe apa saja yang tersedia di data
+            avail_types_raw = df_view['load_type'].unique().tolist()
             
-            for t_code, t_ui in [('FTL', t_ftl), ('FCL', t_fcl)]:
-                with t_ui:
-                    df_sub = df_view[df_view['load_type'] == t_code]
-                    if df_sub.empty: 
-                        st.caption(f"Tidak ada akses {t_code}.")
-                    else:
+            # 2. Definisikan urutan dan nama tab
+            type_map = {
+                "FTL": "🚛 FTL (Full Truck Load)",
+                "FCL": "🚢 FCL (Full Container Load)"
+            }
+            
+            # 3. Filter hanya tipe yang ada datanya (FTL duluan jika ada)
+            final_types = [t for t in ["FTL", "FCL"] if t in avail_types_raw]
+            
+            if not final_types:
+                st.warning("Tipe muatan tidak dikenali.")
+            else:
+                # 4. Buat Tab sesuai isi final_types
+                tab_labels = [type_map.get(t, t) for t in final_types]
+                created_tabs = st.tabs(tab_labels)
+                
+                # 5. Loop Render (zip menggabungkan list tipe dan list tab object)
+                for t_code, t_ui in zip(final_types, created_tabs):
+                    with t_ui:
+                        df_sub = df_view[df_view['load_type'] == t_code]
+                        # Disini tidak perlu cek empty lagi, karena tab dibuat hanya jika data ada
+                        
                         for org in sorted(df_sub['origin'].unique()):
                             with st.container(border=True):
                                 st.markdown(f"#### 📍 {org}")
@@ -1832,8 +1850,8 @@ def vendor_dashboard(email):
                             for u in u_types: 
                                 if cur_round == "2":
                                     tgt = get_target_price(df_p, rid, u, cur_val)
-                                    rd[f"Target Biaya per Trip {u}"] = tgt
-                                rd[f"Biaya per Trip {u}"] = ex_price.get((rid, u), 0)
+                                    rd[f"Target {u}"] = tgt
+                                rd[f"Harga {u}"] = ex_price.get((rid, u), 0)
                             p_data.append(rd)
                         
                         df_pr = pd.DataFrame(p_data)
@@ -1842,25 +1860,20 @@ def vendor_dashboard(email):
                         cf_pr = {
                             "Route ID": None,
                             "Kota Asal": st.column_config.TextColumn(disabled=True, width="small"),
-                            "Kota Tujuan": st.column_config.TextColumn(disabled=True, width="small"), # <--- WIDTH SMALL
-                            "Keterangan": st.column_config.TextColumn(width="medium"), # <--- Keterangan
+                            "Kota Tujuan": st.column_config.TextColumn(disabled=True, width="small"),
+                            "Keterangan": st.column_config.TextColumn(width="medium"),
                             "Lead Time (Hari)": st.column_config.NumberColumn(min_value=0, step=1, width="small")
                         }
                         
-                        # Reorder Columns: KETERANGAN DI AKHIR
                         cols_order = ["Route ID", "Kota Asal", "Kota Tujuan", "Lead Time (Hari)"]
                         for u in u_types:
-                            # Config Harga (Format Rupiah)
-                            cf_pr[f"Biaya per Trip {u}"] = st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d", required=True, width="medium")
-                            
+                            cf_pr[f"Harga {u}"] = st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d", required=True, width="medium")
                             target_col = f"Target {u}"
                             if target_col in df_pr.columns:
-                                # Config Target (Format Rupiah)
                                 cf_pr[target_col] = st.column_config.NumberColumn(format="Rp %d", disabled=True, width="medium")
                                 cols_order.append(target_col)
-                            cols_order.append(f"Biaya per Trip {u}")
+                            cols_order.append(f"Harga {u}")
                         
-                        # Tambahkan Keterangan di paling belakang
                         cols_order.append("Keterangan")
 
                         df_pr = df_pr[cols_order]
@@ -1888,7 +1901,6 @@ def vendor_dashboard(email):
                         
                         df_md_ui = pd.DataFrame([{"Multidrop Dalam Kota": ic, "Multidrop Luar Kota": oc, "Biaya Buruh": lc}])
                         
-                        # Config Format Ribuan di Multidrop
                         cf_md = {
                             "Multidrop Dalam Kota": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d"),
                             "Multidrop Luar Kota": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d"),
@@ -1906,10 +1918,10 @@ def vendor_dashboard(email):
                         
                         for _, r in ed_pr.iterrows():
                             rid = str(r['Route ID']); lt = int(r['Lead Time (Hari)'])
-                            ket = str(r['Keterangan']) # Ambil Keterangan
+                            ket = str(r['Keterangan'])
                             
                             for u in u_types:
-                                pr = int(r[f"Biaya per Trip {u}"])
+                                pr = int(r[f"Harga {u}"])
                                 w = str(c_spec.get(u,{}).get('w','')); c = str(c_spec.get(u,{}).get('c',''))
                                 tid = f"{email}_{cur_val}_{rid}_{u}_{cur_round}".replace(" ","")
                                 f_data.append([tid, email, "Open", cur_val, rid, u, lt, pr, w, c, ket, ts, cur_round])
@@ -1929,6 +1941,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
