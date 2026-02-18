@@ -365,7 +365,7 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
     due_date_str = f"{due_date.day} {months_id[due_date.month]} {due_date.year}"
 
     # Update Subject agar terlihat Tahap keberapa
-    subject = f"Undangan Tender {load_type} - {validity} (Tahap {round_num}) - TACO Group"
+    subject = f"Undangan Tender {load_type} - {validity} (Tahap Penawaran {round_num}) - TACO Group"
     origins_str = ", ".join(origins)
     
     body = f"""
@@ -1578,7 +1578,7 @@ def admin_dashboard():
                     else: st.warning("Vendor ini tidak memiliki data.")
                 else: st.warning("Data tidak ditemukan.")
                 
-# ================= VENDOR DASHBOARD (FIX: KETERANGAN & ERROR) =================
+# ================= VENDOR DASHBOARD (UPDATE: URUTAN KOLOM, FORMAT RIBUAN, LEBAR KOLOM) =================
 def vendor_dashboard(email):
     step = st.session_state['vendor_step']
     
@@ -1822,7 +1822,7 @@ def vendor_dashboard(email):
                             rid = row['route_id']
                             rd = {
                                 "Route ID": rid, "Kota Asal": row['kota_asal'], "Kota Tujuan": row['kota_tujuan'],
-                                "Keterangan": row.get('keterangan', '-'), # <--- Keterangan Dikembalikan
+                                "Keterangan": row.get('keterangan', '-'),
                                 "Lead Time (Hari)": 0 
                             }
                             if not source_p_data.empty:
@@ -1832,8 +1832,8 @@ def vendor_dashboard(email):
                             for u in u_types: 
                                 if cur_round == "2":
                                     tgt = get_target_price(df_p, rid, u, cur_val)
-                                    rd[f"Target {u}"] = tgt
-                                rd[f"Harga {u}"] = ex_price.get((rid, u), 0)
+                                    rd[f"Target Biaya per Trip {u}"] = tgt
+                                rd[f"Biaya per Trip {u}"] = ex_price.get((rid, u), 0)
                             p_data.append(rd)
                         
                         df_pr = pd.DataFrame(p_data)
@@ -1842,20 +1842,26 @@ def vendor_dashboard(email):
                         cf_pr = {
                             "Route ID": None,
                             "Kota Asal": st.column_config.TextColumn(disabled=True, width="small"),
-                            "Kota Tujuan": st.column_config.TextColumn(disabled=True, width="medium"),
-                            "Keterangan": st.column_config.TextColumn(disabled=True, width="small"), # Config Keterangan
+                            "Kota Tujuan": st.column_config.TextColumn(disabled=True, width="small"), # <--- WIDTH SMALL
+                            "Keterangan": st.column_config.TextColumn(width="medium"), # <--- Keterangan
                             "Lead Time (Hari)": st.column_config.NumberColumn(min_value=0, step=1, width="small")
                         }
                         
-                        # Reorder Columns
-                        cols_order = ["Route ID", "Kota Asal", "Kota Tujuan", "Keterangan", "Lead Time (Hari)"]
+                        # Reorder Columns: KETERANGAN DI AKHIR
+                        cols_order = ["Route ID", "Kota Asal", "Kota Tujuan", "Lead Time (Hari)"]
                         for u in u_types:
-                            cf_pr[f"Harga {u}"] = st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d", required=True, width="medium")
+                            # Config Harga (Format Rupiah)
+                            cf_pr[f"Biaya per Trip {u}"] = st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d", required=True, width="medium")
+                            
                             target_col = f"Target {u}"
                             if target_col in df_pr.columns:
+                                # Config Target (Format Rupiah)
                                 cf_pr[target_col] = st.column_config.NumberColumn(format="Rp %d", disabled=True, width="medium")
                                 cols_order.append(target_col)
-                            cols_order.append(f"Harga {u}")
+                            cols_order.append(f"Biaya per Trip {u}")
+                        
+                        # Tambahkan Keterangan di paling belakang
+                        cols_order.append("Keterangan")
 
                         df_pr = df_pr[cols_order]
                         ed_pr = st.data_editor(df_pr, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_pr)
@@ -1881,6 +1887,8 @@ def vendor_dashboard(email):
                             lc = clean_numeric(md_source.iloc[0].get('labor_cost')) or 0
                         
                         df_md_ui = pd.DataFrame([{"Multidrop Dalam Kota": ic, "Multidrop Luar Kota": oc, "Biaya Buruh": lc}])
+                        
+                        # Config Format Ribuan di Multidrop
                         cf_md = {
                             "Multidrop Dalam Kota": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d"),
                             "Multidrop Luar Kota": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d"),
@@ -1898,11 +1906,13 @@ def vendor_dashboard(email):
                         
                         for _, r in ed_pr.iterrows():
                             rid = str(r['Route ID']); lt = int(r['Lead Time (Hari)'])
+                            ket = str(r['Keterangan']) # Ambil Keterangan
+                            
                             for u in u_types:
-                                pr = int(r[f"Harga {u}"])
+                                pr = int(r[f"Biaya per Trip {u}"])
                                 w = str(c_spec.get(u,{}).get('w','')); c = str(c_spec.get(u,{}).get('c',''))
                                 tid = f"{email}_{cur_val}_{rid}_{u}_{cur_round}".replace(" ","")
-                                f_data.append([tid, email, "Open", cur_val, rid, u, lt, pr, w, c, "", ts, cur_round])
+                                f_data.append([tid, email, "Open", cur_val, rid, u, lt, pr, w, c, ket, ts, cur_round])
                         
                         mi = int(ed_md.iloc[0]["Multidrop Dalam Kota"])
                         mo = int(ed_md.iloc[0]["Multidrop Luar Kota"])
@@ -1919,5 +1929,6 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
