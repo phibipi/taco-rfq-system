@@ -1184,7 +1184,7 @@ def admin_dashboard():
             sel_lt = c2.selectbox("Pilih Load Type", ["FTL", "FCL"])
             
             # DROPDOWN BARU: TAHAP PENAWARAN
-            sel_round = c3.selectbox("Tahap Penawaran", ["1", "2", "3"]) 
+            sel_round = c3.selectbox("Tahap", ["Penawaran 1", "Penawaran 2", "Penawaran 3"]) 
             
             unique_origins = []
             if not df_g.empty:
@@ -1686,7 +1686,7 @@ def vendor_dashboard(email):
             
             df_disp = pd.DataFrame(data_list)
             if df_disp.empty: 
-                st.warning(f"Tidak ada rute di Penawaran Tahap {sel_round}.")
+                st.warning(f"Tidak ada rute di Tahap {sel_round}.")
                 return
 
             avail_validity = sorted(df_disp['validity'].unique().tolist())
@@ -1776,7 +1776,7 @@ def vendor_dashboard(email):
         focused_gid = st.session_state.get('focused_group_id')
 
         st.markdown(f"### Input Penawaran Harga {cur_load}: {cur_org}")
-        st.caption(f"Periode: {cur_val} | **Tahap Penawaran: {cur_round}**")
+        st.caption(f"Periode: {cur_val} | **Tahap: {cur_round}**")
 
         df_acc = get_data("Access_Rights"); df_grps = get_data("Master_Groups")
         
@@ -1960,6 +1960,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
