@@ -688,13 +688,21 @@ def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic
     doc.save(fn)
     return fn
 
-# --- HELPER: HITUNG TARGET PRICE (UPDATE: LOGIKA SEMESTER) ---
+# --- HELPER: HITUNG TARGET PRICE (FIX: TYPE ERROR) ---
 def get_target_price(df_all, route_id, unit_type, cur_validity):
+    # SAFETY: Pastikan kolom price dibaca sebagai angka
+    # Kita buat copy agar tidak merusak dataframe asli
+    df_safe = df_all.copy()
+    if 'price' in df_safe.columns:
+        df_safe['price'] = pd.to_numeric(df_safe['price'], errors='coerce').fillna(0)
+    else:
+        return 0
+
     # 1. Ambil Harga Terendah Periode SAAT INI
-    df_curr = df_all[
-        (df_all['validity'] == cur_validity) & 
-        (df_all['route_id'] == str(route_id)) & 
-        (df_all['unit_type'] == unit_type)
+    df_curr = df_safe[
+        (df_safe['validity'] == cur_validity) & 
+        (df_safe['route_id'] == str(route_id)) & 
+        (df_safe['unit_type'] == unit_type)
     ]
     
     if df_curr.empty: return 0 
@@ -704,59 +712,47 @@ def get_target_price(df_all, route_id, unit_type, cur_validity):
 
     # 2. Tentukan Periode "SEBELUMNYA"
     target_price = 0
-    df_prev = pd.DataFrame() # Wadah kosong
+    df_prev = pd.DataFrame()
     
     try:
-        # Parsing Tahun
         parts = cur_validity.split(" ") 
         cur_year_str = parts[-1]
         cur_year_int = int(cur_year_str)
         
-        # Cek apakah ini Semester 2 (Juli - ...)
         is_semester_2 = "juli" in cur_validity.lower() or "july" in cur_validity.lower()
         
         if is_semester_2:
-            # SKENARIO A: Periode Juli-Desember
-            # Logika: Cari data yang mengandung "Jan" ATAU "Jun" DI TAHUN YANG SAMA
-            # Contoh: Input "Juli - Des 2026" -> Cari "Januari - Juni 2026"
-            
-            df_prev = df_all[
-                (df_all['validity'].str.contains(cur_year_str, na=False)) & # Tahun sama
-                (df_all['validity'].str.contains("Jan", case=False, na=False)) & # Ada kata 'Jan' (Januari)
-                (df_all['route_id'] == str(route_id)) & 
-                (df_all['unit_type'] == unit_type)
+            # SKENARIO A: Periode Juli-Desember -> Cari Jan-Jun tahun sama
+            df_prev = df_safe[
+                (df_safe['validity'].str.contains(cur_year_str, na=False)) & 
+                (df_safe['validity'].str.contains("Jan", case=False, na=False)) & 
+                (df_safe['route_id'] == str(route_id)) & 
+                (df_safe['unit_type'] == unit_type)
             ]
         else:
-            # SKENARIO B: Periode Januari-Juni (Semester 1) atau Tahunan
-            # Logika: Cari data TAHUN SEBELUMNYA
+            # SKENARIO B: Periode Januari-Juni -> Cari Tahun Sebelumnya
             prev_year_str = str(cur_year_int - 1)
-            
-            df_prev = df_all[
-                (df_all['validity'].str.contains(prev_year_str, na=False)) & # Tahun Lalu (2025)
-                (df_all['route_id'] == str(route_id)) & 
-                (df_all['unit_type'] == unit_type)
+            df_prev = df_safe[
+                (df_safe['validity'].str.contains(prev_year_str, na=False)) & 
+                (df_safe['route_id'] == str(route_id)) & 
+                (df_safe['unit_type'] == unit_type)
             ]
 
         # 3. Bandingkan Harga
         if not df_prev.empty:
             min_prev = df_prev['price'].min()
             
-            # Jika ada harga masa lalu yang valid (tidak 0)
             if min_prev > 0:
-                # ATURAN: Jika harga masa lalu LEBIH RENDAH dari harga sekarang
                 if min_prev < min_curr:
-                    target_price = min_prev * 0.95 # Pakai Harga Lama - 5%
+                    target_price = min_prev * 0.95 
                 else:
-                    # Harga masa lalu lebih mahal (atau sama), abaikan.
-                    target_price = min_curr * 0.92 # Pakai Harga Sekarang - 8%
+                    target_price = min_curr * 0.92 
             else:
                 target_price = min_curr * 0.92
         else:
-            # Data periode sebelumnya tidak ditemukan sama sekali
             target_price = min_curr * 0.92
             
     except:
-        # Fallback jika gagal parsing nama bulan/tahun
         target_price = min_curr * 0.92
         
     return int(target_price)
@@ -1582,7 +1578,7 @@ def admin_dashboard():
                     else: st.warning("Vendor ini tidak memiliki data.")
                 else: st.warning("Data tidak ditemukan.")
                 
-# ================= VENDOR DASHBOARD (UPDATE: PREFILL & TABLE LAYOUT) =================
+# ================= VENDOR DASHBOARD (FIX: KETERANGAN & ERROR) =================
 def vendor_dashboard(email):
     step = st.session_state['vendor_step']
     
@@ -1724,14 +1720,11 @@ def vendor_dashboard(email):
         cur_org = st.session_state.get('sel_origin')
         cur_val = st.session_state.get('sel_validity')
         cur_load = st.session_state.get('sel_load')
-        cur_round = str(st.session_state.get('sel_round')) # Pastikan string
+        cur_round = str(st.session_state.get('sel_round'))
         focused_gid = st.session_state.get('focused_group_id')
 
-        # Hitung Previous Round (Jika Round 2 -> Round 1, Round 3 -> Round 2)
-        try:
-            prev_round = str(int(cur_round) - 1)
-        except:
-            prev_round = "0"
+        try: prev_round = str(int(cur_round) - 1)
+        except: prev_round = "0"
 
         st.markdown(f"### Input Penawaran Harga {cur_load}: {cur_org}")
         st.caption(f"Periode: {cur_val} | **Tahap Penawaran: {cur_round}**")
@@ -1750,8 +1743,7 @@ def vendor_dashboard(email):
                     target_gids.append(gid); grp_names[gid]=rr['route_group']
         
         if not target_gids: 
-            st.error("Data error.")
-            return
+            st.error("Data error."); return
 
         target_gids = sorted(target_gids)
         if focused_gid and focused_gid in target_gids:
@@ -1762,9 +1754,7 @@ def vendor_dashboard(email):
         
         df_r = get_data("Master_Routes"); df_u = get_data("Master_Units"); df_p = get_data("Price_Data"); df_m = get_data("Multidrop_Data")
         if not df_p.empty and 'round' not in df_p.columns: df_p['round'] = '1'
-        if not df_m.empty and 'group_id' in df_m.columns:
-             # Fix potensi error whitespace di ID multidrop
-             df_m['group_id'] = df_m['group_id'].astype(str).str.strip()
+        if not df_m.empty and 'group_id' in df_m.columns: df_m['group_id'] = df_m['group_id'].astype(str).str.strip()
 
         for i, gid in enumerate(target_gids):
             with tabs[i]:
@@ -1778,8 +1768,7 @@ def vendor_dashboard(email):
                 ex_price = {}; ex_spec = {}
                 is_lock = False
                 
-                # --- LOGIKA PRE-FILL DATA ---
-                # 1. Coba ambil data Round INI
+                # --- LOGIKA PRE-FILL ---
                 current_p_data = pd.DataFrame()
                 if not df_p.empty:
                     current_p_data = df_p[
@@ -1787,23 +1776,18 @@ def vendor_dashboard(email):
                         (df_p['route_id'].isin(my_r['route_id'])) & (df_p['round'] == cur_round)
                     ]
                 
-                # 2. Jika Round INI kosong DAN bukan Round 1, ambil data Round SEBELUMNYA
                 source_p_data = current_p_data
                 is_using_prev_data = False
-                
                 if current_p_data.empty and cur_round != "1":
                     if not df_p.empty:
                         source_p_data = df_p[
                             (df_p['vendor_email']==email) & (df_p['validity']==cur_val) & 
                             (df_p['route_id'].isin(my_r['route_id'])) & (df_p['round'] == prev_round)
                         ]
-                        is_using_prev_data = True # Flag penanda pakai data lama (sebagai draft)
+                        is_using_prev_data = True 
 
-                # 3. Load data ke Dictionary
                 if not source_p_data.empty:
-                    # Jika pakai data round ini, cek status Lock. Jika pakai data prev round, jangan lock.
                     if not is_using_prev_data and "Locked" in source_p_data['status'].values: is_lock = True
-                    
                     for _, row in source_p_data.iterrows():
                         ex_price[(row['route_id'], row['unit_type'])] = row['price']
                         ex_spec[row['unit_type']] = {'w': row.get('weight_capacity'), 'c': row.get('cubic_capacity')}
@@ -1812,7 +1796,7 @@ def vendor_dashboard(email):
                     # 1. SPEC
                     with st.container(border=True):
                         st.markdown(f"#### 🛻 Spesifikasi Armada")
-                        if is_using_prev_data: st.info(f"ℹ️ Data spesifikasi disalin dari Tahap {prev_round}. Silakan edit jika perlu.")
+                        if is_using_prev_data: st.info(f"ℹ️ Data disalin dari Tahap {prev_round}.")
                         
                         sp_data = []
                         for u in u_types:
@@ -1830,92 +1814,66 @@ def vendor_dashboard(email):
                         }
                         ed_sp = st.data_editor(df_sp, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_sp)
 
-                    # 2. PRICE (Column Layout: Route, Target U1, Harga U1, Target U2, Harga U2)
+                    # 2. PRICE
                     with st.container(border=True):
                         st.markdown(f"#### 💰 Penawaran Harga")
-                        if is_using_prev_data: st.info(f"ℹ️ Harga disalin dari Tahap {prev_round}. Silakan sesuaikan.")
-                        
                         p_data = []
                         for _, row in my_r.iterrows():
                             rid = row['route_id']
                             rd = {
                                 "Route ID": rid, "Kota Asal": row['kota_asal'], "Kota Tujuan": row['kota_tujuan'],
-                                "Lead Time (Hari)": 0 # Default/Todo: Load LeadTime if exists
+                                "Keterangan": row.get('keterangan', '-'), # <--- Keterangan Dikembalikan
+                                "Lead Time (Hari)": 0 
                             }
-                            # Jika ada lead time di data source
                             if not source_p_data.empty:
                                 temp_lt = source_p_data[source_p_data['route_id']==rid]['lead_time']
                                 if not temp_lt.empty: rd["Lead Time (Hari)"] = clean_numeric(temp_lt.iloc[0]) or 0
 
                             for u in u_types: 
-                                # --- LOGIC TARGET PRICE (Cuma Round 2) ---
                                 if cur_round == "2":
                                     tgt = get_target_price(df_p, rid, u, cur_val)
                                     rd[f"Target {u}"] = tgt
-                                
-                                # Harga User (Load dari ex_price)
                                 rd[f"Harga {u}"] = ex_price.get((rid, u), 0)
-                                
-                            # rd["Keterangan"] = row.get('keterangan','-') # Optional hide description to save space
                             p_data.append(rd)
                         
                         df_pr = pd.DataFrame(p_data)
                         
-                        # --- CONFIG KOLOM DINAMIS ---
+                        # Config
                         cf_pr = {
                             "Route ID": None,
                             "Kota Asal": st.column_config.TextColumn(disabled=True, width="small"),
                             "Kota Tujuan": st.column_config.TextColumn(disabled=True, width="medium"),
+                            "Keterangan": st.column_config.TextColumn(disabled=True, width="small"), # Config Keterangan
                             "Lead Time (Hari)": st.column_config.NumberColumn(min_value=0, step=1, width="small")
                         }
                         
-                        # Urutkan Kolom: Asal, Tujuan, LeadTime, [Target U1, Harga U1], [Target U2, Harga U2]...
-                        cols_order = ["Route ID", "Kota Asal", "Kota Tujuan", "Lead Time (Hari)"]
-                        
+                        # Reorder Columns
+                        cols_order = ["Route ID", "Kota Asal", "Kota Tujuan", "Keterangan", "Lead Time (Hari)"]
                         for u in u_types:
-                            # Config Harga
                             cf_pr[f"Harga {u}"] = st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d", required=True, width="medium")
-                            
-                            # Config Target (Jika ada)
                             target_col = f"Target {u}"
                             if target_col in df_pr.columns:
                                 cf_pr[target_col] = st.column_config.NumberColumn(format="Rp %d", disabled=True, width="medium")
-                                cols_order.append(target_col) # Tambahkan Target dulu
-                            
-                            cols_order.append(f"Harga {u}") # Baru Harga
+                                cols_order.append(target_col)
+                            cols_order.append(f"Harga {u}")
 
-                        # Reorder DataFrame
                         df_pr = df_pr[cols_order]
-
                         ed_pr = st.data_editor(df_pr, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_pr)
 
-                    # 3. MULTIDROP (PRE-FILL LOGIC)
+                    # 3. MULTIDROP
                     with st.container(border=True):
                         st.markdown("#### 📦 Biaya Multidrop & Buruh")
                         ic, oc, lc = 0, 0, 0
-                        
-                        # Cari data multidrop (Round Ini)
                         md_source = pd.DataFrame()
+                        
                         if not df_m.empty:
-                            # Coba cari data round ini
-                            # Pastikan di database multidrop ada kolom 'mid' yang unik mengandung round, atau kita filter by validity/timestamp
-                            # Asumsi: df_m tidak punya kolom round eksplisit, tapi kita bisa pakai logic 'last saved' atau tambah kolom.
-                            # Agar aman dengan struktur lama, kita cari yang 'mid' nya mengandung _round_
-                            
-                            # Filter dasar
                             base_m = df_m[(df_m['vendor_email']==email) & (df_m['validity']==cur_val) & (df_m['group_id']==gid)]
-                            
                             if not base_m.empty:
-                                # Coba cari yg ID-nya mengandung _cur_round
                                 md_curr = base_m[base_m['id_multidrop'].astype(str).str.endswith(f"_{cur_round}")]
-                                if not md_curr.empty:
-                                    md_source = md_curr
+                                if not md_curr.empty: md_source = md_curr
                                 elif cur_round != "1":
-                                    # Jika kosong, cari prev round
                                     md_prev = base_m[base_m['id_multidrop'].astype(str).str.endswith(f"_{prev_round}")]
-                                    if not md_prev.empty:
-                                        md_source = md_prev
-                                        st.info(f"ℹ️ Biaya Multidrop disalin dari Tahap {prev_round}.")
+                                    if not md_prev.empty: md_source = md_prev
 
                         if not md_source.empty:
                             ic = clean_numeric(md_source.iloc[0].get('inner_city_price')) or 0
@@ -1957,27 +1915,8 @@ def vendor_dashboard(email):
                         st.session_state['temp_success_msg'] = f"Sukses! Data Tahap {cur_round} tersimpan."
                         st.cache_data.clear()
                         st.rerun()
-if __name__ == "__main__":
+                        
+                        
+    if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
