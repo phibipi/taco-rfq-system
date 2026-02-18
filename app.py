@@ -694,6 +694,79 @@ def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic
     doc.save(fn)
     return fn
 
+# --- HELPER: HITUNG TARGET PRICE (UPDATE: LOGIKA SEMESTER) ---
+def get_target_price(df_all, route_id, unit_type, cur_validity):
+    # 1. Ambil Harga Terendah Periode SAAT INI
+    df_curr = df_all[
+        (df_all['validity'] == cur_validity) & 
+        (df_all['route_id'] == str(route_id)) & 
+        (df_all['unit_type'] == unit_type)
+    ]
+    
+    if df_curr.empty: return 0 
+    
+    min_curr = df_curr['price'].min()
+    if min_curr == 0: return 0
+
+    # 2. Tentukan Periode "SEBELUMNYA"
+    target_price = 0
+    df_prev = pd.DataFrame() # Wadah kosong
+    
+    try:
+        # Parsing Tahun
+        parts = cur_validity.split(" ") 
+        cur_year_str = parts[-1]
+        cur_year_int = int(cur_year_str)
+        
+        # Cek apakah ini Semester 2 (Juli - ...)
+        is_semester_2 = "juli" in cur_validity.lower() or "july" in cur_validity.lower()
+        
+        if is_semester_2:
+            # SKENARIO A: Periode Juli-Desember
+            # Logika: Cari data yang mengandung "Jan" ATAU "Jun" DI TAHUN YANG SAMA
+            # Contoh: Input "Juli - Des 2026" -> Cari "Januari - Juni 2026"
+            
+            df_prev = df_all[
+                (df_all['validity'].str.contains(cur_year_str, na=False)) & # Tahun sama
+                (df_all['validity'].str.contains("Jan", case=False, na=False)) & # Ada kata 'Jan' (Januari)
+                (df_all['route_id'] == str(route_id)) & 
+                (df_all['unit_type'] == unit_type)
+            ]
+        else:
+            # SKENARIO B: Periode Januari-Juni (Semester 1) atau Tahunan
+            # Logika: Cari data TAHUN SEBELUMNYA
+            prev_year_str = str(cur_year_int - 1)
+            
+            df_prev = df_all[
+                (df_all['validity'].str.contains(prev_year_str, na=False)) & # Tahun Lalu (2025)
+                (df_all['route_id'] == str(route_id)) & 
+                (df_all['unit_type'] == unit_type)
+            ]
+
+        # 3. Bandingkan Harga
+        if not df_prev.empty:
+            min_prev = df_prev['price'].min()
+            
+            # Jika ada harga masa lalu yang valid (tidak 0)
+            if min_prev > 0:
+                # ATURAN: Jika harga masa lalu LEBIH RENDAH dari harga sekarang
+                if min_prev < min_curr:
+                    target_price = min_prev * 0.95 # Pakai Harga Lama - 5%
+                else:
+                    # Harga masa lalu lebih mahal (atau sama), abaikan.
+                    target_price = min_curr * 0.92 # Pakai Harga Sekarang - 8%
+            else:
+                target_price = min_curr * 0.92
+        else:
+            # Data periode sebelumnya tidak ditemukan sama sekali
+            target_price = min_curr * 0.92
+            
+    except:
+        # Fallback jika gagal parsing nama bulan/tahun
+        target_price = min_curr * 0.92
+        
+    return int(target_price)
+
 def main():
     st.markdown('<div id="top-page"></div>', unsafe_allow_html=True)
     init_style()
@@ -1105,88 +1178,104 @@ def admin_dashboard():
                 st.success("Saved")
         st.dataframe(get_data("Users"), use_container_width=True)
 
-    # --- TAB 5: ACCESS ---
+# --- TAB 5: ACCESS RIGHTS (FIXED) ---
     with tabs[4]:
         st.write("Grant Access (Batch per Origin)")
         df_u = get_data("Users"); df_g = get_data("Master_Groups")
         df_rights = get_data("Access_Rights")
         
         if not df_u.empty and not df_g.empty:
-            c1, c2 = st.columns(2)
+            c1, c2, c3 = st.columns(3)
             ven = c1.selectbox("Pilih Vendor", df_u[df_u['role']=='vendor']['email'].unique())
             sel_lt = c2.selectbox("Pilih Load Type", ["FTL", "FCL"])
+            
+            # DROPDOWN BARU: TAHAP PENAWARAN
+            sel_round = c3.selectbox("Tahap Penawaran", ["1", "2", "3"]) 
             
             unique_origins = []
             if not df_g.empty:
                 subset_g = df_g[df_g['load_type'] == sel_lt]
                 unique_origins = sorted(subset_g['origin'].unique().tolist())
             
-            if not unique_origins:
-                st.info(f"Belum ada data Origin untuk {sel_lt}.")
-            else:
-                st.write(f"**Pilih Origin / Area ({sel_lt}):**")
-                
+            if unique_origins:
+                # Filter existing access
                 existing_gids = set()
-                if not df_rights.empty:
-                    existing_gids = set(df_rights[df_rights['vendor_email'] == ven]['group_id'].tolist())
-                
+                if not df_rights.empty: 
+                    # Pastikan kolom 'round' ada
+                    if 'round' in df_rights.columns:
+                        sub_r = df_rights[
+                            (df_rights['vendor_email'] == ven) & 
+                            (df_rights['round'] == sel_round)
+                        ]
+                    else:
+                        sub_r = df_rights[df_rights['vendor_email'] == ven] # Fallback
+                    
+                    existing_gids = set(sub_r['group_id'].tolist())
+
                 with st.form("acc_origin_batch"):
                     cols = st.columns(3)
                     selected_origins = []
-                    
                     for idx, org in enumerate(unique_origins):
-                        col_ptr = cols[idx % 3]
                         org_groups = df_g[(df_g['origin'] == org) & (df_g['load_type'] == sel_lt)]
                         org_gids = set(org_groups['group_id'].tolist())
+                        
                         is_checked = not org_gids.isdisjoint(existing_gids)
                         
-                        if col_ptr.checkbox(org, value=False, key=f"chk_org_{org}_{sel_lt}"):
+                        if cols[idx % 3].checkbox(org, value=is_checked, key=f"chk_{org}"): 
                             selected_origins.append(org)
                     
                     st.divider()
                     c_val1, c_val2 = st.columns([2, 1])
-                    with c_val1:
-                        val_period = st.selectbox("Pilih Periode", ["Januari - Juni", "Juli - Desember", "Januari - Desember"])
-                    with c_val2:
-                        val_year = st.text_input("Tahun", value=str(datetime.now().year))
-                    
-                    # ... (Bagian atas Tab 5 tetap sama) ...
+                    val_period = c_val1.selectbox("Periode", ["Januari - Juni", "Juli - Desember", "Januari - Desember"])
+                    val_year = c_val2.text_input("Tahun", value=str(datetime.now().year))
                     
                     if st.form_submit_button("Grant Access", type="primary"):
                         val = f"{val_period} {val_year}"
-                        
-                        if selected_origins and val_year:
-                            # ... (Logika filter target_groups tetap sama) ...
+                        if selected_origins:
                             target_groups = df_g[(df_g['load_type'] == sel_lt) & (df_g['origin'].isin(selected_origins))]
+                            target_gids = target_groups['group_id'].unique().tolist()
                             
-                            if not target_groups.empty:
-                                target_gids = target_groups['group_id'].unique().tolist()
-                                sh = connect_to_gsheet()
-                                if sh:
-                                    ws = sh.worksheet("Access_Rights")
-                                    # ... (Logika existing_keys tetap sama) ...
-                                    existing_data = ws.get_all_values()
-                                    existing_keys = set()
-                                    if len(existing_data) > 1:
-                                        for row in existing_data[1:]:
-                                            if len(row) >= 3:
-                                                key = f"{row[0]}_{row[1]}_{row[2]}".lower()
-                                                existing_keys.add(key)
+                            sh = connect_to_gsheet()
+                            if sh:
+                                ws = sh.worksheet("Access_Rights")
+                                existing_data = ws.get_all_values()
+                                existing_keys = set()
+                                
+                                # Buat Key Unik: Email_Val_GID_Round
+                                if len(existing_data) > 1:
+                                    # Cek apakah header punya kolom Round (biasanya di indeks ke-4 jika ada)
+                                    header = existing_data[0]
+                                    has_round_col = 'round' in [h.lower() for h in header]
                                     
-                                    new_rows_to_add = []
-                                    skipped_count = 0
+                                    for row in existing_data[1:]:
+                                        if len(row) >= 3:
+                                            # Key standar: email_validity_gid
+                                            base_key = f"{row[0]}_{row[1]}_{row[2]}".lower()
+                                            
+                                            # Jika ada kolom round, tambahkan ke key
+                                            if has_round_col and len(row) >= 5:
+                                                base_key += f"_{row[4]}".lower()
+                                            elif not has_round_col:
+                                                # Jika sheet belum ada kolom round, asumsikan itu round 1
+                                                base_key += "_1"
+                                                
+                                            existing_keys.add(base_key)
+                                
+                                new_rows = []
+                                skipped_count = 0
+                                
+                                for gid in target_gids:
+                                    # Key yang mau dimasukkan: email_val_gid_round
+                                    key_check = f"{ven}_{val}_{gid}_{sel_round}".lower()
                                     
-                                    for gid in target_gids:
-                                        key_check = f"{ven}_{val}_{gid}".lower()
-                                        if key_check not in existing_keys:
-                                            new_rows_to_add.append([ven, val, gid, "Active"])
-                                        else:
-                                            skipped_count += 1
-                                    
-                                    if new_rows_to_add:
-                                        # 1. Simpan ke Google Sheet
-                                        ws.append_rows(new_rows_to_add)
-                                        get_data.clear()
+                                    if key_check not in existing_keys:
+                                        new_rows.append([ven, val, gid, "Active", sel_round])
+                                    else:
+                                        skipped_count += 1
+                                
+                                if new_rows:
+                                    ws.append_rows(new_rows)
+                                    get_data.clear()
                                         
                                         # 2. KIRIM EMAIL NOTIFIKASI
                                         # Ambil password user dari df_u
@@ -1196,7 +1285,7 @@ def admin_dashboard():
                                             ven_pass = user_row['password']
                                             
                                             with st.spinner("Mengirim email undangan ke vendor..."):
-                                                email_status = send_invitation_email(ven, ven_name, sel_lt, val, selected_origins, ven_pass)
+                                                email_status = send_invitation_email(ven, ven_name, sel_lt, val, selected_origins, ven_pass, sel_round)
                                                 
                                             if email_status:
                                                 st.success(f"✅ Sukses! Akses diberikan & Email undangan terkirim ke {ven}.")
@@ -1535,7 +1624,7 @@ def admin_dashboard():
                     else: st.warning("Vendor ini tidak memiliki data.")
                 else: st.warning("Data tidak ditemukan.")
                 
-# ================= VENDOR DASHBOARD (FULL FIX) =================
+# ================= VENDOR DASHBOARD (UPDATE: TARGET PRICE & ROUND) =================
 def vendor_dashboard(email):
     step = st.session_state['vendor_step']
     
@@ -1543,14 +1632,13 @@ def vendor_dashboard(email):
     if step == "dashboard":
         t1, t2 = st.tabs(["🛣️ Pilih Rute & Isi Harga", "📋 Isi Data Perusahaan"])
         
-        # Tab 2: Profil
+        # Tab 2: Profil (Tidak Berubah)
         with t2:
             df_p = get_data("Vendor_Profile")
             curr = {}
             if not df_p.empty:
                 m = df_p[df_p['email']==email]
                 if not m.empty: curr = m.iloc[-1].to_dict()
-            
             with st.container(border=True):
                 with st.form("prof"):
                     c1, c2 = st.columns(2)
@@ -1560,10 +1648,8 @@ def vendor_dashboard(email):
                     with c2:
                         ph = st.text_input("No. Telepon", value=curr.get('phone',''))
                         top = st.selectbox("Term of Payment", ["7 hari","14 Hari", "30 Hari"])
-                    
                     ppn = st.selectbox("PPN", ["11%", "1,1%","0%"])
                     pph = st.selectbox("PPh", ["Include", "Exclude"])
-                    
                     if st.form_submit_button("Simpan Data", type="primary"):
                         save_data("Vendor_Profile", [[email, ad, cp, ph, top, ppn, pph, datetime.now().strftime("%Y-%m-%d")]])
                         st.success("Saved")
@@ -1579,10 +1665,24 @@ def vendor_dashboard(email):
                 st.warning("Belum ada akses.")
                 return
             
+            # Filter Akses Milik Vendor
             my_access = df_acc[df_acc['vendor_email'] == email]
             if my_access.empty: 
                 st.info("Anda belum diberikan akses ke project manapun.")
                 return
+
+            # --- FILTER TAHAP (ROUND) ---
+            # Ambil unique rounds yang tersedia untuk vendor ini
+            # Pastikan kolom 'round' ada, jika tidak default '1'
+            if 'round' not in my_access.columns: my_access['round'] = '1'
+            
+            avail_rounds = sorted(my_access['round'].unique().tolist())
+            c_filter1, c_filter2 = st.columns(2)
+            
+            sel_round = c_filter1.selectbox("Pilih Tahap Penawaran:", avail_rounds)
+            
+            # Filter akses berdasarkan Round
+            my_access = my_access[my_access['round'] == sel_round]
 
             data_list = []
             for _, acc in my_access.iterrows():
@@ -1595,11 +1695,11 @@ def vendor_dashboard(email):
             
             df_disp = pd.DataFrame(data_list)
             if df_disp.empty: 
-                st.warning("Konfigurasi Group tidak ditemukan.")
+                st.warning(f"Tidak ada rute di Penawaran Tahap {sel_round}.")
                 return
 
             avail_validity = sorted(df_disp['validity'].unique().tolist())
-            sel_val = st.selectbox("Pilih Periode / Validity:", avail_validity)
+            sel_val = c_filter2.selectbox("Pilih Periode / Validity:", avail_validity)
             df_view = df_disp[df_disp['validity'] == sel_val]
             
             if df_view.empty: 
@@ -1626,21 +1726,24 @@ def vendor_dashboard(email):
                                     gid = row['group_id']
                                     grp_name = row['route_group']
                                     
-                                    # Status Check
+                                    # Status Check (Harus cek Round juga)
                                     r_data = df_routes[df_routes['group_id'] == gid] if not df_routes.empty else pd.DataFrame()
                                     status_ui = '<span class="status-pending">❌ Belum Ada Data</span>'
                                     is_locked_btn = False
                                     
                                     if not df_price.empty and not r_data.empty:
+                                        # Pastikan kolom round ada di df_price, jika tidak, anggap round 1
+                                        if 'round' not in df_price.columns: df_price['round'] = '1'
+                                        
                                         sub_p = df_price[
                                             (df_price['vendor_email']==email) & 
                                             (df_price['validity']==sel_val) & 
-                                            (df_price['route_id'].isin(r_data['route_id']))
+                                            (df_price['route_id'].isin(r_data['route_id'])) &
+                                            (df_price['round'] == sel_round) # Cek Round
                                         ]
                                         if not sub_p.empty:
                                             status_ui = '<span class="status-done">✅Sudah Terisi</span>'
-                                            if "Locked" in sub_p['status'].values or "Waiting" in sub_p['status'].values:
-                                                is_locked_btn = True
+                                            if "Locked" in sub_p['status'].values: is_locked_btn = True
                                     
                                     c1, c2, c3, c4 = st.columns([3, 4, 2, 2])
                                     c1.write(f"**{grp_name}**")
@@ -1650,18 +1753,19 @@ def vendor_dashboard(email):
                                     c2.markdown(f"<span class='route-dest-list'>{preview_txt}</span>", unsafe_allow_html=True)
 
                                     if is_locked_btn:
-                                        c3.button("🔒 Locked", key=f"btn_lk_{gid}", disabled=True)
+                                        c3.button("🔒 Locked", key=f"btn_lk_{gid}_{sel_round}", disabled=True)
                                     else:
-                                        if c3.button("📌 Isi Harga", key=f"btn_{t_code}_{gid}", type="primary"):
+                                        if c3.button("📌 Isi Harga", key=f"btn_{t_code}_{gid}_{sel_round}", type="primary"):
                                             st.session_state.update({
                                                 'sel_origin': org, 
                                                 'sel_validity': sel_val, 
                                                 'sel_load': t_code, 
                                                 'vendor_step': 'input',
-                                                'focused_group_id': gid
+                                                'focused_group_id': gid,
+                                                'sel_round': sel_round # Simpan state Round
                                             })
                                             st.rerun()
-                                            
+                                    
                                     c4.markdown(status_ui, unsafe_allow_html=True)
                                     st.markdown("<hr>", unsafe_allow_html=True)
 
@@ -1677,13 +1781,22 @@ def vendor_dashboard(email):
         cur_org = st.session_state.get('sel_origin')
         cur_val = st.session_state.get('sel_validity')
         cur_load = st.session_state.get('sel_load')
+        cur_round = st.session_state.get('sel_round') # Ambil Round
         focused_gid = st.session_state.get('focused_group_id')
 
         st.markdown(f"### Input Penawaran Harga {cur_load}: {cur_org}")
-        st.caption(f"Periode: {cur_val}")
+        st.caption(f"Periode: {cur_val} | **Tahap Penawaran: {cur_round}**")
 
         df_acc = get_data("Access_Rights"); df_grps = get_data("Master_Groups")
-        my_acc = df_acc[(df_acc['vendor_email']==email) & (df_acc['validity']==cur_val)]
+        
+        # Filter akses berdasarkan Validity dan Round
+        if 'round' not in df_acc.columns: df_acc['round'] = '1'
+        
+        my_acc = df_acc[
+            (df_acc['vendor_email']==email) & 
+            (df_acc['validity']==cur_val) &
+            (df_acc['round']==cur_round)
+        ]
         
         target_gids = []
         grp_names = {}
@@ -1706,6 +1819,7 @@ def vendor_dashboard(email):
         tabs = st.tabs([grp_names[g] for g in target_gids])
         
         df_r = get_data("Master_Routes"); df_u = get_data("Master_Units"); df_p = get_data("Price_Data"); df_m = get_data("Multidrop_Data")
+        if not df_p.empty and 'round' not in df_p.columns: df_p['round'] = '1'
 
         for i, gid in enumerate(target_gids):
             with tabs[i]:
@@ -1720,15 +1834,22 @@ def vendor_dashboard(email):
 
                 ex_price = {}; ex_spec = {}
                 is_lock = False
+                
+                # Filter harga berdasarkan Round saat ini
                 if not df_p.empty:
-                    my_p = df_p[(df_p['vendor_email']==email) & (df_p['validity']==cur_val) & (df_p['route_id'].isin(my_r['route_id']))]
+                    my_p = df_p[
+                        (df_p['vendor_email']==email) & 
+                        (df_p['validity']==cur_val) & 
+                        (df_p['route_id'].isin(my_r['route_id'])) &
+                        (df_p['round'] == cur_round) # Filter Round
+                    ]
                     if not my_p.empty:
-                        if "Locked" in my_p['status'].values or "Waiting" in my_p['status'].values: is_lock = True
+                        if "Locked" in my_p['status'].values: is_lock = True
                         for _, row in my_p.iterrows():
                             ex_price[(row['route_id'], row['unit_type'])] = row['price']
                             ex_spec[row['unit_type']] = {'w': row.get('weight_capacity'), 'c': row.get('cubic_capacity')}
 
-                with st.form(key=f"f_{gid}"):
+                with st.form(key=f"f_{gid}_{cur_round}"):
                     # 1. SPEC
                     with st.container(border=True):
                         st.markdown(f"#### 🛻 Spesifikasi Armada")
@@ -1746,11 +1867,12 @@ def vendor_dashboard(email):
                             "Kapasitas Berat Bersih (Kg)": st.column_config.NumberColumn(min_value=0, format="%d", step=1),
                             "Kapasitas Kubikasi Dalam (CBM)": st.column_config.NumberColumn(min_value=0, format="%.2f", step=0.1)
                         }
-                        ed_sp = st.data_editor(df_sp, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_sp, height=(len(df_sp)+1)*36+30)
+                        ed_sp = st.data_editor(df_sp, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_sp)
 
-                    # 2. PRICE
+                    # 2. PRICE (WITH TARGET PRICE)
                     with st.container(border=True):
                         st.markdown(f"#### 💰 Penawaran Harga")
+                        
                         p_data = []
                         for _, row in my_r.iterrows():
                             rid = row['route_id']
@@ -1758,14 +1880,23 @@ def vendor_dashboard(email):
                                 "Route ID": rid, "Kota Asal": row['kota_asal'], "Kota Tujuan": row['kota_tujuan'],
                                 "Lead Time (Hari)": 0
                             }
-                            for u in u_types: rd[f"Harga {u}"] = ex_price.get((rid, u), 0)
+                            
+                            for u in u_types: 
+                                # --- LOGIC TARGET PRICE (Hanya Muncul di Round 2 & 3) ---
+                                if str(cur_round) in ["2", "3"]:
+                                    # Hitung Target Price
+                                    tgt = get_target_price(df_p, rid, u, cur_val)
+                                    rd[f"Target {u}"] = tgt
+                                
+                                # Harga User
+                                rd[f"Harga {u}"] = ex_price.get((rid, u), 0)
+                                
                             rd["Keterangan"] = row.get('keterangan','-')
                             p_data.append(rd)
                         
                         df_pr = pd.DataFrame(p_data)
-                        for c in [f"Harga {u}" for u in u_types]: 
-                            if c in df_pr.columns: df_pr[c] = pd.to_numeric(df_pr[c], errors='coerce').fillna(0)
                         
+                        # Column Config
                         cf_pr = {
                             "Route ID": None,
                             "Kota Asal": st.column_config.TextColumn(disabled=True),
@@ -1773,10 +1904,16 @@ def vendor_dashboard(email):
                             "Keterangan": st.column_config.TextColumn(disabled=True),
                             "Lead Time (Hari)": st.column_config.NumberColumn(min_value=0, step=1)
                         }
+                        
                         for u in u_types:
-                            cf_pr[f"Harga {u}"] = st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d")
+                            # Config Kolom Harga
+                            cf_pr[f"Harga {u}"] = st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d", required=True)
+                            
+                            # Config Kolom Target (Read Only, Warna Merah/Khusus jika bisa)
+                            if f"Target {u}" in df_pr.columns:
+                                cf_pr[f"Target {u}"] = st.column_config.NumberColumn(format="Rp %d", disabled=True)
 
-                        ed_pr = st.data_editor(df_pr, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_pr, height=(len(df_pr)+1)*36+30)
+                        ed_pr = st.data_editor(df_pr, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_pr)
 
                     # 3. MULTIDROP
                     with st.container(border=True):
@@ -1789,17 +1926,17 @@ def vendor_dashboard(email):
                                 oc = clean_numeric(mr.iloc[0].get('outer_city_price')) or 0
                                 lc = clean_numeric(mr.iloc[0].get('labor_cost')) or 0
                         
-                        df_md = pd.DataFrame([{"Multidrop Dalam Kota": ic, "Multidrop Luar Kota": oc, "Biaya Buruh": lc}])
+                        df_md_ui = pd.DataFrame([{"Multidrop Dalam Kota": ic, "Multidrop Luar Kota": oc, "Biaya Buruh": lc}])
                         cf_md = {
                             "Multidrop Dalam Kota": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d"),
                             "Multidrop Luar Kota": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d"),
                             "Biaya Buruh": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d")
                         }
-                        ed_md = st.data_editor(df_md, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_md)
+                        ed_md = st.data_editor(df_md_ui, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_md)
 
-# SAVE
+                    # SAVE
                     st.write("")
-                    if st.form_submit_button(f"Simpan Data {cur_load} {g_name}", type="primary") and not is_lock:
+                    if st.form_submit_button(f"Simpan Data {cur_load} {g_name} (Tahap {cur_round})", type="primary") and not is_lock:
                         c_spec = {r['Jenis Unit']: {'w': r['Kapasitas Berat Bersih (Kg)'], 'c': r['Kapasitas Kubikasi Dalam (CBM)']} for _, r in ed_sp.iterrows()}
                         
                         f_data = []
@@ -1810,24 +1947,29 @@ def vendor_dashboard(email):
                             for u in u_types:
                                 pr = int(r[f"Harga {u}"])
                                 w = str(c_spec.get(u,{}).get('w','')); c = str(c_spec.get(u,{}).get('c',''))
-                                tid = f"{email}_{cur_val}_{rid}_{u}".replace(" ","")
-                                f_data.append([tid, email, "Open", cur_val, rid, u, lt, pr, w, c, "", ts])
+                                
+                                # TID sekarang harus unik per Round juga
+                                tid = f"{email}_{cur_val}_{rid}_{u}_{cur_round}".replace(" ","")
+                                
+                                # Struktur Save: [ID, Email, Status, Validity, Route, Unit, LT, Price, W, C, Remarks, TS, ROUND]
+                                f_data.append([tid, email, "Open", cur_val, rid, u, lt, pr, w, c, "", ts, cur_round])
                         
                         mi = int(ed_md.iloc[0]["Multidrop Dalam Kota"])
                         mo = int(ed_md.iloc[0]["Multidrop Luar Kota"])
                         ml = int(ed_md.iloc[0]["Biaya Buruh"])
-                        mid = f"M_{email}_{gid}_{cur_val}"
+                        mid = f"M_{email}_{gid}_{cur_val}_{cur_round}"
 
+                        # Save ke Google Sheet
                         save_data("Price_Data", f_data)
                         save_data("Multidrop_Data", [[mid, email, cur_val, gid, mi, mo, ml, ts]])
                         
-                        st.session_state['temp_success_msg'] = f"Sukses! Data untuk {g_name} tersimpan."
+                        st.session_state['temp_success_msg'] = f"Sukses! Data Tahap {cur_round} tersimpan."
                         st.cache_data.clear()
                         st.rerun()
 
-
 if __name__ == "__main__":
     main()
+
 
 
 
