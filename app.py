@@ -347,9 +347,9 @@ def add_scroll_to_top():
         </a>
     """, unsafe_allow_html=True)
     
-# --- FUNGSI KIRIM EMAIL (UPDATED: WITH DUE DATE) ---
-def send_invitation_email(to_email, vendor_name, load_type, validity, origins, password):
-    # 1. Cek Config
+# --- FUNGSI KIRIM EMAIL (UPDATE: ADA INFO ROUND) ---
+def send_invitation_email(to_email, vendor_name, load_type, validity, origins, password, round_num="1"):
+    # Cek Config
     if "email_config" not in st.secrets:
         st.warning("Konfigurasi email belum disetting di Secrets. Email tidak terkirim.")
         return False
@@ -357,42 +357,36 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
     sender_email = st.secrets["email_config"]["sender_email"]
     sender_password = st.secrets["email_config"]["sender_password"]
     
-    # 2. Hitung Due Date (Hari ini + 14 Hari)
+    # Hitung Due Date
     today = datetime.now()
     due_date = today + timedelta(days=14)
     
-    # 3. Format Tanggal ke Indonesia (dd MMMM yyyy)
-    months_id = {
-        1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni",
-        7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"
-    }
+    months_id = {1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni", 7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"}
     due_date_str = f"{due_date.day} {months_id[due_date.month]} {due_date.year}"
 
-    subject = f"Undangan Tender Transport {load_type} - {validity} (TACO Group)"
+    # Update Subject agar terlihat Tahap keberapa
+    subject = f"Undangan Tender {load_type} - {validity} (Tahap {round_num}) - TACO Group"
     origins_str = ", ".join(origins)
     
-    # 4. Desain Isi Email (HTML) - Ditambahkan Due Date
     body = f"""
     <html>
     <body>
         <h3>Dear {vendor_name},</h3>
         <p>Anda telah diundang untuk berpartisipasi dalam Tender Transport <b>TACO Group</b>.</p>
-        
         <p><b>Detail Tender:</b></p>
         <ul>
             <li><b>Periode:</b> {validity}</li>
+            <li><b>Tahap Penawaran:</b> {round_num}</li>
             <li><b>Tipe Armada:</b> {load_type}</li>
             <li><b>Area/Origin:</b> {origins_str}</li>
-            <li style="color: #d9534f;"><b>Batas Akhir Pengisian Penawaran Harga: {due_date_str}</b></li>
+            <li style="color: #d9534f;"><b>Batas Akhir Pengisian: {due_date_str}</b></li>
         </ul>
-        
         <p>Silakan login ke sistem kami untuk memasukkan penawaran harga:</p>
         <p>
             <b>Link App:</b> <a href="https://taco-rfq.streamlit.app">https://taco-rfq.streamlit.app</a><br>
             <b>Email Login:</b> {to_email}<br>
             <b>Password:</b> {password}
         </p>
-        
         <p>Terima Kasih,<br>Procurement Team TACO</p>
     </body>
     </html>
@@ -1966,6 +1960,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
