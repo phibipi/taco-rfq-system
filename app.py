@@ -1279,29 +1279,26 @@ def admin_dashboard():
                                         
                                         # 2. KIRIM EMAIL NOTIFIKASI
                                         # Ambil password user dari df_u
-                                        try:
-                                            user_row = df_u[df_u['email'] == ven].iloc[0]
-                                            ven_name = user_row['vendor_name']
-                                            ven_pass = user_row['password']
+                                    try:
+                                        user_row = df_u[df_u['email'] == ven].iloc[0]
+                                        ven_name = user_row['vendor_name']
+                                        ven_pass = user_row['password']
                                             
-                                            with st.spinner("Mengirim email undangan ke vendor..."):
-                                                email_status = send_invitation_email(ven, ven_name, sel_lt, val, selected_origins, ven_pass, sel_round)
+                                        with st.spinner("Mengirim email undangan ke vendor..."):
+                                            email_status = send_invitation_email(ven, ven_name, sel_lt, val, selected_origins, ven_pass, sel_round)
                                                 
-                                            if email_status:
-                                                st.success(f"✅ Sukses! Akses diberikan & Email undangan terkirim ke {ven}.")
-                                            else:
-                                                st.warning("⚠️ Akses tersimpan, tapi Email GAGAL terkirim.")
+                                        if email_status:
+                                            st.success(f"✅ Sukses! Akses diberikan & Email undangan terkirim ke {ven}.")
+                                        else:
+                                            st.warning("⚠️ Akses tersimpan, tapi Email GAGAL terkirim.")
                                                 
-                                        except Exception as e:
-                                            st.warning(f"Akses tersimpan, tapi gagal mengambil data user untuk email: {e}")
+                                    except Exception as e:
+                                        st.warning(f"Akses tersimpan, tapi gagal mengambil data user untuk email: {e}")
 
-                                        time.sleep(2); st.rerun()
-                                    else:
-                                        st.warning(f"Semua data sudah ada ({skipped_count} skip). Tidak ada update.")
-                            else:
-                                st.warning("Data Group error.")
-                        else:
-                            st.warning("Pilih Origin dan isi Tahun.")
+                                    time.sleep(2); st.rerun()
+                                else:
+                                     st.warning(f"Semua data sudah ada ({skipped_count} skip). Tidak ada update.")
+                        else: st.warning("Pilih Origin dan isi Tahun.")
                             
         st.dataframe(get_data("Access_Rights"), use_container_width=True)
 
@@ -1969,6 +1966,7 @@ def vendor_dashboard(email):
 
 if __name__ == "__main__":
     main()
+
 
 
 
