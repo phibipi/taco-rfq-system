@@ -383,7 +383,7 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
         </ul>
         <p>Silakan login ke sistem kami untuk memasukkan penawaran harga:</p>
         <p>
-            <b>Link App:</b> <a href="http://bit.ly/TACOtender">https://taco-transport.streamlit.app/</a><br>
+            <b>Link App:</b> <a href="https://taco-transport.streamlit.app/">http://bit.ly/TACOtender</a><br>
             <b>Email Login:</b> {to_email}<br>
             <b>Password:</b> {password}
         </p>
@@ -1941,6 +1941,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
