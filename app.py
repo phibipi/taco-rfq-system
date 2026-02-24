@@ -385,7 +385,8 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
         <p>
             <b>Link App:</b> <a href="https://taco-transport.streamlit.app/">http://bit.ly/TACOtender</a><br>
             <b>Email Login:</b> {to_email}<br>
-            <b>Password:</b> {password}
+            <b>Password:</b> {password}<br>
+            <b>Tutorial:</b> <a href="https://drive.google.com/file/d/1M5QnSGibg2s9LiQXlNaiCLWxaA7jebJM/view">https://bit.ly/TutorialRFQTACO</a><br>
         </p>
         <p>Terima Kasih,<br>Procurement Team TACO</p>
     </body>
@@ -1941,6 +1942,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
