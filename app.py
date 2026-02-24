@@ -359,7 +359,7 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
     
     # Hitung Due Date
     today = datetime.now()
-    due_date = today + timedelta(days=14)
+    due_date = today + timedelta(days=7)
     
     months_id = {1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni", 7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"}
     due_date_str = f"{due_date.day} {months_id[due_date.month]} {due_date.year}"
