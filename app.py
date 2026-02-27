@@ -356,6 +356,9 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
 
     sender_email = st.secrets["email_config"]["sender_email"]
     sender_password = st.secrets["email_config"]["sender_password"]
+
+    cc_list = ["firli.mandaras@taco.co.id", "budhi.yuono@taco.co.id"]
+    cc_string = ", ".join(cc_list)
     
     # Hitung Due Date
     today = datetime.now()
@@ -397,6 +400,7 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
         msg = MIMEMultipart()
         msg['From'] = sender_email
         msg['To'] = to_email
+        msg['Cc'] = cc_string
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'html'))
 
@@ -1942,6 +1946,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
