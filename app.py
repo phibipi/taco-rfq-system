@@ -1619,6 +1619,7 @@ def vendor_dashboard(email):
             df_grps = get_data("Master_Groups")
             df_routes = get_data("Master_Routes")
             df_price = get_data("Price_Data")
+            df_gudang = get_data("Gudang")
 
             if df_acc.empty: 
                 st.warning("Belum ada akses.")
@@ -1687,6 +1688,14 @@ def vendor_dashboard(email):
                         for org in sorted(df_sub['origin'].unique()):
                             with st.container(border=True):
                                 st.markdown(f"#### 📍 {org}")
+
+                                # --- TAMPILKAN ALAMAT GUDANG ---
+                                if not df_gudang.empty and 'origin' in df_gudang.columns and 'alamat' in df_gudang.columns:
+                                    res_addr = df_gudang[df_gudang['origin'].astype(str).str.lower() == str(org).lower()]
+                                    if not res_addr.empty:
+                                        st.caption(f"🏢 **Alamat:** {res_addr.iloc[0]['alamat']}")
+                                # -------------------------------
+                                
                                 org_groups = df_sub[df_sub['origin'] == org]
                                 c1, c2, c3, c4 = st.columns([3, 4, 2, 2])
                                 c1.caption(""); c2.caption("Kota Tujuan"); c3.caption(""); c4.caption("Status Pengisian")
@@ -1946,6 +1955,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
