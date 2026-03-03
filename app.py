@@ -1375,7 +1375,7 @@ def admin_dashboard():
         tabs = st.tabs(["⏳ Submit Monitor", "✅ Lock Data", "📊 Summary", "🖨️ Print File"])
 
 # --- TAB 1: SUBMIT MONITOR (UPDATE: ROUTE GROUP) ---
-         with tabs[0]:
+        with tabs[0]:
             st.caption("Pantau kelengkapan pengisian vendor per Group Rute.")
             
             if not df_acc.empty and not df_g.empty:
@@ -1436,7 +1436,7 @@ def admin_dashboard():
                         display_data.append({
                             "Nama Vendor": v_name,
                             "Email": vendor,
-                            "Status Route Group": " | ".join(status_texts), # <--- Kolom Berubah
+                            "Status Route Group": " | ".join(status_texts),
                             "Status Akhir": "✅ Selesai" if is_complete else "⚠️ Belum Lengkap"
                         })
                     
@@ -1458,18 +1458,20 @@ def admin_dashboard():
                         st.success("🎉 Semua vendor di filter ini sudah melengkapi pengisian harga!")
                 else:
                     st.info("Tidak ada data assignment (Grant Access) untuk filter ini.")
+
+        # --- TAB 2: LOCK DATA ---
         with tabs[1]:
-        st.subheader("Lock Data")
-        df_price = get_data("Price_Data")
-        df_routes = get_data("Master_Routes")
-        df_md = get_data("Multidrop_Data")
-        df_g = get_data("Master_Groups")
+            st.subheader("Lock Data")
+            df_price = get_data("Price_Data")
+            df_routes = get_data("Master_Routes")
+            df_md = get_data("Multidrop_Data")
+            df_g = get_data("Master_Groups")
         
-        if df_price.empty:
-            st.info("Belum ada data harga masuk.")
-        else:
-            df_price['route_id'] = df_price['route_id'].astype(str).str.strip()
-            df_routes['route_id'] = df_routes['route_id'].astype(str).str.strip()
+            if df_price.empty:
+                st.info("Belum ada data harga masuk.")
+            else:
+                df_price['route_id'] = df_price['route_id'].astype(str).str.strip()
+                df_routes['route_id'] = df_routes['route_id'].astype(str).str.strip()
             
             merged_pr = pd.merge(df_price, df_routes[['route_id', 'group_id', 'kota_asal', 'kota_tujuan']], on='route_id', how='left')
             merged_pr['group_id'] = merged_pr['group_id'].fillna('Unknown')
@@ -2148,6 +2150,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
