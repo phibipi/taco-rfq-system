@@ -422,7 +422,7 @@ def send_reminder_email(to_email, vendor_name, load_type, validity, round_num, p
     cc_list = ["firli.mandaras@taco.co.id", "budhi.yuono@taco.co.id"]
     cc_string = ", ".join(cc_list)
     
-    subject = f"REMINDER: Pengisian Tender {load_type} - {validity} (Tahap {round_num})"
+    subject = f"REMINDER: Pengisian Penawaran Harga Tender {load_type} - {validity} (Tahap {round_num})"
     
     # PENGAMAN: Ubah semua item ke string sebelum di-join agar tidak TypeError
     pending_groups_str = ", ".join([str(g) for g in pending_groups])
@@ -430,7 +430,7 @@ def send_reminder_email(to_email, vendor_name, load_type, validity, round_num, p
     body = f"""
     <html>
     <body>
-        <h3 style="color: #d9534f;">⚠️ Reminder Pengisian Tender</h3>
+        <h3 style="color: #d9534f;">⚠️ Reminder Pengisian Penawaran Harga</h3>
         <p>Dear <b>{vendor_name}</b>,</p>
         <p>Melalui email ini, kami ingin mengingatkan bahwa Anda <b>belum menyelesaikan</b> pengisian penawaran harga pada sistem kami untuk detail berikut:</p>
         <ul>
@@ -2166,6 +2166,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
