@@ -1202,15 +1202,19 @@ def admin_dashboard():
                                             st.success("Unit tersimpan."); time.sleep(0.5); st.rerun()
         st.dataframe(get_data("Master_Units"), use_container_width=True)
 
-    # --- TAB 4: USERS ---
+# --- TAB 4: USERS ---
         with tabs[3]:
             with st.form("add_usr"):
                 c1, c2, c3 = st.columns(3)
-                em = c1.text_input("Email"); pw = c2.text_input("Pass"); nm = c3.text_input("PT Name")
+                em = c1.text_input("Email")
+                pw = c2.text_input("Pass")
+                nm = c3.text_input("PT Name")
                 if st.form_submit_button("Add User", type="primary"):
                     save_data("Users", [[em, pw, "vendor", nm]])
                     st.success("Saved")
-             st.dataframe(get_data("Users"), use_container_width=True)
+            
+            # Baris ini sekarang sejajar persis dengan 'with st.form'
+            st.dataframe(get_data("Users"), use_container_width=True)
 
 # --- TAB 5: ACCESS RIGHTS (UPDATE: VALIDITY LOGIC) ---
         with tabs[4]:
@@ -2144,6 +2148,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
