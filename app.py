@@ -1375,7 +1375,7 @@ def admin_dashboard():
 
         tabs = st.tabs(["⏳ Submit Monitor", "✅ Lock Data", "📊 Summary", "🖨️ Print File"])
 
-        # --- TAB 1: SUBMIT MONITOR (UPDATE: ROUTE GROUP) ---
+# --- TAB 1: SUBMIT MONITOR (UPDATE: LIST PER VENDOR & REMINDER SPESIFIK) ---
         with tabs[0]:
             st.caption("Pantau kelengkapan pengisian vendor per Group Rute.")
             
@@ -1403,63 +1403,56 @@ def admin_dashboard():
                     (df_master['round'] == sel_sm_rnd)
                 ] if not df_master.empty else pd.DataFrame()
                 
-                display_data = []
-                vendor_pending_groups = {} # <--- Merekam detail group yang belum diisi
-                
                 if not acc_target.empty:
                     for vendor in acc_target['vendor_email'].unique():
+                        # Dapatkan Nama Vendor (Email disembunyikan dari UI)
+                        v_name = df_u[df_u['email']==vendor]['vendor_name'].iloc[0] if not df_u[df_u['email']==vendor].empty else vendor
+                        
                         # Ambil list Route Group yang di-assign ke vendor ini
                         assigned_groups = sorted(acc_target[acc_target['vendor_email'] == vendor]['route_group'].dropna().tolist())
                         
                         submitted_groups = []
                         if not sub_master.empty:
-                            # Cek vendor ini sudah submit di Route Group mana saja
                             submitted_groups = sub_master[sub_master['vendor_email'] == vendor]['route_group'].dropna().unique().tolist()
                         
-                        status_texts = []
-                        is_complete = True
-                        pending_for_this_vendor = [] 
+                        pending_groups = []
                         
-                        for grp in assigned_groups:
-                            if grp in submitted_groups: 
-                                status_texts.append(f"{grp} ✅")
+                        # --- BUAT UI CARD PER VENDOR ---
+                        with st.container(border=True):
+                            st.markdown(f"#### 🏢 {v_name}")
+                            
+                            c_h1, c_h2 = st.columns([4, 2])
+                            c_h1.caption("Group Rute")
+                            c_h2.caption("Status Pengisian")
+                            st.divider()
+                            
+                            for grp in assigned_groups:
+                                c_r1, c_r2 = st.columns([4, 2])
+                                c_r1.write(f"**{grp}**")
+                                
+                                if grp in submitted_groups: 
+                                    c_r2.markdown('<span class="status-done">✅ Sudah Terisi</span>', unsafe_allow_html=True)
+                                else:
+                                    c_r2.markdown('<span class="status-pending">❌ Belum Ada Data</span>', unsafe_allow_html=True)
+                                    pending_groups.append(grp)
+                                
+                                st.markdown("<hr style='margin: 0.5em 0;'>", unsafe_allow_html=True)
+                            
+                            # --- TOMBOL REMINDER KHUSUS VENDOR INI ---
+                            if pending_groups:
+                                st.warning(f"⚠️ Terdapat {len(pending_groups)} rute yang belum diisi.")
+                                # Key dibuat unik menggunakan email vendor agar tidak bentrok
+                                if st.button(f"📨 Kirim Reminder ke {v_name}", key=f"remind_{vendor}_{sel_sm_rnd}", type="primary"):
+                                    with st.spinner(f"Mengirim email ke {v_name}..."):
+                                        res = send_reminder_email(vendor, v_name, sel_sm_lt, sel_sm_val, sel_sm_rnd, pending_groups)
+                                        if res: 
+                                            st.success(f"Berhasil mengirim email reminder ke {v_name}!")
+                                        else:
+                                            st.error("Gagal mengirim email.")
                             else:
-                                status_texts.append(f"{grp} ❌")
-                                is_complete = False
-                                pending_for_this_vendor.append(grp) 
-                        
-                        # Jika belum lengkap, masukkan list group ke dictionary
-                        if not is_complete:
-                            vendor_pending_groups[vendor] = pending_for_this_vendor
-                        
-                        v_name = df_u[df_u['email']==vendor]['vendor_name'].iloc[0] if not df_u[df_u['email']==vendor].empty else vendor
-                        
-                        display_data.append({
-                            "Nama Vendor": v_name,
-                            "Email": vendor,
-                            "Status Route Group": " | ".join(status_texts),
-                            "Status Akhir": "✅ Selesai" if is_complete else "⚠️ Belum Lengkap"
-                        })
-                    
-                    df_monitor = pd.DataFrame(display_data)
-                    st.dataframe(df_monitor, use_container_width=True, hide_index=True)
-                    
-                    if vendor_pending_groups:
-                        st.warning(f"Ada {len(vendor_pending_groups)} vendor yang belum selesai mengisi penawaran.")
-                        if st.button("📨 Kirim Reminder Email ke Vendor Tertunda", type="primary"):
-                            with st.spinner("Mengirim email massal..."):
-                                success_count = 0
-                                # Looping kirim email
-                                for email_target, pending_groups in vendor_pending_groups.items():
-                                    ven_nm = df_u[df_u['email']==email_target]['vendor_name'].iloc[0] if not df_u[df_u['email']==email_target].empty else email_target
-                                    res = send_reminder_email(email_target, ven_nm, sel_sm_lt, sel_sm_val, sel_sm_rnd, pending_groups)
-                                    if res: success_count += 1
-                                st.success(f"Berhasil mengirim {success_count} email reminder!")
-                    else:
-                        st.success("🎉 Semua vendor di filter ini sudah melengkapi pengisian harga!")
+                                st.success("🎉 Pengisian Harga Lengkap!")
                 else:
                     st.info("Tidak ada data assignment (Grant Access) untuk filter ini.")
-
         # --- TAB 2: LOCK DATA ---
         with tabs[1]:
             st.subheader("Lock Data")
@@ -2149,3 +2142,4 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
