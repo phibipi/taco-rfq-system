@@ -1381,10 +1381,9 @@ def admin_dashboard():
 
         tabs = st.tabs(["⏳ Submit Monitor", "✅ Lock Data", "📊 Summary", "🖨️ Print Dokumen"])
         
-# --- TAB 1: SUBMIT MONITOR (UPDATE: COLLAPSIBLE & COMPACT) ---
+# --- TAB 1: SUBMIT MONITOR (UPDATE: STATS & SEARCH BAR) ---
         with tabs[0]:
-            st.caption("Monitor kelengkapan pengisian vendor per Group Rute.")
-            
+                        
             if not df_acc.empty and not df_g.empty:
                 # Merge Access dengan Group untuk tahu origin, route_group & load type
                 acc_merge = pd.merge(df_acc, df_g[['group_id', 'origin', 'route_group', 'load_type']], on='group_id', how='left')
@@ -1410,80 +1409,124 @@ def admin_dashboard():
                 ] if not df_master.empty else pd.DataFrame()
                 
                 if not acc_target.empty:
-                    vendor_list = []
-                    for vendor in acc_target['vendor_email'].unique():
-                        # Dapatkan Nama Vendor
-                        v_name = df_u[df_u['email']==vendor]['vendor_name'].iloc[0] if not df_u[df_u['email']==vendor].empty else vendor
-                        vendor_list.append((vendor, v_name))
+                    # --- 1. TAHAP PRE-CALCULATION & PENGUMPULAN DATA ---
+                    vendor_data_list = []
                     
-                    vendor_list.sort(key=lambda x: str(x[1]).strip().lower())   
-                    for vendor, v_name in vendor_list:
-                        # Ambil list Route Group yang di-assign ke vendor ini   
-                        assigned_groups = sorted(acc_target[acc_target['vendor_email'] == vendor]['route_group'].dropna().tolist())
+                    # Variabel untuk Statistik
+                    total_vendors = 0
+                    completed_vendors = 0
+                    total_groups_assigned = 0
+                    total_groups_filled = 0
+                    
+                    for vendor in acc_target['vendor_email'].unique():
+                        v_name = df_u[df_u['email']==vendor]['vendor_name'].iloc[0] if not df_u[df_u['email']==vendor].empty else vendor
+                        
+                        v_acc_subset = acc_target[acc_target['vendor_email'] == vendor]
+                        assigned_groups = sorted(v_acc_subset['route_group'].dropna().tolist())
+                        assigned_origins = v_acc_subset['origin'].dropna().unique().tolist() # Untuk fitur search origin
                         
                         submitted_groups = []
                         if not sub_master.empty:
                             submitted_groups = sub_master[sub_master['vendor_email'] == vendor]['route_group'].dropna().unique().tolist()
                         
-                        # --- PRE-CALCULATE TUNGGAKAN UNTUK JUDUL EXPANDER ---
-                        pending_groups = []
-                        for grp in assigned_groups:
-                            if grp not in submitted_groups:
-                                pending_groups.append(grp)
+                        pending_groups = [grp for grp in assigned_groups if grp not in submitted_groups]
+                        filled_groups = [grp for grp in assigned_groups if grp in submitted_groups]
                         
-                        total_g = len(assigned_groups)
-                        done_g = total_g - len(pending_groups)
+                        # Hitung Statistik Global
+                        total_vendors += 1
+                        if len(pending_groups) == 0 and len(assigned_groups) > 0:
+                            completed_vendors += 1
+                            
+                        total_groups_assigned += len(assigned_groups)
+                        total_groups_filled += len(filled_groups)
                         
-                        # Set Icon di judul
-                        if len(pending_groups) > 0:
-                            header_icon = "⚠️"
-                            header_text = f"{header_icon} {v_name} — ({done_g}/{total_g})"
-                            is_expanded = False # Bisa diset True kalau mau otomatis terbuka yang belum selesai
-                        else:
-                            header_icon = "✅"
-                            header_text = f"{header_icon} {v_name} — (Lengkap: {total_g}/{total_g})"
-                            is_expanded = False # Yang sudah selesai ditutup otomatis
+                        vendor_data_list.append({
+                            'email': vendor,
+                            'name': v_name,
+                            'assigned_groups': assigned_groups,
+                            'submitted_groups': submitted_groups,
+                            'pending_groups': pending_groups,
+                            'origins': assigned_origins
+                        })
+                    
+                    # Sort berdasarkan Alfabet Nama Vendor
+                    vendor_data_list.sort(key=lambda x: str(x['name']).strip().lower())
+                    
+                    # --- 2. TAMPILKAN UI STATISTIK ---
+                    st.divider()
+                    col_stat1, col_stat2 = st.columns(2)
+                    with col_stat1:
+                        st.info(f"🏆 **Vendor Selesai (Full):** {completed_vendors} dari {total_vendors} Vendor")
+                    with col_stat2:
+                        st.info(f"📝 **Grup Rute Terisi:** {total_groups_filled} dari {total_groups_assigned} Grup")
+                    
+                    # --- 3. TAMPILKAN SEARCH BAR ---
+                    search_query = st.text_input("🔍 Cari berdasarkan Nama Vendor atau Origin (Area)...", placeholder="Contoh: Logistik atau Jakarta").strip().lower()
+                    st.write("")
+                    
+                    # --- 4. FILTER & RENDER LIST VENDOR ---
+                    filtered_vendors = []
+                    for v in vendor_data_list:
+                        # Logika Pencarian: Cocokkan dengan Nama ATAU salah satu Origin-nya
+                        match_name = search_query in str(v['name']).lower()
+                        match_origin = any(search_query in str(org).lower() for org in v['origins'])
+                        
+                        if search_query == "" or match_name or match_origin:
+                            filtered_vendors.append(v)
                             
-                        # --- BUAT UI COLLAPSE (EXPANDER) PER VENDOR ---
-                        with st.expander(header_text, expanded=is_expanded):
+                    if not filtered_vendors:
+                        st.warning("Tidak ada vendor atau origin yang cocok dengan pencarian.")
+                    else:
+                        for v in filtered_vendors:
+                            v_name = v['name']
+                            vendor_email = v['email']
+                            assigned_groups = v['assigned_groups']
+                            submitted_groups = v['submitted_groups']
+                            pending_groups = v['pending_groups']
                             
-                            c_h1, c_h2 = st.columns([4, 2])
-                            c_h1.caption("Group Rute")
-                            c_h2.caption("Status Pengisian")
-                            st.divider()
+                            total_g = len(assigned_groups)
+                            done_g = total_g - len(pending_groups)
                             
-                            for grp in assigned_groups:
-                                c_r1, c_r2 = st.columns([4, 2])
-                                c_r1.write(f"**{grp}**")
-                                
-                                if grp in submitted_groups: 
-                                    c_r2.markdown('<span class="status-done">✅ Sudah Terisi</span>', unsafe_allow_html=True)
-                                else:
-                                    c_r2.markdown('<span class="status-pending">❌ Belum Ada Data</span>', unsafe_allow_html=True)
-                                
-                                st.markdown("<hr style='margin: 0.5em 0;'>", unsafe_allow_html=True)
-                            
-                            # --- TOMBOL REMINDER KHUSUS VENDOR INI ----
-                            if pending_groups:
-                                if st.button(f"📨 Kirim Reminder ke {v_name}", key=f"remind_{vendor}_{sel_sm_rnd}", type="primary"):
-                                    with st.spinner(f"Mengirim email ke {v_name}..."):
-                                        
-                                        # 1. CARI PASSWORD VENDOR DI DATABASE
-                                        vendor_pw = "Hubungi Admin"
-                                        if not df_u[df_u['email']==vendor].empty:
-                                            vendor_pw = df_u[df_u['email']==vendor].iloc[0]['password']
-                                            
-                                        # 2. MASUKKAN PASSWORD KE DALAM FUNGSI (sebagai argumen ke-7)
-                                        res = send_reminder_email(vendor, v_name, sel_sm_lt, sel_sm_val, sel_sm_rnd, pending_groups, vendor_pw)
-                                        
-                                        if res: 
-                                            st.success(f"Berhasil mengirim email reminder ke {v_name}!")
-                                        else:
-                                            st.error("Gagal mengirim email.")
+                            if len(pending_groups) > 0:
+                                header_text = f"⚠️ {v_name} — (Selesai: {done_g}/{total_g})"
+                                is_expanded = False 
                             else:
-                                st.success("🎉 Pengisian Harga Lengkap!")
+                                header_text = f"✅ {v_name} — (Lengkap: {total_g}/{total_g})"
+                                is_expanded = False 
+                                
+                            # --- BUAT UI COLLAPSE ---
+                            with st.expander(header_text, expanded=is_expanded):
+                                # (Optional Info) Tampilkan origin apa saja yg dipegang vendor ini
+                                st.caption(f"📍 Area: {', '.join(v['origins'])}")
+                                
+                                c_h1, c_h2 = st.columns([4, 2])
+                                c_h1.write("**Group Rute**")
+                                c_h2.write("**Status Pengisian**")
+                                st.divider()
+                                
+                                for grp in assigned_groups:
+                                    c_r1, c_r2 = st.columns([4, 2])
+                                    c_r1.write(f"{grp}")
+                                    if grp in submitted_groups: 
+                                        c_r2.markdown('<span class="status-done">✅ Sudah Terisi</span>', unsafe_allow_html=True)
+                                    else:
+                                        c_r2.markdown('<span class="status-pending">❌ Belum Ada Data</span>', unsafe_allow_html=True)
+                                    st.markdown("<hr style='margin: 0.5em 0;'>", unsafe_allow_html=True)
+                                
+                                if pending_groups:
+                                    if st.button(f"📨 Kirim Reminder ke {v_name}", key=f"remind_{vendor_email}_{sel_sm_rnd}", type="primary"):
+                                        with st.spinner(f"Mengirim email ke {v_name}..."):
+                                            vendor_pw = "Hubungi Admin"
+                                            if not df_u[df_u['email']==vendor_email].empty:
+                                                vendor_pw = df_u[df_u['email']==vendor_email].iloc[0]['password']
+                                                
+                                            res = send_reminder_email(vendor_email, v_name, sel_sm_lt, sel_sm_val, sel_sm_rnd, pending_groups, vendor_pw)
+                                            if res: st.success(f"Berhasil mengirim email reminder ke {v_name}!")
+                                            else: st.error("Gagal mengirim email.")
+                                else:
+                                    st.success("🎉 Pengisian Harga Lengkap!")
                 else:
-                    st.info("Tidak ada data assignment (Grant Access) untuk filter ini.")
+                    st.info("Tidak ada data akses untuk filter ini.")
                     
         # --- TAB 2: LOCK DATA ---
         with tabs[1]:
@@ -2174,6 +2217,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
