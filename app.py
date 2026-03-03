@@ -430,14 +430,14 @@ def send_reminder_email(to_email, vendor_name, load_type, validity, round_num, p
     body = f"""
     <html>
     <body>
-        <h3 style="color: #d9534f;">⚠️ URGENT: Reminder Pengisian Tender</h3>
+        <h3 style="color: #d9534f;">⚠️ Reminder Pengisian Tender</h3>
         <p>Dear <b>{vendor_name}</b>,</p>
         <p>Melalui email ini, kami ingin mengingatkan bahwa Anda <b>belum menyelesaikan</b> pengisian penawaran harga pada sistem kami untuk detail berikut:</p>
         <ul>
             <li><b>Periode:</b> {validity}</li>
             <li><b>Tahap Penawaran:</b> {round_num}</li>
             <li><b>Tipe Armada:</b> {load_type}</li>
-            <li><b style="color: #d9534f;">Group Rute yang belum diisi: {pending_groups_str}</b></li>
+            <li><b style="color: #d9534f;">Origin yang belum diisi: {pending_groups_str}</b></li>
         </ul>
         <p>Mohon segera login dan melengkapi form harga pada area (Origin) yang belum terselesaikan.</p>
         <p>
@@ -2168,6 +2168,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
