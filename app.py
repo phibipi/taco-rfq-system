@@ -1100,13 +1100,13 @@ def admin_dashboard():
 
     
     # --- TAB 1: GROUPS ---
-    with tabs[0]:
-        st.caption("Buat Group Baru (ID Otomatis)")
-        with st.form("add_grp"):
-            c1, c2, c3 = st.columns(3)
-            lt = c1.selectbox("Load Type", ["FTL", "FCL"])
-            org = c2.text_input("Origin (Area)") 
-            gn = c3.text_input("Nama Route Group")
+        with tabs[0]:
+            st.caption("Buat Group Baru (ID Otomatis)")
+            with st.form("add_grp"):
+                c1, c2, c3 = st.columns(3)
+                lt = c1.selectbox("Load Type", ["FTL", "FCL"])
+                org = c2.text_input("Origin (Area)") 
+                gn = c3.text_input("Nama Route Group")
             
             if st.form_submit_button("Simpan Group", type="primary"):
                 df_g = get_data("Master_Groups")
@@ -1129,19 +1129,19 @@ def admin_dashboard():
         st.dataframe(get_data("Master_Groups"), use_container_width=True)
 
     # --- TAB 2: ROUTES ---
-    with tabs[1]:
-        st.caption("Tambah Rute")
-        df_g = get_data("Master_Groups")
+        with tabs[1]:
+            st.caption("Tambah Rute")
+            df_g = get_data("Master_Groups")
         
-        c_f1, c_f2 = st.columns(2)
-        f_lt = c_f1.selectbox("Filter Load Type", ["All"] + df_g['load_type'].unique().tolist() if not df_g.empty else [])
-        avail_origins = []
+            c_f1, c_f2 = st.columns(2)
+            f_lt = c_f1.selectbox("Filter Load Type", ["All"] + df_g['load_type'].unique().tolist() if not df_g.empty else [])
+            avail_origins = []
         if not df_g.empty:
             if f_lt != "All": avail_origins = df_g[df_g['load_type']==f_lt]['origin'].unique().tolist()
             else: avail_origins = df_g['origin'].unique().tolist()
-        f_org = c_f2.selectbox("Filter Origin", ["All"] + avail_origins)
+            f_org = c_f2.selectbox("Filter Origin", ["All"] + avail_origins)
         
-        grp_opts = {}
+            grp_opts = {}
         if not df_g.empty:
             filtered_g = df_g.copy()
             if f_lt != "All": filtered_g = filtered_g[filtered_g['load_type'] == f_lt]
@@ -1166,18 +1166,18 @@ def admin_dashboard():
                     st.success(f"Tersimpan! ID: {new_rid}")
                     time.sleep(1); st.rerun()
                 else: st.warning("Data belum lengkap.")
-        st.dataframe(get_data("Master_Routes"), use_container_width=True)
+            st.dataframe(get_data("Master_Routes"), use_container_width=True)
 
     # --- TAB 3: UNITS ---
-    with tabs[2]:
-        st.caption("Setting Unit per Group (Tanpa Unit ID)")
-        all_grp_opts = {}
+        with tabs[2]:
+            st.caption("Setting Unit per Group (Tanpa Unit ID)")
+            all_grp_opts = {}
         if not df_g.empty:
              for _, r in df_g.iterrows():
                 label = f"{r['group_id']} - {r['route_group']} ({r['origin']})"
                 all_grp_opts[label] = r['group_id']
 
-        with st.form("add_ut"):
+            with st.form("add_ut"):
             c1, c2 = st.columns(2)
             sel_g = c1.selectbox("Pilih Group", list(all_grp_opts.keys()))
             ut = c2.text_input("Jenis Unit (ex: Tronton)")
@@ -1199,22 +1199,22 @@ def admin_dashboard():
                             ws.append_rows([[gid, ut]])
                             get_data.clear() 
                             st.success("Unit tersimpan."); time.sleep(0.5); st.rerun()
-        st.dataframe(get_data("Master_Units"), use_container_width=True)
+            st.dataframe(get_data("Master_Units"), use_container_width=True)
 
     # --- TAB 4: USERS ---
-    with tabs[3]:
-        with st.form("add_usr"):
-            c1, c2, c3 = st.columns(3)
-            em = c1.text_input("Email"); pw = c2.text_input("Pass"); nm = c3.text_input("PT Name")
+        with tabs[3]:
+            with st.form("add_usr"):
+                c1, c2, c3 = st.columns(3)
+                em = c1.text_input("Email"); pw = c2.text_input("Pass"); nm = c3.text_input("PT Name")
             if st.form_submit_button("Add User", type="primary"):
                 save_data("Users", [[em, pw, "vendor", nm]])
                 st.success("Saved")
-        st.dataframe(get_data("Users"), use_container_width=True)
+         st.dataframe(get_data("Users"), use_container_width=True)
 
 # --- TAB 5: ACCESS RIGHTS (UPDATE: VALIDITY LOGIC) ---
-    with tabs[4]:
-        st.write("Grant Access (Batch per Origin)")
-        df_u = get_data("Users"); df_g = get_data("Master_Groups"); df_rights = get_data("Access_Rights")
+        with tabs[4]:
+            st.write("Grant Access (Batch per Origin)")
+            df_u = get_data("Users"); df_g = get_data("Master_Groups"); df_rights = get_data("Access_Rights")
         
         if not df_u.empty and not df_g.empty:
             c1, c2, c3 = st.columns(3)
@@ -1326,7 +1326,7 @@ def admin_dashboard():
                                     else: st.info("Tidak ada data dihapus.")
                             except: st.error("Error Google API")
         
-        st.dataframe(get_data("Access_Rights"), use_container_width=True)
+            st.dataframe(get_data("Access_Rights"), use_container_width=True)
 
 # --- HALAMAN 2: MONITORING & SUMMARY ---
     elif step == 'monitoring':
@@ -1338,13 +1338,13 @@ def admin_dashboard():
 
 # --- LOAD DATA SEKALI UNTUK SEMUA TAB ANALISA (OPTIMASI) ---
 
-    df_p = get_data("Price_Data")
-    df_r = get_data("Master_Routes")
-    df_g = get_data("Master_Groups")
-    df_u = get_data("Users")
-    df_prof = get_data("Vendor_Profile")
-    df_md = get_data("Multidrop_Data")
-    df_acc = get_data("Access_Rights")
+        df_p = get_data("Price_Data")
+        df_r = get_data("Master_Routes")
+        df_g = get_data("Master_Groups")
+        df_u = get_data("Users")
+        df_prof = get_data("Vendor_Profile")
+        df_md = get_data("Multidrop_Data")
+        df_acc = get_data("Access_Rights")
     
 # BIG MERGE MASTER (Untuk Tab 2, 3, 4)
         df_master = pd.DataFrame()
@@ -1370,7 +1370,7 @@ def admin_dashboard():
         tabs = st.tabs(["⏳ Submit Monitor", "✅ Lock Data", "📊 Summary", "🖨️ Print File"])
 
 # --- TAB 1: SUBMIT MONITOR (UPDATE: ROUTE GROUP) ---
-     with tabs[0]:
+         with tabs[0]:
             st.caption("Pantau kelengkapan pengisian vendor per Group Rute.")
             
             if not df_acc.empty and not df_g.empty:
@@ -1453,7 +1453,7 @@ def admin_dashboard():
                         st.success("🎉 Semua vendor di filter ini sudah melengkapi pengisian harga!")
                 else:
                     st.info("Tidak ada data assignment (Grant Access) untuk filter ini.")
-    with tabs[1]:
+        with tabs[1]:
         st.subheader("Lock Data")
         df_price = get_data("Price_Data")
         df_routes = get_data("Master_Routes")
@@ -1555,7 +1555,7 @@ def admin_dashboard():
                             st.success("Locked!"); time.sleep(0.5); st.rerun()
     
     # --- TAB 7: SUMMARY ---   
-    with tabs[2]:
+        with tabs[2]:
         st.subheader("📊 Summary & Ranking Vendor")
         if df_master.empty:
             st.info("Belum ada data harga masuk.")
@@ -1603,7 +1603,7 @@ def admin_dashboard():
                 st.warning("Data tidak ditemukan.")
 
 # --- TAB 8: PRINT FILE (SK & SPK TERPISAH) ---
-    with tabs[3]:
+        with tabs[3]:
         st.subheader("🖨️ Print Dokumen")
         
         if df_master.empty:
@@ -2143,6 +2143,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
