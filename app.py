@@ -1376,7 +1376,7 @@ def admin_dashboard():
             m4['price'] = pd.to_numeric(m4['price'], errors='coerce').fillna(0)
             df_master = m4
 
-        tabs = st.tabs(["⏳ Submit Monitor", "✅ Lock Data", "📊 Summary", "🖨️ Print File"])
+        tabs = st.tabs(["⏳ Submit Monitor", "✅ Lock Data", "📊 Summary", "🖨️ Print Dokumen"])
         
 # --- TAB 1: SUBMIT MONITOR (UPDATE: COLLAPSIBLE & COMPACT) ---
         with tabs[0]:
@@ -1458,7 +1458,6 @@ def admin_dashboard():
                             
                             # --- TOMBOL REMINDER KHUSUS VENDOR INI ----
                             if pending_groups:
-                                st.warning(f"**{len(pending_groups)}** rute yang belum diisi.")
                                 if st.button(f"📨 Kirim Reminder ke {v_name}", key=f"remind_{vendor}_{sel_sm_rnd}", type="primary"):
                                     with st.spinner(f"Mengirim email ke {v_name}..."):
                                         
@@ -2168,6 +2167,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
