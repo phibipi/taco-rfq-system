@@ -1219,121 +1219,125 @@ def admin_dashboard():
             # Baris ini sekarang sejajar persis dengan 'with st.form'
             st.dataframe(get_data("Users"), use_container_width=True)
 
-        # --- TAB 5: ACCESS RIGHTS (UPDATE: VALIDITY LOGIC) ---
+# --- TAB 5: ACCESS RIGHTS (UPDATE: FORMAT VENDOR DROPDOWN) ---
         with tabs[4]:
             st.write("Grant Access (Batch per Origin)")
             df_u = get_data("Users"); df_g = get_data("Master_Groups"); df_rights = get_data("Access_Rights")
         
             if not df_u.empty and not df_g.empty:
+                # --- HELPER FORMAT DROPDOWN ---
+                df_vendors = df_u[df_u['role']=='vendor']
+                vendor_emails = df_vendors['email'].unique()
+                
+                def fmt_vendor(eml):
+                    nm = df_vendors[df_vendors['email'] == eml]['vendor_name']
+                    if not nm.empty: return f"{nm.iloc[0]} - {eml}"
+                    return eml
+                # ------------------------------
+
                 c1, c2, c3 = st.columns(3)
-                ven = c1.selectbox("Pilih Vendor", df_u[df_u['role']=='vendor']['email'].unique())
+                ven = c1.selectbox("Pilih Vendor", vendor_emails, format_func=fmt_vendor) # <-- UPDATE DI SINI
                 sel_lt = c2.selectbox("Pilih Load Type", ["FTL", "FCL"])
                 sel_round = c3.selectbox("Tahap Penawaran", ["1", "2", "3"]) 
             
-            unique_origins = []
-            if not df_g.empty:
+                unique_origins = []
                 subset_g = df_g[df_g['load_type'] == sel_lt]
                 unique_origins = sorted(subset_g['origin'].unique().tolist())
-            
-            if unique_origins:
-                # Filter akses eksisting
-                existing_gids = set()
-                if not df_rights.empty: 
-                    if 'round' in df_rights.columns:
-                        sub_r = df_rights[(df_rights['vendor_email'] == ven) & (df_rights['round'] == sel_round)]
-                    else:
-                        sub_r = df_rights[df_rights['vendor_email'] == ven]
-                    existing_gids = set(sub_r['group_id'].tolist())
+                
+                if unique_origins:
+                    existing_gids = set()
+                    if not df_rights.empty: 
+                        if 'round' in df_rights.columns:
+                            sub_r = df_rights[(df_rights['vendor_email'] == ven) & (df_rights['round'] == sel_round)]
+                        else:
+                            sub_r = df_rights[df_rights['vendor_email'] == ven]
+                        existing_gids = set(sub_r['group_id'].tolist())
 
-                with st.form("acc_origin_batch"):
-                    cols = st.columns(3)
-                    selected_origins = []
-                    for idx, org in enumerate(unique_origins):
-                        org_groups = df_g[(df_g['origin'] == org) & (df_g['load_type'] == sel_lt)]
-                        org_gids = set(org_groups['group_id'].tolist())
-                        is_checked = not org_gids.isdisjoint(existing_gids)
-                        if cols[idx % 3].checkbox(org, value=is_checked, key=f"chk_{org}"): 
-                            selected_origins.append(org)
+                    with st.form("acc_origin_batch"):
+                        cols = st.columns(3)
+                        selected_origins = []
+                        for idx, org in enumerate(unique_origins):
+                            org_groups = df_g[(df_g['origin'] == org) & (df_g['load_type'] == sel_lt)]
+                            org_gids = set(org_groups['group_id'].tolist())
+                            is_checked = not org_gids.isdisjoint(existing_gids)
+                            if cols[idx % 3].checkbox(org, value=is_checked, key=f"chk_{org}"): 
+                                selected_origins.append(org)
+                        
+                        st.divider()
+                        c_val1, c_val2 = st.columns([2, 1])
+                        
+                        opt_validity = ["Januari - Juni", "Juli - Desember"] if sel_lt == "FCL" else ["Januari - Desember"]
+                        val_period = c_val1.selectbox("Periode", opt_validity)
+                        val_year = c_val2.text_input("Tahun", value=str(datetime.now().year))
+                        
+                        if st.form_submit_button("Grant Access", type="primary"):
+                            val = f"{val_period} {val_year}"
+                            if selected_origins:
+                                target_groups = df_g[(df_g['load_type'] == sel_lt) & (df_g['origin'].isin(selected_origins))]
+                                target_gids = target_groups['group_id'].unique().tolist()
+                                
+                                sh = connect_to_gsheet()
+                                if sh:
+                                    ws = sh.worksheet("Access_Rights")
+                                    existing_data = ws.get_all_values()
+                                    existing_keys = set()
+                                    if len(existing_data) > 1:
+                                        header = existing_data[0]
+                                        has_round_col = 'round' in [h.lower() for h in header]
+                                        for row in existing_data[1:]:
+                                            if len(row) >= 3:
+                                                base_key = f"{row[0]}_{row[1]}_{row[2]}".lower()
+                                                if has_round_col and len(row) >= 5: base_key += f"_{row[4]}".lower()
+                                                elif not has_round_col: base_key += "_1"
+                                                existing_keys.add(base_key)
+                                    
+                                    new_rows = []
+                                    skipped_count = 0
+                                    for gid in target_gids:
+                                        key_check = f"{ven}_{val}_{gid}_{sel_round}".lower()
+                                        if key_check not in existing_keys:
+                                            new_rows.append([ven, val, gid, "Active", sel_round])
+                                        else: skipped_count += 1
+                                    
+                                    if new_rows:
+                                        ws.append_rows(new_rows)
+                                        get_data.clear()
+                                        try:
+                                            user_row = df_u[df_u['email'] == ven].iloc[0]
+                                            with st.spinner("Mengirim email..."):
+                                                send_invitation_email(ven, user_row['vendor_name'], sel_lt, val, selected_origins, user_row['password'], sel_round)
+                                            st.success(f"Sukses! Akses Tahap {sel_round} diberikan.")
+                                        except Exception as e: st.warning(f"Akses OK, Email Gagal: {e}")
+                                        time.sleep(1); st.rerun()
+                                    else: st.warning(f"Data sudah ada ({skipped_count} skip).")
+                            else: st.warning("Pilih minimal 1 origin.")
                     
-                    st.divider()
-                    c_val1, c_val2 = st.columns([2, 1])
-                    
-                    # --- LOGIKA BARU: OPSI VALIDITY BERDASARKAN LOAD TYPE ---
-                    if sel_lt == "FCL":
-                        opt_validity = ["Januari - Juni", "Juli - Desember"]
-                    else: # FTL
-                        opt_validity = ["Januari - Desember"]
-                    
-                    val_period = c_val1.selectbox("Periode", opt_validity)
-                    val_year = c_val2.text_input("Tahun", value=str(datetime.now().year))
-                    
-                    if st.form_submit_button("Grant Access", type="primary"):
-                        val = f"{val_period} {val_year}"
-                        if selected_origins:
-                            target_groups = df_g[(df_g['load_type'] == sel_lt) & (df_g['origin'].isin(selected_origins))]
-                            target_gids = target_groups['group_id'].unique().tolist()
-                            
+                    st.markdown("---")
+                    # FITUR RESET AKSES
+                    with st.expander("🗑️ Area Berbahaya: Reset/Hapus Akses Vendor", expanded=False):
+                        c_del1, c_del2 = st.columns(2)
+                        del_ven = c_del1.selectbox("Pilih Vendor (Hapus)", vendor_emails, format_func=fmt_vendor, key="del_ven") # <-- UPDATE DI SINI JUGA
+                        del_lt = c_del2.selectbox("Pilih Tipe Muatan (Hapus)", ["FTL", "FCL"], key="del_lt")
+                        if st.button("⚠️ Hapus Semua Akses Vendor Ini", type="primary"):
+                            target_groups_del = df_g[df_g['load_type'] == del_lt]
+                            gids_to_remove = set(target_groups_del['group_id'].tolist())
                             sh = connect_to_gsheet()
                             if sh:
-                                ws = sh.worksheet("Access_Rights")
-                                existing_data = ws.get_all_values()
-                                existing_keys = set()
-                                if len(existing_data) > 1:
-                                    header = existing_data[0]
-                                    has_round_col = 'round' in [h.lower() for h in header]
-                                    for row in existing_data[1:]:
-                                        if len(row) >= 3:
-                                            base_key = f"{row[0]}_{row[1]}_{row[2]}".lower()
-                                            if has_round_col and len(row) >= 5: base_key += f"_{row[4]}".lower()
-                                            elif not has_round_col: base_key += "_1"
-                                            existing_keys.add(base_key)
-                                
-                                new_rows = []
-                                skipped_count = 0
-                                for gid in target_gids:
-                                    key_check = f"{ven}_{val}_{gid}_{sel_round}".lower()
-                                    if key_check not in existing_keys:
-                                        new_rows.append([ven, val, gid, "Active", sel_round])
-                                    else: skipped_count += 1
-                                
-                                if new_rows:
-                                    ws.append_rows(new_rows)
-                                    get_data.clear()
-                                    try:
-                                        user_row = df_u[df_u['email'] == ven].iloc[0]
-                                        with st.spinner("Mengirim email..."):
-                                            send_invitation_email(ven, user_row['vendor_name'], sel_lt, val, selected_origins, user_row['password'], sel_round)
-                                        st.success(f"Sukses! Akses Tahap {sel_round} diberikan.")
-                                    except Exception as e: st.warning(f"Akses OK, Email Gagal: {e}")
-                                    time.sleep(1); st.rerun()
-                                else: st.warning(f"Data sudah ada ({skipped_count} skip).")
-                        else: st.warning("Pilih minimal 1 origin.")
-                st.markdown("---")
-                # FITUR RESET AKSES
-                with st.expander("🗑️ Area Berbahaya: Reset/Hapus Akses Vendor", expanded=False):
-                    c_del1, c_del2 = st.columns(2)
-                    del_ven = c_del1.selectbox("Pilih Vendor (Hapus)", df_u[df_u['role']=='vendor']['email'].unique(), key="del_ven")
-                    del_lt = c_del2.selectbox("Pilih Tipe Muatan (Hapus)", ["FTL", "FCL"], key="del_lt")
-                    if st.button("⚠️ Hapus Semua Akses Vendor Ini", type="primary"):
-                        target_groups_del = df_g[df_g['load_type'] == del_lt]
-                        gids_to_remove = set(target_groups_del['group_id'].tolist())
-                        sh = connect_to_gsheet()
-                        if sh:
-                            try:
-                                ws = sh.worksheet("Access_Rights")
-                                all_rows = ws.get_all_values()
-                                if len(all_rows) > 1:
-                                    header = all_rows[0]; data_rows = all_rows[1:]
-                                    new_data_rows, deleted_count = [], 0
-                                    for row in data_rows:
-                                        if row[0] == del_ven and row[2] in gids_to_remove: deleted_count += 1
-                                        else: new_data_rows.append(row)
-                                    if deleted_count > 0:
-                                        ws.clear(); ws.append_rows([header] + new_data_rows); get_data.clear()
-                                        st.success(f"Dihapus {deleted_count} akses."); time.sleep(1); st.rerun()
-                                    else: st.info("Tidak ada data dihapus.")
-                            except: st.error("Error Google API")
-        
+                                try:
+                                    ws = sh.worksheet("Access_Rights")
+                                    all_rows = ws.get_all_values()
+                                    if len(all_rows) > 1:
+                                        header = all_rows[0]; data_rows = all_rows[1:]
+                                        new_data_rows, deleted_count = [], 0
+                                        for row in data_rows:
+                                            if row[0] == del_ven and row[2] in gids_to_remove: deleted_count += 1
+                                            else: new_data_rows.append(row)
+                                        if deleted_count > 0:
+                                            ws.clear(); ws.append_rows([header] + new_data_rows); get_data.clear()
+                                            st.success(f"Dihapus {deleted_count} akses."); time.sleep(1); st.rerun()
+                                        else: st.info("Tidak ada data dihapus.")
+                                except: st.error("Error Google API")
+            
             st.dataframe(get_data("Access_Rights"), use_container_width=True)
 
     # --- HALAMAN 2: MONITORING & SUMMARY ---
@@ -1900,7 +1904,7 @@ def vendor_dashboard(email):
                         df_sub = df_view[df_view['load_type'] == t_code]
                         # Disini tidak perlu cek empty lagi, karena tab dibuat hanya jika data ada
                         
-                        for org in sorted(df_sub['origin'].unique()):
+                        for org in sorted(df_sub['origin'].unique(),key=lambda x: str(x).strip().lower()):
                             with st.container(border=True):
                                 st.markdown(f"#### 📍 {org}")
 
@@ -2170,6 +2174,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
