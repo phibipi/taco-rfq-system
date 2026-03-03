@@ -413,7 +413,7 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
         st.error(f"Gagal kirim email: {e}")
         return False
 
-def send_reminder_email(to_email, vendor_name, load_type, validity, round_num, pending_groups):
+def send_reminder_email(to_email, vendor_name, load_type, validity, round_num, pending_groups, password):
     if "email_config" not in st.secrets: return False
     sender_email = st.secrets["email_config"]["sender_email"]
     sender_password = st.secrets["email_config"]["sender_password"]
@@ -2158,6 +2158,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
