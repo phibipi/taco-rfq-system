@@ -1079,7 +1079,7 @@ def admin_dashboard():
         with c1:
             with st.container(border=True):
                 st.markdown("### 📂 Akses & Master Data")
-                st.write("Kelola Master Group, Rute, Unit, User Vendor, dan Berikan Hak Akses Tender.")
+                st.write("Manage Origin, Rute, Unit, User Vendor, dan Akses Pengisian Harga.")
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("Masuk ke Master Data ➡️", type="primary", use_container_width=True):
                     st.session_state['admin_step'] = 'master'
@@ -1430,7 +1430,7 @@ def admin_dashboard():
                         # Set Icon di judul
                         if len(pending_groups) > 0:
                             header_icon = "⚠️"
-                            header_text = f"{header_icon} {v_name} — (✅Terisi: {done_g}/{total_g})"
+                            header_text = f"{header_icon} {v_name} — ({done_g}/{total_g})"
                             is_expanded = False # Bisa diset True kalau mau otomatis terbuka yang belum selesai
                         else:
                             header_icon = "✅"
@@ -1458,7 +1458,7 @@ def admin_dashboard():
                             
                             # --- TOMBOL REMINDER KHUSUS VENDOR INI ----
                             if pending_groups:
-                                st.warning(f"Terdapat **{len(pending_groups)}** rute yang belum diisi.")
+                                st.warning(f"**{len(pending_groups)}** rute yang belum diisi.")
                                 if st.button(f"📨 Kirim Reminder ke {v_name}", key=f"remind_{vendor}_{sel_sm_rnd}", type="primary"):
                                     with st.spinner(f"Mengirim email ke {v_name}..."):
                                         
@@ -2168,6 +2168,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
