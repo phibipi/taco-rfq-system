@@ -412,7 +412,55 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
     except Exception as e:
         st.error(f"Gagal kirim email: {e}")
         return False
-        
+
+def send_reminder_email(to_email, vendor_name, load_type, validity, round_num, pending_groups):
+    if "email_config" not in st.secrets: return False
+    sender_email = st.secrets["email_config"]["sender_email"]
+    sender_password = st.secrets["email_config"]["sender_password"]
+    
+    cc_list = ["firli.mandaras@taco.co.id", "budhi.yuono@taco.co.id"]
+    cc_string = ", ".join(cc_list)
+    
+    subject = f"REMINDER: Pengisian Tender {load_type} - {validity} (Tahap {round_num})"
+    pending_groups_str = ", ".join(pending_groups)
+    
+    body = f"""
+    <html>
+    <body>
+        <h3 style="color: #d9534f;">⚠️ URGENT: Reminder Pengisian Tender</h3>
+        <p>Dear <b>{vendor_name}</b>,</p>
+        <p>Melalui email ini, kami ingin mengingatkan bahwa Anda <b>belum menyelesaikan</b> pengisian penawaran harga pada sistem kami untuk detail berikut:</p>
+        <ul>
+            <li><b>Periode:</b> {validity}</li>
+            <li><b>Tahap Penawaran:</b> {round_num}</li>
+            <li><b>Tipe Armada:</b> {load_type}</li>
+            <li><b style="color: #d9534f;">Group Rute yang belum diisi: {pending_groups_str}</b></li>
+        </ul>
+        <p>Mohon segera login dan melengkapi form harga pada area (Origin) yang belum terselesaikan.</p>
+        <p>
+            <b>Link App:</b> <a href="https://taco-transport.streamlit.app/">http://bit.ly/TACOtender</a><br>
+            <b>Email Login:</b> {to_email}<br>
+            <b>Password:</b> {password}<br>
+            <b>Tutorial:</b> <a href="https://drive.google.com/file/d/1M5QnSGibg2s9LiQXlNaiCLWxaA7jebJM/view">https://bit.ly/TutorialRFQTACO</a><br>
+        </p>
+        <p>Terima Kasih,<br>Procurement Team TACO</p>
+    </body>
+    </html>
+    """
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = sender_email
+        msg['To'] = to_email
+        msg['Cc'] = cc_string 
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'html'))
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+        server.login(sender_email, sender_password)
+        server.send_message(msg) 
+        server.quit()
+        return True
+    except Exception as e:
+        return False        
 
 # --- FUNGSI GENERATE WORD (OPTIMIZED: SUPER CEPAT & RAPI) ---
 def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
@@ -773,6 +821,7 @@ def main():
 
     if 'user_info' not in st.session_state: st.session_state['user_info'] = None
     if 'vendor_step' not in st.session_state: st.session_state['vendor_step'] = "dashboard" 
+    if 'admin_step' not in st.session_state: st.session_state['admin_step'] = "home" # <--- TAMBAHAN BARU
     
     for k in ['selected_group_id', 'selected_validity', 'sel_origin', 'sel_load', 'focused_group_id', 'temp_success_msg']:
         if k not in st.session_state: st.session_state[k] = None
@@ -1015,51 +1064,40 @@ def user_dashboard():
                 
 # ================= ADMIN =================
 def admin_dashboard():
-    tabs = st.tabs(["📍Master Groups", "🛣️Master Routes", "🚛Master Units", "👥Users", "🔑Access Rights", "✅Monitoring & Approval", "📊Summary", "🖨️Print File"])
-# --- LOAD DATA SEKALI UNTUK SEMUA TAB ANALISA (OPTIMASI) ---
-    # Kita load di sini agar Tab 7 dan Tab 8 bisa pakai data yang sama
-    df_p = get_data("Price_Data")
-    df_r = get_data("Master_Routes")
-    df_g = get_data("Master_Groups")
-    df_u = get_data("Users")
-    df_prof = get_data("Vendor_Profile")
+    step = st.session_state.get('admin_step', 'home')
     
-    # Persiapkan Data "Big Join" (Master Data Gabungan)
-    df_master = pd.DataFrame()
-    if not df_p.empty:
-        # Cleaning & Merge
-        df_p['route_id'] = df_p['route_id'].astype(str).str.strip()
-        df_r['route_id'] = df_r['route_id'].astype(str).str.strip()
-        df_g['group_id'] = df_g['group_id'].astype(str).str.strip()
+    # --- HALAMAN UTAMA (HOME) ---
+    if step == 'home':
+        st.markdown("## 🎛️ Admin Control Panel")
+        st.write("Silakan pilih halaman:")
+        st.markdown("<br>", unsafe_allow_html=True)
         
-        m1 = pd.merge(df_p, df_r, on='route_id', how='left')
-        m2 = pd.merge(m1, df_g, on='group_id', how='left')
-        m3 = pd.merge(m2, df_u[['email', 'vendor_name']], left_on='vendor_email', right_on='email', how='left')
-        m3['vendor_name'] = m3['vendor_name'].fillna(m3['vendor_email'])
-        
-        if not df_prof.empty:
-            df_prof_clean = df_prof.sort_values('updated_at', ascending=False).drop_duplicates('email')
-            
-            # Kita ambil kolom alamat & kontak juga
-            cols_to_merge = ['email', 'top', 'ppn', 'pph', 'address', 'contact_person', 'phone']
-            
-            m4 = pd.merge(m3, df_prof_clean[cols_to_merge], left_on='vendor_email', right_on='email', how='left')
-            
-            # Fill NA dengan "-"
-            fill_cols = ['top', 'ppn', 'pph', 'address', 'contact_person', 'phone']
-            for c in fill_cols:
-                if c in m4.columns: m4[c] = m4[c].fillna("-")
-                
-            m4['ppn_status'] = m4['ppn']
-            m4['pph_status'] = m4['pph']
-        else:
-            m4 = m3
-            for c in ['top', 'ppn_status', 'pph_status', 'address', 'contact_person', 'phone']:
-                m4[c] = "-"
-        
+        c1, c2 = st.columns(2)
+        with c1:
+            with st.container(border=True):
+                st.markdown("### 📂 Akses & Master Data")
+                st.write("Kelola Master Group, Rute, Unit, User Vendor, dan Berikan Hak Akses Tender.")
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("Masuk ke Master Data ➡️", type="primary", use_container_width=True):
+                    st.session_state['admin_step'] = 'master'
+                    st.rerun()
+                    
+        with c2:
+            with st.container(border=True):
+                st.markdown("### 📊 Monitoring & Summary")
+                st.write("Pantau progres submit vendor, Lock/Unlock data, Ranking Harga, dan Cetak SK/SPK.")
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("Masuk ke Monitoring ➡️", type="primary", use_container_width=True):
+                    st.session_state['admin_step'] = 'monitoring'
+                    st.rerun()   
+# --- HALAMAN 1: MASTER DATA ---
+    elif step == 'master':
+        if st.button("⬅️ Kembali ke Menu Utama"):
+            st.session_state['admin_step'] = 'home'
+            st.rerun() 
+        st.markdown("### 📂 Akses & Master Data")
+        tabs = st.tabs(["📍Master Groups", "🛣️Master Routes", "🚛Master Units", "👥Users", "🔑Access Rights"])
 
-        m4['price'] = pd.to_numeric(m4['price'], errors='coerce').fillna(0)
-        df_master = m4
     
     # --- TAB 1: GROUPS ---
     with tabs[0]:
@@ -1262,11 +1300,161 @@ def admin_dashboard():
                                     time.sleep(1); st.rerun()
                                 else: st.warning(f"Data sudah ada ({skipped_count} skip).")
                         else: st.warning("Pilih minimal 1 origin.")
+                st.markdown("---")
+                # FITUR RESET AKSES
+                with st.expander("🗑️ Area Berbahaya: Reset/Hapus Akses Vendor", expanded=False):
+                    c_del1, c_del2 = st.columns(2)
+                    del_ven = c_del1.selectbox("Pilih Vendor (Hapus)", df_u[df_u['role']=='vendor']['email'].unique(), key="del_ven")
+                    del_lt = c_del2.selectbox("Pilih Tipe Muatan (Hapus)", ["FTL", "FCL"], key="del_lt")
+                    if st.button("⚠️ Hapus Semua Akses Vendor Ini", type="primary"):
+                        target_groups_del = df_g[df_g['load_type'] == del_lt]
+                        gids_to_remove = set(target_groups_del['group_id'].tolist())
+                        sh = connect_to_gsheet()
+                        if sh:
+                            try:
+                                ws = sh.worksheet("Access_Rights")
+                                all_rows = ws.get_all_values()
+                                if len(all_rows) > 1:
+                                    header = all_rows[0]; data_rows = all_rows[1:]
+                                    new_data_rows, deleted_count = [], 0
+                                    for row in data_rows:
+                                        if row[0] == del_ven and row[2] in gids_to_remove: deleted_count += 1
+                                        else: new_data_rows.append(row)
+                                    if deleted_count > 0:
+                                        ws.clear(); ws.append_rows([header] + new_data_rows); get_data.clear()
+                                        st.success(f"Dihapus {deleted_count} akses."); time.sleep(1); st.rerun()
+                                    else: st.info("Tidak ada data dihapus.")
+                            except: st.error("Error Google API")
+        
         st.dataframe(get_data("Access_Rights"), use_container_width=True)
 
-# --- TAB 6: MONITORING (UPDATE: ADA LOAD TYPE DI JUDUL) ---
-    with tabs[5]:
-        st.subheader("Monitoring Harga & Approval")
+# --- HALAMAN 2: MONITORING & SUMMARY ---
+    elif step == 'monitoring':
+        if st.button("⬅️ Kembali ke Menu Utama"):
+            st.session_state['admin_step'] = 'home'
+            st.rerun()
+    
+    st.markdown("### 📊 Monitoring & Summary")       
+
+# --- LOAD DATA SEKALI UNTUK SEMUA TAB ANALISA (OPTIMASI) ---
+
+    df_p = get_data("Price_Data")
+    df_r = get_data("Master_Routes")
+    df_g = get_data("Master_Groups")
+    df_u = get_data("Users")
+    df_prof = get_data("Vendor_Profile")
+    df_md = get_data("Multidrop_Data")
+    df_acc = get_data("Access_Rights")
+    
+# BIG MERGE MASTER (Untuk Tab 2, 3, 4)
+        df_master = pd.DataFrame()
+        if not df_p.empty and not df_g.empty:
+            df_p['route_id'] = df_p['route_id'].astype(str).str.strip()
+            df_r['route_id'] = df_r['route_id'].astype(str).str.strip()
+            df_g['group_id'] = df_g['group_id'].astype(str).str.strip()
+            m1 = pd.merge(df_p, df_r, on='route_id', how='left')
+            m2 = pd.merge(m1, df_g, on='group_id', how='left')
+            m3 = pd.merge(m2, df_u[['email', 'vendor_name']], left_on='vendor_email', right_on='email', how='left')
+            m3['vendor_name'] = m3['vendor_name'].fillna(m3['vendor_email'])
+            if not df_prof.empty:
+                df_prof_clean = df_prof.sort_values('updated_at', ascending=False).drop_duplicates('email')
+                m4 = pd.merge(m3, df_prof_clean[['email', 'top', 'ppn', 'pph', 'address', 'contact_person', 'phone']], left_on='vendor_email', right_on='email', how='left')
+                for c in ['top', 'ppn', 'pph', 'address', 'contact_person', 'phone']:
+                    if c in m4.columns: m4[c] = m4[c].fillna("-")
+            else:
+                m4 = m3
+                for c in ['top', 'address', 'contact_person', 'phone']: m4[c] = "-"
+            m4['price'] = pd.to_numeric(m4['price'], errors='coerce').fillna(0)
+            df_master = m4
+
+        tabs = st.tabs(["⏳ Submit Monitor", "✅ Lock Data", "📊 Summary", "🖨️ Print File"])
+
+# --- TAB 1: SUBMIT MONITOR (UPDATE: ROUTE GROUP) ---
+     with tabs[0]:
+            st.caption("Pantau kelengkapan pengisian vendor per Group Rute.")
+            
+            if not df_acc.empty and not df_g.empty:
+                # Merge Access dengan Group untuk tahu origin, route_group & load type
+                acc_merge = pd.merge(df_acc, df_g[['group_id', 'origin', 'route_group', 'load_type']], on='group_id', how='left')
+                if 'round' not in acc_merge.columns: acc_merge['round'] = '1'
+                
+                c1, c2, c3 = st.columns(3)
+                sel_sm_lt = c1.selectbox("Filter Tipe Muatan", acc_merge['load_type'].dropna().unique().tolist())
+                sel_sm_val = c2.selectbox("Filter Periode", acc_merge['validity'].dropna().unique().tolist())
+                sel_sm_rnd = c3.selectbox("Filter Tahap", sorted(acc_merge['round'].dropna().unique().tolist()))
+                
+                # Filter Data Target (Unik berdasarkan Vendor dan Route Group)
+                acc_target = acc_merge[
+                    (acc_merge['load_type'] == sel_sm_lt) & 
+                    (acc_merge['validity'] == sel_sm_val) & 
+                    (acc_merge['round'] == sel_sm_rnd)
+                ].drop_duplicates(subset=['vendor_email', 'route_group'])
+                
+                # Ambil Data yg sudah disubmit (dari df_master)
+                sub_master = df_master[
+                    (df_master['load_type'] == sel_sm_lt) & 
+                    (df_master['validity'] == sel_sm_val) & 
+                    (df_master['round'] == sel_sm_rnd)
+                ] if not df_master.empty else pd.DataFrame()
+                
+                display_data = []
+                vendor_pending_groups = {} # <--- Merekam detail group yang belum diisi
+                
+                if not acc_target.empty:
+                    for vendor in acc_target['vendor_email'].unique():
+                        # Ambil list Route Group yang di-assign ke vendor ini
+                        assigned_groups = sorted(acc_target[acc_target['vendor_email'] == vendor]['route_group'].dropna().tolist())
+                        
+                        submitted_groups = []
+                        if not sub_master.empty:
+                            # Cek vendor ini sudah submit di Route Group mana saja
+                            submitted_groups = sub_master[sub_master['vendor_email'] == vendor]['route_group'].dropna().unique().tolist()
+                        
+                        status_texts = []
+                        is_complete = True
+                        pending_for_this_vendor = [] 
+                        
+                        for grp in assigned_groups:
+                            if grp in submitted_groups: 
+                                status_texts.append(f"{grp} ✅")
+                            else:
+                                status_texts.append(f"{grp} ❌")
+                                is_complete = False
+                                pending_for_this_vendor.append(grp) 
+                        
+                        # Jika belum lengkap, masukkan list group ke dictionary
+                        if not is_complete:
+                            vendor_pending_groups[vendor] = pending_for_this_vendor
+                        
+                        v_name = df_u[df_u['email']==vendor]['vendor_name'].iloc[0] if not df_u[df_u['email']==vendor].empty else vendor
+                        
+                        display_data.append({
+                            "Nama Vendor": v_name,
+                            "Email": vendor,
+                            "Status Route Group": " | ".join(status_texts), # <--- Kolom Berubah
+                            "Status Akhir": "✅ Selesai" if is_complete else "⚠️ Belum Lengkap"
+                        })
+                    
+                    df_monitor = pd.DataFrame(display_data)
+                    st.dataframe(df_monitor, use_container_width=True, hide_index=True)
+                    
+                    if vendor_pending_groups:
+                        st.warning(f"Ada {len(vendor_pending_groups)} vendor yang belum selesai mengisi penawaran.")
+                        if st.button("📨 Kirim Reminder Email ke Vendor Tertunda", type="primary"):
+                            with st.spinner("Mengirim email massal..."):
+                                success_count = 0
+                                # Looping kirim email
+                                for email_target, pending_groups in vendor_pending_groups.items():
+                                    ven_nm = df_u[df_u['email']==email_target]['vendor_name'].iloc[0] if not df_u[df_u['email']==email_target].empty else email_target
+                                    res = send_reminder_email(email_target, ven_nm, sel_sm_lt, sel_sm_val, sel_sm_rnd, pending_groups)
+                                    if res: success_count += 1
+                                st.success(f"Berhasil mengirim {success_count} email reminder!")
+                    else:
+                        st.success("🎉 Semua vendor di filter ini sudah melengkapi pengisian harga!")
+                else:
+                    st.info("Tidak ada data assignment (Grant Access) untuk filter ini.")
+    with tabs[1]:
+        st.subheader("Lock Data")
         df_price = get_data("Price_Data")
         df_routes = get_data("Master_Routes")
         df_md = get_data("Multidrop_Data")
@@ -1367,7 +1555,7 @@ def admin_dashboard():
                             st.success("Locked!"); time.sleep(0.5); st.rerun()
     
     # --- TAB 7: SUMMARY ---   
-    with tabs[6]:
+    with tabs[2]:
         st.subheader("📊 Summary & Ranking Vendor")
         if df_master.empty:
             st.info("Belum ada data harga masuk.")
@@ -1415,7 +1603,7 @@ def admin_dashboard():
                 st.warning("Data tidak ditemukan.")
 
 # --- TAB 8: PRINT FILE (SK & SPK TERPISAH) ---
-    with tabs[7]:
+    with tabs[3]:
         st.subheader("🖨️ Print Dokumen")
         
         if df_master.empty:
@@ -1955,6 +2143,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
