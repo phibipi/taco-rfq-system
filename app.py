@@ -1339,7 +1339,7 @@ def admin_dashboard():
             st.session_state['admin_step'] = 'home'
             st.rerun()
     
-    st.markdown("### 📊 Monitoring & Summary")       
+        st.markdown("### 📊 Monitoring & Summary")       
 
 # --- LOAD DATA SEKALI UNTUK SEMUA TAB ANALISA (OPTIMASI) ---
 
@@ -2148,6 +2148,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
