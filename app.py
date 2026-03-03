@@ -14,6 +14,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import nsdecls, qn  
 from docx.oxml import parse_xml, OxmlElement 
 from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
+import urllib.parse
 
 
 # --- MAIN APP ---
@@ -1514,15 +1515,49 @@ def admin_dashboard():
                                     st.markdown("<hr style='margin: 0.5em 0;'>", unsafe_allow_html=True)
                                 
                                 if pending_groups:
-                                    if st.button(f"📨 Kirim Reminder ke {v_name}", key=f"remind_{vendor_email}_{sel_sm_rnd}", type="primary"):
-                                        with st.spinner(f"Mengirim email ke {v_name}..."):
-                                            vendor_pw = "Hubungi Admin"
-                                            if not df_u[df_u['email']==vendor_email].empty:
-                                                vendor_pw = df_u[df_u['email']==vendor_email].iloc[0]['password']
-                                                
-                                            res = send_reminder_email(vendor_email, v_name, sel_sm_lt, sel_sm_val, sel_sm_rnd, pending_groups, vendor_pw)
-                                            if res: st.success(f"Berhasil mengirim email reminder ke {v_name}!")
-                                            else: st.error("Gagal mengirim email.")
+                                    st.write("") # Memberi sedikit jarak
+                                    c_btn1, c_btn2 = st.columns(2)
+                                    
+                                    # --- TOMBOL EMAIL ---
+                                    with c_btn1:
+                                        if st.button(f"📨 Kirim Email", key=f"remind_{vendor_email}_{sel_sm_rnd}", type="primary", use_container_width=True):
+                                            with st.spinner(f"Mengirim email ke {v_name}..."):
+                                                vendor_pw = "Hubungi Admin"
+                                                if not df_u[df_u['email']==vendor_email].empty:
+                                                    vendor_pw = df_u[df_u['email']==vendor_email].iloc[0]['password']
+                                                    
+                                                res = send_reminder_email(vendor_email, v_name, sel_sm_lt, sel_sm_val, sel_sm_rnd, pending_groups, vendor_pw)
+                                                if res: st.success("Email terkirim!")
+                                                else: st.error("Gagal mengirim email.")
+                                    
+                                    # --- TOMBOL WHATSAPP ---
+                                    with c_btn2:
+                                        vendor_phone = ""
+                                        # Cari nomor HP dari tabel Vendor Profile
+                                        if not df_prof.empty:
+                                            prof_subset = df_prof[df_prof['email'] == vendor_email]
+                                            if not prof_subset.empty:
+                                                vendor_phone = str(prof_subset.iloc[0].get('phone', '')).strip()
+                                        
+                                        # Jika nomor HP ada dan valid
+                                        if vendor_phone and vendor_phone != "-" and vendor_phone.lower() != "nan":
+                                            # Ubah awalan "08" menjadi "628" sesuai standar API WA
+                                            if vendor_phone.startswith("0"):
+                                                vendor_phone = "62" + vendor_phone[1:]
+                                            
+                                            # Siapkan teks draf WA
+                                            pending_str = ", ".join([str(g) for g in pending_groups])
+                                            wa_text = f"Halo *{v_name}*,\n\nKami dari TACO Group ingin mengingatkan bahwa Anda *belum menyelesaikan* pengisian harga Tender {sel_sm_lt} ({sel_sm_val}) Tahap {sel_sm_rnd} untuk area:\n\n📌 {pending_str}\n\nMohon segera melengkapi penawaran Anda di sistem.\nLink: https://taco-transport.streamlit.app/\n\nTerima Kasih."
+                                            
+                                            # Encode teks agar aman di URL
+                                            wa_text_encoded = urllib.parse.quote(wa_text)
+                                            wa_url = f"https://wa.me/{vendor_phone}?text={wa_text_encoded}"
+                                            
+                                            # Render tombol hijau ala WhatsApp
+                                            st.markdown(f'<a href="{wa_url}" target="_blank" style="background-color:#25D366; color:white; padding:10px 16px; border-radius:8px; text-decoration:none; font-weight:bold; display:inline-block; text-align:center; width:100%; border: 1px solid #1eaa50; box-shadow: 0 2px 4px rgba(37, 211, 102, 0.2);">💬 Kirim WA</a>', unsafe_allow_html=True)
+                                        else:
+                                            # Render tombol abu-abu jika nomor tidak ada
+                                            st.markdown(f'<div style="background-color:#E5E7EB; color:#6B7280; padding:10px 16px; border-radius:8px; text-decoration:none; font-weight:bold; display:inline-block; text-align:center; width:100%; cursor:not-allowed; border: 1px solid #D1D5DB;">❌ No WA Tidak Ada</div>', unsafe_allow_html=True)
                                 else:
                                     st.success("🎉 Pengisian Harga Lengkap!")
                 else:
@@ -2229,6 +2264,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
