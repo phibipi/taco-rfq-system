@@ -1406,11 +1406,15 @@ def admin_dashboard():
                 ] if not df_master.empty else pd.DataFrame()
                 
                 if not acc_target.empty:
+                    vendor_list = []
                     for vendor in acc_target['vendor_email'].unique():
                         # Dapatkan Nama Vendor
                         v_name = df_u[df_u['email']==vendor]['vendor_name'].iloc[0] if not df_u[df_u['email']==vendor].empty else vendor
-                        
-                        # Ambil list Route Group yang di-assign ke vendor ini
+                        vendor_list.append((vendor, v_name))
+                    
+                    vendor_list.sort(key=lambda x: str(x[1]).strip().lower())   
+                    for vendor, v_name in vendor_list:
+                        # Ambil list Route Group yang di-assign ke vendor ini   
                         assigned_groups = sorted(acc_target[acc_target['vendor_email'] == vendor]['route_group'].dropna().tolist())
                         
                         submitted_groups = []
@@ -2166,6 +2170,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
