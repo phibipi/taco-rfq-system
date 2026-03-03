@@ -1071,7 +1071,7 @@ def admin_dashboard():
     
     # --- HALAMAN UTAMA (HOME) ---
     if step == 'home':
-        st.markdown("## 🎛️ Admin Control Panel")
+        st.markdown("## 🎛️ Admin Portal")
         st.write("Silakan pilih halaman:")
         st.markdown("<br>", unsafe_allow_html=True)
         
@@ -2167,6 +2167,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
