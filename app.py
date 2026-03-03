@@ -74,10 +74,10 @@ def init_style():
             border: 2px solid #F58536 !important;
             border-radius: 12px !important; 
             font-weight: 900 !important;      /* Lebih Tebal */
-            font-size: 24px !important;       /* Huruf Lebih Besar */
+            font-size: 24px !important;        /* Huruf Lebih Besar */
             padding: 0.8rem 2rem !important;  /* Ukuran Tombol Lebih Besar */
             box-shadow: 0 4px 8px rgba(249, 115, 22, 0.3);
-            width: 100% !important;           /* Tombol Memanjang Penuh */
+            width: 100% !important;            /* Tombol Memanjang Penuh */
             transition: all 0.3s ease;
         }
         div[data-testid="stFormSubmitButton"] button:hover {
@@ -133,7 +133,7 @@ def init_style():
         /* 3. Target Judul (Header) Expander */
         div[data-testid="stExpander"] summary {
             background-color: #FFFFFF !important; /* Paksa Background Putih */
-            color: #111827 !important;            /* Paksa Teks Hitam */
+            color: #111827 !important;             /* Paksa Teks Hitam */
             font-weight: 600 !important;
             border-radius: 8px !important;
         }
@@ -1090,7 +1090,8 @@ def admin_dashboard():
                 if st.button("Masuk ke Monitoring ➡️", type="primary", use_container_width=True):
                     st.session_state['admin_step'] = 'monitoring'
                     st.rerun()   
-# --- HALAMAN 1: MASTER DATA ---
+                    
+    # --- HALAMAN 1: MASTER DATA ---
     elif step == 'master':
         if st.button("⬅️ Kembali ke Menu Utama"):
             st.session_state['admin_step'] = 'home'
@@ -1099,7 +1100,7 @@ def admin_dashboard():
         tabs = st.tabs(["📍Master Groups", "🛣️Master Routes", "🚛Master Units", "👥Users", "🔑Access Rights"])
 
     
-    # --- TAB 1: GROUPS ---
+        # --- TAB 1: GROUPS ---
         with tabs[0]:
             st.caption("Buat Group Baru (ID Otomatis)")
             with st.form("add_grp"):
@@ -1108,27 +1109,27 @@ def admin_dashboard():
                 org = c2.text_input("Origin (Area)") 
                 gn = c3.text_input("Nama Route Group")
             
-            if st.form_submit_button("Simpan Group", type="primary"):
-                df_g = get_data("Master_Groups")
-                duplicate = False
-                if not df_g.empty:
-                    check = df_g[
-                        (df_g['load_type'] == lt) & 
-                        (df_g['origin'].str.lower() == org.lower()) & 
-                        (df_g['route_group'].str.lower() == gn.lower())
-                    ]
-                    if not check.empty: duplicate = True
+                if st.form_submit_button("Simpan Group", type="primary"):
+                    df_g = get_data("Master_Groups")
+                    duplicate = False
+                    if not df_g.empty:
+                        check = df_g[
+                            (df_g['load_type'] == lt) & 
+                            (df_g['origin'].str.lower() == org.lower()) & 
+                            (df_g['route_group'].str.lower() == gn.lower())
+                        ]
+                        if not check.empty: duplicate = True
                 
-                if duplicate: st.error(f"Gagal: Group '{gn}' dengan Origin '{org}' dan tipe '{lt}' sudah ada!")
-                elif not org or not gn: st.warning("Lengkapi data.")
-                else:
-                    new_gid = generate_next_id(df_g, 'group_id', 'R-', 3)
-                    save_data("Master_Groups", [[new_gid, lt, gn, org]])
-                    st.success(f"Berhasil! ID: {new_gid}")
-                    time.sleep(1); st.rerun()
-        st.dataframe(get_data("Master_Groups"), use_container_width=True)
+                    if duplicate: st.error(f"Gagal: Group '{gn}' dengan Origin '{org}' dan tipe '{lt}' sudah ada!")
+                    elif not org or not gn: st.warning("Lengkapi data.")
+                    else:
+                        new_gid = generate_next_id(df_g, 'group_id', 'R-', 3)
+                        save_data("Master_Groups", [[new_gid, lt, gn, org]])
+                        st.success(f"Berhasil! ID: {new_gid}")
+                        time.sleep(1); st.rerun()
+            st.dataframe(get_data("Master_Groups"), use_container_width=True)
 
-    # --- TAB 2: ROUTES ---
+        # --- TAB 2: ROUTES ---
         with tabs[1]:
             st.caption("Tambah Rute")
             df_g = get_data("Master_Groups")
@@ -1136,39 +1137,39 @@ def admin_dashboard():
             c_f1, c_f2 = st.columns(2)
             f_lt = c_f1.selectbox("Filter Load Type", ["All"] + df_g['load_type'].unique().tolist() if not df_g.empty else [])
             avail_origins = []
-        if not df_g.empty:
-            if f_lt != "All": avail_origins = df_g[df_g['load_type']==f_lt]['origin'].unique().tolist()
-            else: avail_origins = df_g['origin'].unique().tolist()
+            if not df_g.empty:
+                if f_lt != "All": avail_origins = df_g[df_g['load_type']==f_lt]['origin'].unique().tolist()
+                else: avail_origins = df_g['origin'].unique().tolist()
             f_org = c_f2.selectbox("Filter Origin", ["All"] + avail_origins)
         
             grp_opts = {}
-        if not df_g.empty:
-            filtered_g = df_g.copy()
-            if f_lt != "All": filtered_g = filtered_g[filtered_g['load_type'] == f_lt]
-            if f_org != "All": filtered_g = filtered_g[filtered_g['origin'] == f_org]
-            for _, r in filtered_g.iterrows():
-                label = f"{r['group_id']} | {r['route_group']} ({r['load_type']})"
-                grp_opts[label] = r['group_id']
+            if not df_g.empty:
+                filtered_g = df_g.copy()
+                if f_lt != "All": filtered_g = filtered_g[filtered_g['load_type'] == f_lt]
+                if f_org != "All": filtered_g = filtered_g[filtered_g['origin'] == f_org]
+                for _, r in filtered_g.iterrows():
+                    label = f"{r['group_id']} | {r['route_group']} ({r['load_type']})"
+                    grp_opts[label] = r['group_id']
 
-        with st.form("add_rt"):
-            c1, c2, c3 = st.columns([2, 1, 1])
-            sel_label = c1.selectbox("Pilih Group", list(grp_opts.keys()) if grp_opts else [])
-            ka = c2.text_input("Kota Asal")
-            kt = c3.text_input("Kota Tujuan")
-            ket = st.text_input("Keterangan (Opsional)")
-            
-            if st.form_submit_button("Simpan Rute", type="primary"):
-                if sel_label and ka and kt:
-                    gid = grp_opts[sel_label]
-                    df_r = get_data("Master_Routes")
-                    new_rid = generate_child_id(df_r, gid, 'route_id')
-                    save_data("Master_Routes", [[new_rid, gid, ka, kt, ket]])
-                    st.success(f"Tersimpan! ID: {new_rid}")
-                    time.sleep(1); st.rerun()
-                else: st.warning("Data belum lengkap.")
+            with st.form("add_rt"):
+                c1, c2, c3 = st.columns([2, 1, 1])
+                sel_label = c1.selectbox("Pilih Group", list(grp_opts.keys()) if grp_opts else [])
+                ka = c2.text_input("Kota Asal")
+                kt = c3.text_input("Kota Tujuan")
+                ket = st.text_input("Keterangan (Opsional)")
+                
+                if st.form_submit_button("Simpan Rute", type="primary"):
+                    if sel_label and ka and kt:
+                        gid = grp_opts[sel_label]
+                        df_r = get_data("Master_Routes")
+                        new_rid = generate_child_id(df_r, gid, 'route_id')
+                        save_data("Master_Routes", [[new_rid, gid, ka, kt, ket]])
+                        st.success(f"Tersimpan! ID: {new_rid}")
+                        time.sleep(1); st.rerun()
+                    else: st.warning("Data belum lengkap.")
             st.dataframe(get_data("Master_Routes"), use_container_width=True)
 
-    # --- TAB 3: UNITS ---
+        # --- TAB 3: UNITS ---
         with tabs[2]:
             st.caption("Setting Unit per Group (Tanpa Unit ID)")
             all_grp_opts = {}
@@ -1194,15 +1195,15 @@ def admin_dashboard():
                                 for row in existing[1:]:
                                     if len(row) >= 2 and row[0] == gid and row[1].lower() == ut.lower():
                                         is_exist = True; break
-                                        if is_exist: 
-                                            st.error(f"Unit '{ut}' sudah ada di Group {gid}.")
-                                        else:
-                                            ws.append_rows([[gid, ut]])
-                                            get_data.clear() 
-                                            st.success("Unit tersimpan."); time.sleep(0.5); st.rerun()
-        st.dataframe(get_data("Master_Units"), use_container_width=True)
+                            if is_exist: 
+                                st.error(f"Unit '{ut}' sudah ada di Group {gid}.")
+                            else:
+                                ws.append_rows([[gid, ut]])
+                                get_data.clear() 
+                                st.success("Unit tersimpan."); time.sleep(0.5); st.rerun()
+            st.dataframe(get_data("Master_Units"), use_container_width=True)
 
-# --- TAB 4: USERS ---
+        # --- TAB 4: USERS ---
         with tabs[3]:
             with st.form("add_usr"):
                 c1, c2, c3 = st.columns(3)
@@ -1216,7 +1217,7 @@ def admin_dashboard():
             # Baris ini sekarang sejajar persis dengan 'with st.form'
             st.dataframe(get_data("Users"), use_container_width=True)
 
-# --- TAB 5: ACCESS RIGHTS (UPDATE: VALIDITY LOGIC) ---
+        # --- TAB 5: ACCESS RIGHTS (UPDATE: VALIDITY LOGIC) ---
         with tabs[4]:
             st.write("Grant Access (Batch per Origin)")
             df_u = get_data("Users"); df_g = get_data("Master_Groups"); df_rights = get_data("Access_Rights")
@@ -1333,15 +1334,15 @@ def admin_dashboard():
         
             st.dataframe(get_data("Access_Rights"), use_container_width=True)
 
-# --- HALAMAN 2: MONITORING & SUMMARY ---
+    # --- HALAMAN 2: MONITORING & SUMMARY ---
     elif step == 'monitoring':
         if st.button("⬅️ Kembali ke Menu Utama"):
             st.session_state['admin_step'] = 'home'
             st.rerun()
     
-        st.markdown("### 📊 Monitoring & Summary")       
+        st.markdown("### 📊 Monitoring & Summary")        
 
-# --- LOAD DATA SEKALI UNTUK SEMUA TAB ANALISA (OPTIMASI) ---
+        # --- LOAD DATA SEKALI UNTUK SEMUA TAB ANALISA (OPTIMASI) ---
 
         df_p = get_data("Price_Data")
         df_r = get_data("Master_Routes")
@@ -1351,7 +1352,7 @@ def admin_dashboard():
         df_md = get_data("Multidrop_Data")
         df_acc = get_data("Access_Rights")
     
-# BIG MERGE MASTER (Untuk Tab 2, 3, 4)
+        # BIG MERGE MASTER (Untuk Tab 2, 3, 4)
         df_master = pd.DataFrame()
         if not df_p.empty and not df_g.empty:
             df_p['route_id'] = df_p['route_id'].astype(str).str.strip()
@@ -1374,7 +1375,7 @@ def admin_dashboard():
 
         tabs = st.tabs(["⏳ Submit Monitor", "✅ Lock Data", "📊 Summary", "🖨️ Print File"])
 
-# --- TAB 1: SUBMIT MONITOR (UPDATE: ROUTE GROUP) ---
+        # --- TAB 1: SUBMIT MONITOR (UPDATE: ROUTE GROUP) ---
         with tabs[0]:
             st.caption("Pantau kelengkapan pengisian vendor per Group Rute.")
             
@@ -1561,42 +1562,40 @@ def admin_dashboard():
                             update_status_locked(ids, "Locked")
                             st.success("Locked!"); time.sleep(0.5); st.rerun()
     
-    # --- TAB 7: SUMMARY ---   
+        # --- TAB 7: SUMMARY ---   
         with tabs[2]:
-        st.subheader("📊 Summary & Ranking Vendor")
-        if df_master.empty:
-            st.info("Belum ada data harga masuk.")
-        else:
-            # UI Filter
-            c1, c2 = st.columns(2)
-            avail_val = sorted(df_master['validity'].unique().tolist())
-            avail_load = sorted(df_master['load_type'].unique().tolist())
+            st.subheader("📊 Summary & Ranking Vendor")
+            if df_master.empty:
+                st.info("Belum ada data harga masuk.")
+            else:
+                c1, c2 = st.columns(2)
+                avail_val = sorted(df_master['validity'].unique().tolist())
+                avail_load = sorted(df_master['load_type'].unique().tolist())
             
-            sel_val = c1.selectbox("Filter Periode", avail_val, key="es_val")
-            sel_load = c2.selectbox("Filter Tipe Muatan", avail_load, key="es_load")
+                sel_val = c1.selectbox("Filter Periode", avail_val, key="es_val")
+                sel_load = c2.selectbox("Filter Tipe Muatan", avail_load, key="es_load")
             
-            # Filter Data
-            df_view = df_master[(df_master['validity'] == sel_val) & (df_master['load_type'] == sel_load)].copy()
+                # Filter Data
+                df_view = df_master[(df_master['validity'] == sel_val) & (df_master['load_type'] == sel_load)].copy()
             
-            if not df_view.empty:
-                unique_origins = sorted(df_view['origin'].unique())
+                if not df_view.empty:
+                    unique_origins = sorted(df_view['origin'].unique())
                 
-                for org in unique_origins:
-                    with st.expander(f"📍 Origin: {org}", expanded=True):
-                        sub_df = df_view[df_view['origin'] == org].copy() # Pakai .copy()
+                    for org in unique_origins:
+                        with st.expander(f"📍 Origin: {org}", expanded=True):
+                            sub_df = df_view[df_view['origin'] == org].copy() # Pakai .copy()
                         
-                        # Ranking Logic
-                        sub_df = sub_df.sort_values(by=['kota_tujuan', 'unit_type', 'price'])
-                        sub_df['Ranking'] = sub_df.groupby(['kota_tujuan', 'unit_type']).cumcount() + 1
+                            # Ranking Logic
+                            sub_df = sub_df.sort_values(by=['kota_tujuan', 'unit_type', 'price'])
+                            sub_df['Ranking'] = sub_df.groupby(['kota_tujuan', 'unit_type']).cumcount() + 1
                         
-                        # ▼▼▼ FILTER HANYA TOP 3 ▼▼▼
-                        sub_df = sub_df[sub_df['Ranking'] <= 3]
-                        # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+                            # ▼▼▼ FILTER HANYA TOP 3 ▼▼▼
+                            sub_df = sub_df[sub_df['Ranking'] <= 3]
+                            # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
                         
-                        sub_df['price_fmt'] = sub_df['price'].apply(lambda x: f"Rp {int(x):,}".replace(",", "."))
+                            sub_df['price_fmt'] = sub_df['price'].apply(lambda x: f"Rp {int(x):,}".replace(",", "."))
                         
-                        st.dataframe(
-                            sub_df[['kota_tujuan', 'unit_type', 'Ranking', 'vendor_name', 'price_fmt', 'lead_time', 'top']],
+                            st.dataframe(sub_df[['kota_tujuan', 'unit_type', 'Ranking', 'vendor_name', 'price_fmt', 'lead_time', 'top']],
                             use_container_width=True,
                             column_config={
                                 "kota_tujuan": "Tujuan",
@@ -1606,60 +1605,60 @@ def admin_dashboard():
                             },
                             hide_index=True
                         )
-            else:
-                st.warning("Data tidak ditemukan.")
+                else:
+                    st.warning("Data tidak ditemukan.")
 
-# --- TAB 8: PRINT FILE (SK & SPK TERPISAH) ---
+        # --- TAB 8: PRINT FILE (SK & SPK TERPISAH) ---
         with tabs[3]:
-        st.subheader("🖨️ Print Dokumen")
+            st.subheader("🖨️ Print Dokumen")
         
-        if df_master.empty:
-            st.info("Data belum tersedia.")
-        else:
-            avail_val = sorted(df_master['validity'].unique().tolist())
-            avail_load = sorted(df_master['load_type'].unique().tolist())
+            if df_master.empty:
+                st.info("Data belum tersedia.")
+            else:
+                avail_val = sorted(df_master['validity'].unique().tolist())
+                avail_load = sorted(df_master['load_type'].unique().tolist())
 
-            # ==========================================
-            # BAGIAN 1: SURAT KEPUTUSAN (SK)
-            # ==========================================
-            with st.container(border=True):
-                st.markdown("### 1. Surat Keputusan (SK)")
-                st.caption("Dokumen rekapitulasi pemenang tender (Top 3).")
+                # ==========================================
+                # BAGIAN 1: SURAT KEPUTUSAN (SK)
+                # ==========================================
+                with st.container(border=True):
+                    st.markdown("### 1. Surat Keputusan (SK)")
+                    st.caption("Dokumen rekapitulasi pemenang tender (Top 3).")
                 
-                c1, c2 = st.columns(2)
-                sk_val = c1.selectbox("Periode SK", avail_val, key="sk_val")
-                sk_load = c2.selectbox("Muatan SK", avail_load, key="sk_load")
+                    c1, c2 = st.columns(2)
+                    sk_val = c1.selectbox("Periode SK", avail_val, key="sk_val")
+                    sk_load = c2.selectbox("Muatan SK", avail_load, key="sk_load")
                 
-                # Filter Data SK
-                df_sk = df_master[(df_master['validity'] == sk_val) & (df_master['load_type'] == sk_load)].copy()
+                    # Filter Data SK
+                    df_sk = df_master[(df_master['validity'] == sk_val) & (df_master['load_type'] == sk_load)].copy()
                 
-                if not df_sk.empty:
-                    avail_org = sorted(df_sk['origin'].unique())
-                    sel_orgs = st.multiselect("Pilih Origin (SK):", avail_org, default=avail_org, key="sk_orgs")
+                    if not df_sk.empty:
+                        avail_org = sorted(df_sk['origin'].unique())
+                        sel_orgs = st.multiselect("Pilih Origin (SK):", avail_org, default=avail_org, key="sk_orgs")
                     
-                    if sel_orgs:
-                        df_final_sk = df_sk[df_sk['origin'].isin(sel_orgs)].copy()
-                        df_final_sk = df_final_sk.sort_values(by=['origin', 'kota_tujuan', 'unit_type', 'price'])
-                        df_final_sk['Ranking'] = df_final_sk.groupby(['origin', 'kota_tujuan', 'unit_type']).cumcount() + 1
+                        if sel_orgs:
+                            df_final_sk = df_sk[df_sk['origin'].isin(sel_orgs)].copy()
+                            df_final_sk = df_final_sk.sort_values(by=['origin', 'kota_tujuan', 'unit_type', 'price'])
+                            df_final_sk['Ranking'] = df_final_sk.groupby(['origin', 'kota_tujuan', 'unit_type']).cumcount() + 1
                         
-                        col_a, col_b = st.columns(2)
-                        upl_sk = col_a.file_uploader("Upload Template SK", type="docx", key="upl_sk")
-                        no_sk = col_b.text_input("Nomor Surat SK:", "", key="no_sk")
+                            col_a, col_b = st.columns(2)
+                            upl_sk = col_a.file_uploader("Upload Template SK", type="docx", key="upl_sk")
+                            no_sk = col_b.text_input("Nomor Surat SK:", "", key="no_sk")
                         
-                        if st.button("📄 Generate File SK", type="primary"):
-                            tpl_sk = "template_sk.docx"
-                            if upl_sk: tpl_sk = upl_sk
-                            elif not os.path.exists(tpl_sk): st.error("Template SK tidak ditemukan."); st.stop()
+                            if st.button("📄 Generate File SK", type="primary"):
+                                tpl_sk = "template_sk.docx"
+                                if upl_sk: tpl_sk = upl_sk
+                                elif not os.path.exists(tpl_sk): st.error("Template SK tidak ditemukan."); st.stop()
                             
-                            try:
-                                f_sk = create_docx_sk(tpl_sk, no_sk, sk_val, sk_load, df_final_sk)
-                                fn_sk = f"SK_{sk_load}_{sk_val}.docx"
-                                with open(f_sk, "rb") as f:
-                                    st.download_button("⬇️ Download SK", f, file_name=fn_sk)
-                                os.remove(f_sk)
-                            except Exception as e: st.error(f"Gagal: {e}")
-                    else: st.warning("Pilih minimal 1 origin.")
-                else: st.warning("Data tidak ditemukan.")
+                                try:
+                                    f_sk = create_docx_sk(tpl_sk, no_sk, sk_val, sk_load, df_final_sk)
+                                    fn_sk = f"SK_{sk_load}_{sk_val}.docx"
+                                    with open(f_sk, "rb") as f:
+                                        st.download_button("⬇️ Download SK", f, file_name=fn_sk)
+                                        os.remove(f_sk)
+                                except Exception as e: st.error(f"Gagal: {e}")
+                        else: st.warning("Pilih minimal 1 origin.")
+                    else: st.warning("Data tidak ditemukan.")
 
             st.write("") # Jarak
 
@@ -2150,19 +2149,3 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
