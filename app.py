@@ -413,6 +413,7 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
         st.error(f"Gagal kirim email: {e}")
         return False
 
+# --- FUNGSI KIRIM EMAIL REMINDER ---
 def send_reminder_email(to_email, vendor_name, load_type, validity, round_num, pending_groups, password):
     if "email_config" not in st.secrets: return False
     sender_email = st.secrets["email_config"]["sender_email"]
@@ -422,7 +423,9 @@ def send_reminder_email(to_email, vendor_name, load_type, validity, round_num, p
     cc_string = ", ".join(cc_list)
     
     subject = f"REMINDER: Pengisian Tender {load_type} - {validity} (Tahap {round_num})"
-    pending_groups_str = ", ".join(pending_groups)
+    
+    # PENGAMAN: Ubah semua item ke string sebelum di-join agar tidak TypeError
+    pending_groups_str = ", ".join([str(g) for g in pending_groups])
     
     body = f"""
     <html>
@@ -460,7 +463,7 @@ def send_reminder_email(to_email, vendor_name, load_type, validity, round_num, p
         server.quit()
         return True
     except Exception as e:
-        return False        
+        return False  
 
 # --- FUNGSI GENERATE WORD (OPTIMIZED: SUPER CEPAT & RAPI) ---
 def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
@@ -1453,13 +1456,20 @@ def admin_dashboard():
                                 
                                 st.markdown("<hr style='margin: 0.5em 0;'>", unsafe_allow_html=True)
                             
-                            # --- TOMBOL REMINDER KHUSUS VENDOR INI ---
+                            # --- TOMBOL REMINDER KHUSUS VENDOR INI ----
                             if pending_groups:
                                 st.warning(f"Terdapat **{len(pending_groups)}** rute yang belum diisi.")
-                                # Key dibuat unik menggunakan email vendor agar tidak bentrok
                                 if st.button(f"📨 Kirim Reminder ke {v_name}", key=f"remind_{vendor}_{sel_sm_rnd}", type="primary"):
                                     with st.spinner(f"Mengirim email ke {v_name}..."):
-                                        res = send_reminder_email(vendor, v_name, sel_sm_lt, sel_sm_val, sel_sm_rnd, pending_groups)
+                                        
+                                        # 1. CARI PASSWORD VENDOR DI DATABASE
+                                        vendor_pw = "Hubungi Admin"
+                                        if not df_u[df_u['email']==vendor].empty:
+                                            vendor_pw = df_u[df_u['email']==vendor].iloc[0]['password']
+                                            
+                                        # 2. MASUKKAN PASSWORD KE DALAM FUNGSI (sebagai argumen ke-7)
+                                        res = send_reminder_email(vendor, v_name, sel_sm_lt, sel_sm_val, sel_sm_rnd, pending_groups, vendor_pw)
+                                        
                                         if res: 
                                             st.success(f"Berhasil mengirim email reminder ke {v_name}!")
                                         else:
@@ -2158,6 +2168,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
