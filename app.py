@@ -1172,43 +1172,44 @@ def admin_dashboard():
         with tabs[2]:
             st.caption("Setting Unit per Group (Tanpa Unit ID)")
             all_grp_opts = {}
-        if not df_g.empty:
-             for _, r in df_g.iterrows():
-                label = f"{r['group_id']} - {r['route_group']} ({r['origin']})"
-                all_grp_opts[label] = r['group_id']
+            if not df_g.empty:
+                 for _, r in df_g.iterrows():
+                    label = f"{r['group_id']} - {r['route_group']} ({r['origin']})"
+                    all_grp_opts[label] = r['group_id']
 
             with st.form("add_ut"):
-            c1, c2 = st.columns(2)
-            sel_g = c1.selectbox("Pilih Group", list(all_grp_opts.keys()))
-            ut = c2.text_input("Jenis Unit (ex: Tronton)")
+                c1, c2 = st.columns(2)
+                sel_g = c1.selectbox("Pilih Group", list(all_grp_opts.keys()))
+                ut = c2.text_input("Jenis Unit (ex: Tronton)")
             
-            if st.form_submit_button("Tambah Unit", type="primary"):
-                if sel_g and ut:
-                    gid = all_grp_opts[sel_g]
-                    sh = connect_to_gsheet()
-                    if sh:
-                        ws = sh.worksheet("Master_Units")
-                        existing = ws.get_all_values()
-                        is_exist = False
-                        if len(existing) > 1:
-                            for row in existing[1:]:
-                                if len(row) >= 2 and row[0] == gid and row[1].lower() == ut.lower():
-                                    is_exist = True; break
-                        if is_exist: st.error(f"Unit '{ut}' sudah ada di Group {gid}.")
-                        else:
-                            ws.append_rows([[gid, ut]])
-                            get_data.clear() 
-                            st.success("Unit tersimpan."); time.sleep(0.5); st.rerun()
-            st.dataframe(get_data("Master_Units"), use_container_width=True)
+                if st.form_submit_button("Tambah Unit", type="primary"):
+                    if sel_g and ut:
+                        gid = all_grp_opts[sel_g]
+                        sh = connect_to_gsheet()
+                        if sh:
+                            ws = sh.worksheet("Master_Units")
+                            existing = ws.get_all_values()
+                            is_exist = False
+                            if len(existing) > 1:
+                                for row in existing[1:]:
+                                    if len(row) >= 2 and row[0] == gid and row[1].lower() == ut.lower():
+                                        is_exist = True; break
+                                        if is_exist: 
+                                            st.error(f"Unit '{ut}' sudah ada di Group {gid}.")
+                                        else:
+                                            ws.append_rows([[gid, ut]])
+                                            get_data.clear() 
+                                            st.success("Unit tersimpan."); time.sleep(0.5); st.rerun()
+        st.dataframe(get_data("Master_Units"), use_container_width=True)
 
     # --- TAB 4: USERS ---
         with tabs[3]:
             with st.form("add_usr"):
                 c1, c2, c3 = st.columns(3)
                 em = c1.text_input("Email"); pw = c2.text_input("Pass"); nm = c3.text_input("PT Name")
-            if st.form_submit_button("Add User", type="primary"):
-                save_data("Users", [[em, pw, "vendor", nm]])
-                st.success("Saved")
+                if st.form_submit_button("Add User", type="primary"):
+                    save_data("Users", [[em, pw, "vendor", nm]])
+                    st.success("Saved")
          st.dataframe(get_data("Users"), use_container_width=True)
 
 # --- TAB 5: ACCESS RIGHTS (UPDATE: VALIDITY LOGIC) ---
@@ -1216,11 +1217,11 @@ def admin_dashboard():
             st.write("Grant Access (Batch per Origin)")
             df_u = get_data("Users"); df_g = get_data("Master_Groups"); df_rights = get_data("Access_Rights")
         
-        if not df_u.empty and not df_g.empty:
-            c1, c2, c3 = st.columns(3)
-            ven = c1.selectbox("Pilih Vendor", df_u[df_u['role']=='vendor']['email'].unique())
-            sel_lt = c2.selectbox("Pilih Load Type", ["FTL", "FCL"])
-            sel_round = c3.selectbox("Tahap Penawaran", ["1", "2", "3"]) 
+            if not df_u.empty and not df_g.empty:
+                c1, c2, c3 = st.columns(3)
+                ven = c1.selectbox("Pilih Vendor", df_u[df_u['role']=='vendor']['email'].unique())
+                sel_lt = c2.selectbox("Pilih Load Type", ["FTL", "FCL"])
+                sel_round = c3.selectbox("Tahap Penawaran", ["1", "2", "3"]) 
             
             unique_origins = []
             if not df_g.empty:
@@ -2143,6 +2144,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
