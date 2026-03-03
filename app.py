@@ -1427,7 +1427,7 @@ def admin_dashboard():
                         # Set Icon di judul
                         if len(pending_groups) > 0:
                             header_icon = "⚠️"
-                            header_text = f"{header_icon} {v_name} — (Selesai: {done_g}/{total_g})"
+                            header_text = f"{header_icon} {v_name} — (✅Terisi: {done_g}/{total_g})"
                             is_expanded = False # Bisa diset True kalau mau otomatis terbuka yang belum selesai
                         else:
                             header_icon = "✅"
@@ -2158,5 +2158,6 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
