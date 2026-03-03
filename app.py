@@ -1085,7 +1085,7 @@ def admin_dashboard():
         with c2:
             with st.container(border=True):
                 st.markdown("### 📊 Monitoring & Summary")
-                st.write("Pantau progres submit vendor, Lock/Unlock data, Ranking Harga, dan Cetak SK/SPK.")
+                st.write("Monitor progres submit vendor, Lock/Unlock data, Ranking Harga, dan Cetak SK/SPK.")
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("Masuk ke Monitoring ➡️", type="primary", use_container_width=True):
                     st.session_state['admin_step'] = 'monitoring'
@@ -1374,10 +1374,10 @@ def admin_dashboard():
             df_master = m4
 
         tabs = st.tabs(["⏳ Submit Monitor", "✅ Lock Data", "📊 Summary", "🖨️ Print File"])
-
-# --- TAB 1: SUBMIT MONITOR (UPDATE: LIST PER VENDOR & REMINDER SPESIFIK) ---
+        
+# --- TAB 1: SUBMIT MONITOR (UPDATE: COLLAPSIBLE & COMPACT) ---
         with tabs[0]:
-            st.caption("Pantau kelengkapan pengisian vendor per Group Rute.")
+            st.caption("Monitor kelengkapan pengisian vendor per Group Rute.")
             
             if not df_acc.empty and not df_g.empty:
                 # Merge Access dengan Group untuk tahu origin, route_group & load type
@@ -1405,7 +1405,7 @@ def admin_dashboard():
                 
                 if not acc_target.empty:
                     for vendor in acc_target['vendor_email'].unique():
-                        # Dapatkan Nama Vendor (Email disembunyikan dari UI)
+                        # Dapatkan Nama Vendor
                         v_name = df_u[df_u['email']==vendor]['vendor_name'].iloc[0] if not df_u[df_u['email']==vendor].empty else vendor
                         
                         # Ambil list Route Group yang di-assign ke vendor ini
@@ -1415,11 +1415,27 @@ def admin_dashboard():
                         if not sub_master.empty:
                             submitted_groups = sub_master[sub_master['vendor_email'] == vendor]['route_group'].dropna().unique().tolist()
                         
+                        # --- PRE-CALCULATE TUNGGAKAN UNTUK JUDUL EXPANDER ---
                         pending_groups = []
+                        for grp in assigned_groups:
+                            if grp not in submitted_groups:
+                                pending_groups.append(grp)
                         
-                        # --- BUAT UI CARD PER VENDOR ---
-                        with st.container(border=True):
-                            st.markdown(f"#### 🏢 {v_name}")
+                        total_g = len(assigned_groups)
+                        done_g = total_g - len(pending_groups)
+                        
+                        # Set Icon di judul
+                        if len(pending_groups) > 0:
+                            header_icon = "⚠️"
+                            header_text = f"{header_icon} {v_name} — (Selesai: {done_g}/{total_g})"
+                            is_expanded = False # Bisa diset True kalau mau otomatis terbuka yang belum selesai
+                        else:
+                            header_icon = "✅"
+                            header_text = f"{header_icon} {v_name} — (Lengkap: {total_g}/{total_g})"
+                            is_expanded = False # Yang sudah selesai ditutup otomatis
+                            
+                        # --- BUAT UI COLLAPSE (EXPANDER) PER VENDOR ---
+                        with st.expander(header_text, expanded=is_expanded):
                             
                             c_h1, c_h2 = st.columns([4, 2])
                             c_h1.caption("Group Rute")
@@ -1434,13 +1450,12 @@ def admin_dashboard():
                                     c_r2.markdown('<span class="status-done">✅ Sudah Terisi</span>', unsafe_allow_html=True)
                                 else:
                                     c_r2.markdown('<span class="status-pending">❌ Belum Ada Data</span>', unsafe_allow_html=True)
-                                    pending_groups.append(grp)
                                 
                                 st.markdown("<hr style='margin: 0.5em 0;'>", unsafe_allow_html=True)
                             
                             # --- TOMBOL REMINDER KHUSUS VENDOR INI ---
                             if pending_groups:
-                                st.warning(f"⚠️ Terdapat {len(pending_groups)} rute yang belum diisi.")
+                                st.warning(f"Terdapat **{len(pending_groups)}** rute yang belum diisi.")
                                 # Key dibuat unik menggunakan email vendor agar tidak bentrok
                                 if st.button(f"📨 Kirim Reminder ke {v_name}", key=f"remind_{vendor}_{sel_sm_rnd}", type="primary"):
                                     with st.spinner(f"Mengirim email ke {v_name}..."):
@@ -1453,6 +1468,7 @@ def admin_dashboard():
                                 st.success("🎉 Pengisian Harga Lengkap!")
                 else:
                     st.info("Tidak ada data assignment (Grant Access) untuk filter ini.")
+                    
         # --- TAB 2: LOCK DATA ---
         with tabs[1]:
             st.subheader("Lock Data")
@@ -2142,4 +2158,5 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
