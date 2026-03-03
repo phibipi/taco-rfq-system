@@ -1210,7 +1210,7 @@ def admin_dashboard():
                 if st.form_submit_button("Add User", type="primary"):
                     save_data("Users", [[em, pw, "vendor", nm]])
                     st.success("Saved")
-         st.dataframe(get_data("Users"), use_container_width=True)
+             st.dataframe(get_data("Users"), use_container_width=True)
 
 # --- TAB 5: ACCESS RIGHTS (UPDATE: VALIDITY LOGIC) ---
         with tabs[4]:
@@ -2144,6 +2144,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
