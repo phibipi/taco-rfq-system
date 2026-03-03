@@ -918,10 +918,10 @@ def user_dashboard():
 
         m4['price'] = pd.to_numeric(m4['price'], errors='coerce').fillna(0)
         
-        # Filter hanya data yang sudah Locked (Final) agar user tidak melihat harga draft? 
-        # Opsional: Jika ingin semua harga tampil, hapus baris ini.
-        # df_master = m4[m4['status'] == 'Locked'].copy() 
-        df_master = m4.copy() # Tampilkan semua status (Open/Locked)
+        df_master = m4.copy() 
+        
+        # --- TAMBAHAN FILTER HARGA 0 ---
+        df_master = df_master[df_master['price'] > 0]
     
     # --- TABS ---
     tab1, tab2 = st.tabs(["📊 Summary & Ranking", "🔎 Cari Vendor per Rute"])
@@ -1543,6 +1543,10 @@ def admin_dashboard():
                 df_routes['route_id'] = df_routes['route_id'].astype(str).str.strip()
             
             merged_pr = pd.merge(df_price, df_routes[['route_id', 'group_id', 'kota_asal', 'kota_tujuan']], on='route_id', how='left')
+            
+            merged_pr['price'] = pd.to_numeric(merged_pr['price'], errors='coerce').fillna(0)
+            merged_pr = merged_pr[merged_pr['price'] > 0]
+                        
             merged_pr['group_id'] = merged_pr['group_id'].fillna('Unknown')
             
             if not df_g.empty:
@@ -1643,9 +1647,11 @@ def admin_dashboard():
                 sel_val = c1.selectbox("Filter Periode", avail_val, key="es_val")
                 sel_load = c2.selectbox("Filter Tipe Muatan", avail_load, key="es_load")
             
-                # Filter Data
                 df_view = df_master[(df_master['validity'] == sel_val) & (df_master['load_type'] == sel_load)].copy()
-            
+                
+                # --- TAMBAHAN FILTER HARGA 0 ---
+                df_view = df_view[df_view['price'] > 0]
+                
                 if not df_view.empty:
                     unique_origins = sorted(df_view['origin'].unique())
                 
@@ -1699,6 +1705,9 @@ def admin_dashboard():
                 
                     # Filter Data SK
                     df_sk = df_master[(df_master['validity'] == sk_val) & (df_master['load_type'] == sk_load)].copy()
+                    
+                    # --- TAMBAHAN FILTER HARGA 0 ---
+                    df_sk = df_sk[df_sk['price'] > 0]
                 
                     if not df_sk.empty:
                         avail_org = sorted(df_sk['origin'].unique())
@@ -1743,6 +1752,9 @@ def admin_dashboard():
                 
                 # Filter Data SPK
                 df_spk_raw = df_master[(df_master['validity'] == spk_val) & (df_master['load_type'] == spk_load)].copy()
+                
+                # --- TAMBAHAN FILTER HARGA 0 ---
+                df_spk_raw = df_spk_raw[df_spk_raw['price'] > 0]
                 
                 if not df_spk_raw.empty:
                     # Pilih Vendor
@@ -2217,6 +2229,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
