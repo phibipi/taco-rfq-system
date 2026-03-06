@@ -2175,7 +2175,7 @@ def vendor_dashboard(email):
                                 if cur_round == "2":
                                     tgt = get_target_price(df_p, rid, u, cur_val)
                                     rd[f"Target {u}"] = tgt
-                                rd[f"Harga {u}"] = ex_price.get((rid, u), 0)
+                                rd[f"Harga {u} per trip"] = ex_price.get((rid, u), 0)
                             p_data.append(rd)
                         
                         df_pr = pd.DataFrame(p_data)
@@ -2191,12 +2191,12 @@ def vendor_dashboard(email):
                         
                         cols_order = ["Route ID", "Kota Asal", "Kota Tujuan", "Lead Time (Hari)"]
                         for u in u_types:
-                            cf_pr[f"Harga {u}"] = st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d", required=True, width="medium")
+                            cf_pr[f"Harga {u} per trip"] = st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d", required=True, width="medium")
                             target_col = f"Target {u}"
                             if target_col in df_pr.columns:
                                 cf_pr[target_col] = st.column_config.NumberColumn(format="Rp %d", disabled=True, width="medium")
                                 cols_order.append(target_col)
-                            cols_order.append(f"Harga {u}")
+                            cols_order.append(f"Harga {u} per trip")
                         
                         cols_order.append("Keterangan")
 
@@ -2245,7 +2245,7 @@ def vendor_dashboard(email):
                             ket = str(r['Keterangan'])
                             
                             for u in u_types:
-                                pr = int(r[f"Harga {u}"])
+                                pr = int(r[f"Harga {u} per trip"])
                                 w = str(c_spec.get(u,{}).get('w','')); c = str(c_spec.get(u,{}).get('c',''))
                                 tid = f"{email}_{cur_val}_{rid}_{u}_{cur_round}".replace(" ","")
                                 f_data.append([tid, email, "Open", cur_val, rid, u, lt, pr, w, c, ket, ts, cur_round])
@@ -2265,6 +2265,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
