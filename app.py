@@ -2130,7 +2130,8 @@ def vendor_dashboard(email):
                 if not source_p_data.empty:
                     if not is_using_prev_data and "Locked" in source_p_data['status'].values: is_lock = True
                     for _, row in source_p_data.iterrows():
-                        ex_price[(row['route_id'], row['unit_type'])] = row['price']
+                        harga_bersih = clean_numeric(row['price'])
+                        ex_price[(row['route_id'], row['unit_type'])] = int(harga_bersih) if harga_bersih else 0
                         ex_spec[row['unit_type']] = {'w': row.get('weight_capacity'), 'c': row.get('cubic_capacity')}
 
                 with st.form(key=f"f_{gid}_{cur_round}"):
@@ -2264,6 +2265,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
