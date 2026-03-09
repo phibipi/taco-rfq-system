@@ -2259,10 +2259,7 @@ def vendor_dashboard(email):
                         if df_print.empty:
                             st.info("Tidak ada data untuk kombinasi filter ini.")
                         else:
-                            st.write(f"Ditemukan **{len(df_print)} rute** yang siap dicetak SPH-nya.")
-                            
-                            c_file1, c_file2 = st.columns([1, 2])
-                            upl_sph = c_file1.file_uploader("Upload Template SPH (Opsional)", type="docx")
+                            st.write(f"Ditemukan **{len(df_print)} rute** yang siap dicetak SPH.")
                             
                             if st.button("📄 Buat Dokumen SPH (Word)", type="primary"):
                                 tpl_sph = "template_sph.docx"
@@ -2532,6 +2529,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
