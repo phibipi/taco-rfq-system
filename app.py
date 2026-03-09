@@ -2212,7 +2212,7 @@ def vendor_dashboard(email):
 # --- TAB 3: DOWNLOAD & UPLOAD SPH RESMI ---
         with t3:
             st.markdown("### 📄 SPH (Surat Penawaran Harga)")
-            st.info("Anda dapat mendownload SPH untuk data yang **sudah di-Lock** oleh sistem. Rute dengan harga Rp 0 otomatis tidak akan dicetak.")
+            st.info("Anda dapat mendownload SPH untuk data yang **sudah di-Lock** oleh Panitia Tender.")
             
             df_p = get_data("Price_Data")
             df_r = get_data("Master_Routes")
@@ -2532,6 +2532,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
