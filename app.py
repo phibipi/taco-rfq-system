@@ -240,7 +240,7 @@ def upload_to_drive(file_buffer, filename, mimetype, folder_id):
     
     try:
         # Upload dan minta Google mengembalikan link webViewLink
-        file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
+        file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink,supportsAllDrives=True').execute()
         return file.get('webViewLink')
     except Exception as e:
         st.error(f"Error API Drive: {e}")
@@ -2292,7 +2292,7 @@ def vendor_dashboard(email):
                         if st.button("📤 Upload Dokumen SPH", type="primary", use_container_width=True):
                             if uploaded_file is not None:
                                 # MASUKKAN ID FOLDER GOOGLE DRIVE ANDA DI SINI
-                                DRIVE_FOLDER_ID = "1p01EDLMvvaL2zw113TK6ztbBLssjpB4L" 
+                                DRIVE_FOLDER_ID = "0AMIguJ49asOLUk9PVA" 
                                 
                                 safe_ven = "".join(x for x in v_name if x.isalnum())
                                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -2529,6 +2529,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
