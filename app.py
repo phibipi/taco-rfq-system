@@ -15,7 +15,9 @@ from docx.oxml.ns import nsdecls, qn
 from docx.oxml import parse_xml, OxmlElement 
 from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
 import urllib.parse
-
+import io
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 
 # --- MAIN APP ---
 st.set_page_config(page_title="TACO Procurement", layout="wide", page_icon="🚛")
@@ -208,6 +210,41 @@ def get_data(sheet_name):
     else:
         st.error("ERROR: Gagal Login ke Google (Kredensial Salah/Tidak Ditemukan)")
         return pd.DataFrame()
+
+# --- FUNGSI KONEKSI & UPLOAD GOOGLE DRIVE ---
+@st.cache_resource
+def get_drive_service():
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    try:
+        if "gcp_service_account" in st.secrets:
+            creds_dict = st.secrets["gcp_service_account"]
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        elif os.path.exists("kunci_rahasia.json"):
+            creds = ServiceAccountCredentials.from_json_keyfile_name("kunci_rahasia.json", scope)
+        else:
+            return None
+        service = build('drive', 'v3', credentials=creds)
+        return service
+    except Exception as e:
+        return None
+
+def upload_to_drive(file_buffer, filename, mimetype, folder_id):
+    service = get_drive_service()
+    if not service: return None
+    
+    file_metadata = {
+        'name': filename,
+        'parents': [folder_id]
+    }
+    media = MediaIoBaseUpload(io.BytesIO(file_buffer.getvalue()), mimetype=mimetype, resumable=True)
+    
+    try:
+        # Upload dan minta Google mengembalikan link webViewLink
+        file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
+        return file.get('webViewLink')
+    except Exception as e:
+        st.error(f"Error API Drive: {e}")
+        return None
 
 # --- FUNGSI SAVE (UPSERT UNTUK ID UNIK) ---
 def save_data(sheet_name, new_data_list):
@@ -646,6 +683,102 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     output_filename = f"SK_Result_{int(time.time())}.docx"
     doc.save(output_filename)
     return output_filename
+# --- FUNGSI GENERATE SPH VENDOR ---
+def create_docx_sph(template_file, vendor_name, vendor_address, validity, load_type, round_num, df_data):
+    doc = DocxTemplate(template_file)
+    
+    # Format Tanggal
+    bulan_indo = {1:'Januari', 2:'Februari', 3:'Maret', 4:'April', 5:'Mei', 6:'Juni', 7:'Juli', 8:'Agustus', 9:'September', 10:'Oktober', 11:'November', 12:'Desember'}
+    today = datetime.now()
+    tgl_sph = f"{today.day} {bulan_indo[today.month]} {today.year}"
+
+    # Helper Format
+    def fmt_rp(x):
+        try: return f"Rp {int(x):,}".replace(",", ".")
+        except: return "Rp 0"
+
+    def set_col_widths(table, widths):
+        table.autofit = False 
+        table.allow_autofit = False
+        for row in table.rows:
+            for idx, width in enumerate(widths):
+                if idx < len(row.cells): row.cells[idx].width = width
+
+    def format_cell(cell, text, align=WD_ALIGN_PARAGRAPH.CENTER, bold=False, size=8):
+        cell.text = str(text)
+        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+        p = cell.paragraphs[0]
+        p.alignment = align
+        p.paragraph_format.space_after = Pt(0)
+        run = p.runs[0] if p.runs else p.add_run()
+        run.font.size = Pt(size)
+        run.font.name = 'Calibri'
+        run.font.bold = bold
+
+    def set_repeat_table_header(row):
+        tr = row._tr
+        trPr = tr.get_or_add_trPr()
+        tblHeader = OxmlElement('w:tblHeader')
+        tblHeader.set(qn('w:val'), "true")
+        trPr.append(tblHeader)
+
+    # --- TABEL DATA ---
+    sd = doc.new_subdoc()
+    headers = ['No', 'Origin', 'Tujuan', 'Unit', 'Lead Time', 'Harga Penawaran']
+    table = sd.add_table(rows=1, cols=len(headers))
+    table.style = 'Table Grid'
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    
+    set_repeat_table_header(table.rows[0])
+    
+    # Header Styling
+    hdr_cells = table.rows[0].cells
+    for i, h in enumerate(headers):
+        shading_elm = parse_xml(r'<w:shd {} w:fill="ED7D31"/>'.format(nsdecls('w')))
+        hdr_cells[i]._tc.get_or_add_tcPr().append(shading_elm)
+        format_cell(hdr_cells[i], h, bold=True, size=9)
+
+    # Isi Data
+    for idx, row in df_data.iterrows():
+        row_cells = table.add_row().cells
+        
+        lt_raw = str(row.get('lead_time', '-'))
+        lt_fmt = f"{lt_raw} Hari" if (lt_raw.isdigit() or lt_raw.replace('.','',1).isdigit()) and lt_raw not in ["-","0",""] else "-"
+
+        vals = [
+            str(idx + 1),
+            row.get('origin', '-'),
+            row.get('kota_tujuan', '-'),
+            row.get('unit_type', '-'),
+            lt_fmt,
+            fmt_rp(row.get('price', 0))
+        ]
+        
+        for i, v in enumerate(vals):
+            align = WD_ALIGN_PARAGRAPH.LEFT if i in [1, 2] else WD_ALIGN_PARAGRAPH.CENTER
+            if i == 5: align = WD_ALIGN_PARAGRAPH.RIGHT
+            format_cell(row_cells[i], v, align, size=8)
+
+    # --- UPDATE LEBAR KOLOM ---
+    # No(1.0), Origin(2.5), Tujuan(3.5), Unit(2.5), Lead Time(2.0), Harga(3.5)
+    col_widths = [Cm(1.0), Cm(2.5), Cm(3.5), Cm(2.5), Cm(2.0), Cm(3.5)]
+    set_col_widths(table, col_widths)
+
+    context = {
+        'tanggal': tgl_sph,
+        'vendor_name': vendor_name,
+        'vendor_address': vendor_address,
+        'validity': validity,
+        'load_type': load_type,
+        'round_num': round_num,
+        'tabel_sph': sd
+    }
+    doc.render(context)
+    
+    safe_ven = "".join(x for x in vendor_name if x.isalnum())
+    fn = f"SPH_{safe_ven}_Tahap{round_num}_{int(time.time())}.docx"
+    doc.save(fn)
+    return fn
     
 # --- FUNGSI GENERATE SPK (UPDATE: MULTI ORIGIN & LEBAR KOLOM) ---
 def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic_vendor, vendor_pass, origin_name_str, alamat_gudang, df_data):
@@ -1380,7 +1513,7 @@ def admin_dashboard():
             m4['price'] = pd.to_numeric(m4['price'], errors='coerce').fillna(0)
             df_master = m4
 
-        tabs = st.tabs(["⏳ Submit Monitor", "✅ Lock Data", "📊 Summary", "🖨️ Print Dokumen"])
+        tabs = st.tabs(["⏳ Submit Monitor", "✅ Lock Data", "📊 Summary", "🖨️ Print Dokumen", "📥 SPH Uploads"])
         
 # --- TAB 1: SUBMIT MONITOR (UPDATE: STATS & SEARCH BAR) ---
         with tabs[0]:
@@ -1771,7 +1904,35 @@ def admin_dashboard():
                                 except Exception as e: st.error(f"Gagal: {e}")
                         else: st.warning("Pilih minimal 1 origin.")
                     else: st.warning("Data tidak ditemukan.")
-
+    
+        # --- TAB 5: SPH UPLOADS (FITUR BARU) ---
+        with tabs[4]:
+            st.subheader("📥 Dokumen SPH Vendor (Signed)")
+            st.caption("Daftar dokumen Surat Penawaran Harga yang sudah ditandatangani dan di-upload oleh Vendor.")
+            
+            df_uploads = get_data("SPH_Uploads")
+            
+            if df_uploads.empty:
+                st.info("Belum ada vendor yang mengupload dokumen SPH.")
+            else:
+                # Tampilkan tabel riwayat upload (terbaru di atas)
+                df_uploads = df_uploads.sort_values(by='timestamp', ascending=False)
+                
+                # Buat tampilan list per dokumen
+                for _, row in df_uploads.iterrows():
+                    with st.container(border=True):
+                        col1, col2, col3 = st.columns([4, 2, 2])
+                        col1.markdown(f"**🏢 {row.get('vendor_name', '-')}**")
+                        col1.caption(f"Tipe: {row.get('load_type', '-')} | Tahap: {row.get('round', '-')} | Periode: {row.get('validity', '-')}")
+                        col2.write(f"🕒 {row.get('timestamp', '-')}")
+                        
+                        file_url = row.get('filename', '')
+                        
+                        with col3:
+                            if str(file_url).startswith("http"):
+                                st.markdown(f'<a href="{file_url}" target="_blank" style="background-color:#2563EB; color:white; padding:8px 12px; border-radius:8px; text-decoration:none; font-weight:bold; display:inline-block; text-align:center; width:100%;">🔗 Buka di Drive</a>', unsafe_allow_html=True)
+                            else:
+                                st.error("❌ Link Error") 
             st.write("") # Jarak
 
             # ==========================================
@@ -1898,9 +2059,9 @@ def vendor_dashboard(email):
     
     # --- STEP 1: DASHBOARD / PROFIL ---
     if step == "dashboard":
-        t1, t2 = st.tabs(["🛣️ Pilih Rute & Isi Harga", "📋 Isi Data Perusahaan"])
+        t1, t2, t3 = st.tabs(["🛣️ Pilih Rute & Isi Harga", "📋 Isi Data Perusahaan", "📄 Download & Upload SPH"])
         
-        # Tab 2: Profil (Tetap)
+        # Tab 2: Profil
         with t2:
             df_p = get_data("Vendor_Profile")
             curr = {}
@@ -2048,7 +2209,113 @@ def vendor_dashboard(email):
                                             st.rerun()
                                     c4.markdown(status_ui, unsafe_allow_html=True)
                                     st.markdown("<hr>", unsafe_allow_html=True)
+# --- TAB 3: DOWNLOAD & UPLOAD SPH RESMI ---
+        with t3:
+            st.markdown("### 📄 SPH (Surat Penawaran Harga)")
+            st.info("Anda dapat mendownload SPH untuk data yang **sudah di-Lock** oleh sistem. Rute dengan harga Rp 0 otomatis tidak akan dicetak.")
+            
+            df_p = get_data("Price_Data")
+            df_r = get_data("Master_Routes")
+            df_g = get_data("Master_Groups")
+            df_prof = get_data("Vendor_Profile")
+            
+            if df_p.empty or df_g.empty:
+                st.warning("Belum ada data penawaran.")
+            else:
+                # 1. Filter Hanya Milik Vendor Ini, Status Locked, dan Harga > 0
+                my_prices = df_p[(df_p['vendor_email'] == email) & (df_p['status'] == 'Locked')].copy()
+                my_prices['price'] = pd.to_numeric(my_prices['price'], errors='coerce').fillna(0)
+                my_prices = my_prices[my_prices['price'] > 0]
+                
+                if my_prices.empty:
+                    st.warning("Belum ada data harga Anda yang di-Lock oleh Admin, atau semua harga Anda masih Rp 0.")
+                else:
+                    # 2. Merge Data
+                    my_prices['route_id'] = my_prices['route_id'].astype(str).str.strip()
+                    df_r['route_id'] = df_r['route_id'].astype(str).str.strip()
+                    df_g['group_id'] = df_g['group_id'].astype(str).str.strip()
+                    if 'round' not in my_prices.columns: my_prices['round'] = '1'
+                    
+                    m1 = pd.merge(my_prices, df_r[['route_id', 'group_id', 'kota_tujuan']], on='route_id', how='left')
+                    df_final = pd.merge(m1, df_g[['group_id', 'origin', 'load_type']], on='group_id', how='left')
+                    
+                    # 3. UI Filter (Periode, Load Type, Tahap)
+                    c1, c2, c3 = st.columns(3)
+                    avail_val = sorted(df_final['validity'].unique().tolist())
+                    sel_val = c1.selectbox("Pilih Periode", avail_val, key="sph_val")
+                    
+                    avail_lt = sorted(df_final['load_type'].dropna().unique().tolist())
+                    sel_lt = c2.selectbox("Pilih Tipe Armada", avail_lt, key="sph_lt")
+                    
+                    avail_rnd = sorted(df_final['round'].unique().tolist())
+                    sel_rnd = c3.selectbox("Pilih Tahap Penawaran", avail_rnd, key="sph_rnd")
+                    
+                    df_print = df_final[(df_final['validity'] == sel_val) & (df_final['load_type'] == sel_lt) & (df_final['round'] == sel_rnd)].copy()
+                    v_name = st.session_state['user_info'].get('vendor_name', email)
+                    
+                    # --- BAGIAN A: DOWNLOAD SPH ---
+                    with st.container(border=True):
+                        st.markdown("#### Langkah 1: Download SPH")
+                        if df_print.empty:
+                            st.info("Tidak ada data untuk kombinasi filter ini.")
+                        else:
+                            st.write(f"Ditemukan **{len(df_print)} rute** yang siap dicetak SPH-nya.")
+                            
+                            c_file1, c_file2 = st.columns([1, 2])
+                            upl_sph = c_file1.file_uploader("Upload Template SPH (Opsional)", type="docx")
+                            
+                            if st.button("📄 Buat Dokumen SPH (Word)", type="primary"):
+                                tpl_sph = "template_sph.docx"
+                                if not os.path.exists(tpl_sph): 
+                                    st.error("Sistem error: Template SPH tidak ditemukan di server. Hubungi Admin!")
+                                    st.stop()
+                                    
+                                with st.spinner("Merakit Dokumen SPH..."):
+                                    try:
+                                        v_addr = "-"
+                                        if not df_prof.empty:
+                                            vp = df_prof[df_prof['email'] == email]
+                                            if not vp.empty: v_addr = str(vp.iloc[0].get('address', '-'))
+                                            
+                                        df_print = df_print.sort_values(by=['origin', 'kota_tujuan', 'unit_type']).reset_index(drop=True)
+                                        file_sph = create_docx_sph(tpl_sph, v_name, v_addr, sel_val, sel_lt, sel_rnd, df_print)
+                                        
+                                        with open(file_sph, "rb") as f:
+                                            st.download_button(label="⬇️ Download File SPH", data=f, file_name=f"SPH_{v_name}_{sel_lt}_Tahap{sel_rnd}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", type="primary")
+                                        os.remove(file_sph)
+                                    except Exception as e: st.error(f"Gagal: {e}")
 
+                    # --- BAGIAN B: UPLOAD SPH ---
+                    with st.container(border=True):
+                        st.markdown("#### Langkah 2: Upload SPH yang Sudah Ditandatangani")
+                        st.write(f"Upload untuk: **{sel_lt} | Periode {sel_val} | Tahap {sel_rnd}**")
+                        
+                        uploaded_file = st.file_uploader("Pilih file SPH (PDF / Gambar)", type=['pdf', 'png', 'jpg', 'jpeg'])
+                        
+                        if st.button("📤 Upload Dokumen SPH", type="primary", use_container_width=True):
+                            if uploaded_file is not None:
+                                # MASUKKAN ID FOLDER GOOGLE DRIVE ANDA DI SINI
+                                DRIVE_FOLDER_ID = "1p01EDLMvvaL2zw113TK6ztbBLssjpB4L" 
+                                
+                                safe_ven = "".join(x for x in v_name if x.isalnum())
+                                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                ext = uploaded_file.name.split(".")[-1]
+                                new_filename = f"SPH_{safe_ven}_{sel_lt}_T{sel_rnd}_{timestamp}.{ext}"
+                                
+                                with st.spinner("⏳ Sedang mengirim file ke Google Drive... Mohon tunggu..."):
+                                    # Panggil fungsi upload ke Drive
+                                    file_url = upload_to_drive(uploaded_file, new_filename, uploaded_file.type, DRIVE_FOLDER_ID)
+                                    
+                                    if file_url:
+                                        # Simpan URL Drive-nya ke dalam Google Sheets, BUKAN nama filenya lagi
+                                        id_up = f"UPL_{safe_ven}_{timestamp}"
+                                        save_data("SPH_Uploads", [[id_up, email, v_name, sel_val, sel_lt, sel_rnd, file_url, timestamp]])
+                                        st.success("✅ Sukses! Dokumen SPH telah tersimpan aman di Server TACO.")
+                                    else:
+                                        st.error("⚠️ Gagal mengirim dokumen ke server. Coba lagi.")
+                            else:
+                                st.error("⚠️ Silakan pilih file terlebih dahulu sebelum klik Upload.") 
+    
     # --- STEP 2: INPUT HARGA ---
     elif step == "input":
         if st.session_state.get('temp_success_msg'):
@@ -2265,18 +2532,6 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
