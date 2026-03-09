@@ -1905,34 +1905,6 @@ def admin_dashboard():
                         else: st.warning("Pilih minimal 1 origin.")
                     else: st.warning("Data tidak ditemukan.")
     
-        # --- TAB 5: SPH UPLOADS (FITUR BARU) ---
-        with tabs[4]:
-            st.subheader("📥 Dokumen SPH Vendor (Signed)")
-            st.caption("Daftar dokumen Surat Penawaran Harga yang sudah ditandatangani dan di-upload oleh Vendor.")
-            
-            df_uploads = get_data("SPH_Uploads")
-            
-            if df_uploads.empty:
-                st.info("Belum ada vendor yang mengupload dokumen SPH.")
-            else:
-                # Tampilkan tabel riwayat upload (terbaru di atas)
-                df_uploads = df_uploads.sort_values(by='timestamp', ascending=False)
-                
-                # Buat tampilan list per dokumen
-                for _, row in df_uploads.iterrows():
-                    with st.container(border=True):
-                        col1, col2, col3 = st.columns([4, 2, 2])
-                        col1.markdown(f"**🏢 {row.get('vendor_name', '-')}**")
-                        col1.caption(f"Tipe: {row.get('load_type', '-')} | Tahap: {row.get('round', '-')} | Periode: {row.get('validity', '-')}")
-                        col2.write(f"🕒 {row.get('timestamp', '-')}")
-                        
-                        file_url = row.get('filename', '')
-                        
-                        with col3:
-                            if str(file_url).startswith("http"):
-                                st.markdown(f'<a href="{file_url}" target="_blank" style="background-color:#2563EB; color:white; padding:8px 12px; border-radius:8px; text-decoration:none; font-weight:bold; display:inline-block; text-align:center; width:100%;">🔗 Buka di Drive</a>', unsafe_allow_html=True)
-                            else:
-                                st.error("❌ Link Error") 
             st.write("") # Jarak
 
             # ==========================================
@@ -2052,7 +2024,35 @@ def admin_dashboard():
                         # --- END BUTTON BLOCK ---
                     else: st.warning("Vendor ini tidak memiliki data.")
                 else: st.warning("Data tidak ditemukan.")
+        # --- TAB 5: SPH UPLOADS (FITUR BARU) ---
+        with tabs[4]:
+            st.subheader("📥 Dokumen SPH Vendor (Signed)")
+            st.caption("Daftar dokumen Surat Penawaran Harga yang sudah ditandatangani dan di-upload oleh Vendor.")
+            
+            df_uploads = get_data("SPH_Uploads")
+            
+            if df_uploads.empty:
+                st.info("Belum ada vendor yang mengupload dokumen SPH.")
+            else:
+                # Tampilkan tabel riwayat upload (terbaru di atas)
+                df_uploads = df_uploads.sort_values(by='timestamp', ascending=False)
                 
+                # Buat tampilan list per dokumen
+                for _, row in df_uploads.iterrows():
+                    with st.container(border=True):
+                        col1, col2, col3 = st.columns([4, 2, 2])
+                        col1.markdown(f"**🏢 {row.get('vendor_name', '-')}**")
+                        col1.caption(f"Tipe: {row.get('load_type', '-')} | Tahap: {row.get('round', '-')} | Periode: {row.get('validity', '-')}")
+                        col2.write(f"🕒 {row.get('timestamp', '-')}")
+                        
+                        file_url = row.get('filename', '')
+                        
+                        with col3:
+                            if str(file_url).startswith("http"):
+                                st.markdown(f'<a href="{file_url}" target="_blank" style="background-color:#2563EB; color:white; padding:8px 12px; border-radius:8px; text-decoration:none; font-weight:bold; display:inline-block; text-align:center; width:100%;">🔗 Buka di Drive</a>', unsafe_allow_html=True)
+                            else:
+                                st.error("❌ Link Error")               
+                                
 # ================= VENDOR DASHBOARD (UPDATE: DYNAMIC TABS) =================
 def vendor_dashboard(email):
     step = st.session_state['vendor_step']
@@ -2532,6 +2532,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
