@@ -240,7 +240,7 @@ def upload_to_drive(file_buffer, filename, mimetype, folder_id):
     
     try:
         # Upload dan minta Google mengembalikan link webViewLink
-        file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink,supportsAllDrives=True').execute()
+        file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink',supportsAllDrives=True).execute()
         return file.get('webViewLink')
     except Exception as e:
         st.error(f"Error API Drive: {e}")
@@ -2529,6 +2529,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
