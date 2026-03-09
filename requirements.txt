@@ -6,3 +6,4 @@ fpdf
 docxtpl
 docxcompose
 python-docx
+google-api-python-client==2.108.0
