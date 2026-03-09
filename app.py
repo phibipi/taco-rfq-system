@@ -1680,7 +1680,7 @@ def admin_dashboard():
                                             
                                             # Siapkan teks draf WA
                                             pending_str = ", ".join([str(g) for g in pending_groups])
-                                            wa_text = f"Halo *{v_name}*,\n\nKami dari TACO Group ingin mengingatkan bahwa Anda *belum menyelesaikan* pengisian harga Tender {sel_sm_lt} ({sel_sm_val}) Tahap {sel_sm_rnd} untuk area:\n\n📌 {pending_str}\n\nMohon segera melengkapi penawaran Anda di sistem.\nLink: https://taco-transport.streamlit.app/\n\n*BATAS PENGISIAN: JUMAT, 6 MARET 2026*\nJika tidak dilakukan pengisian, kami akan anggap dari {v_name} *TIDAK* akan mengikuti tender rute tersebut dan *TIDAK* dapat menyusul.\n\nTerima Kasih."
+                                            wa_text = f"Halo *{v_name}*,\n\nKami dari TACO Group ingin mengingatkan bahwa Anda *belum menyelesaikan* pengisian harga Tender {sel_sm_lt} ({sel_sm_val}) Tahap {sel_sm_rnd} untuk area:\n\n📌 {pending_str}\n\nMohon segera melengkapi penawaran Anda di sistem.\nLink: https://taco-transport.streamlit.app/\n\n*BATAS PENGISIAN: SELASA, 10 MARET 2026*\nJika tidak dilakukan pengisian, kami akan anggap dari {v_name} *TIDAK* akan mengikuti tender rute tersebut dan *TIDAK* dapat menyusul.\n\nTerima Kasih."
                                             
                                             # Encode teks agar aman di URL
                                             wa_text_encoded = urllib.parse.quote(wa_text)
@@ -2529,6 +2529,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
