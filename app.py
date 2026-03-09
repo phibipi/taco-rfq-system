@@ -191,7 +191,7 @@ def connect_to_gsheet():
         st.error(f"GAGAL KONEKSI: {e}")
         return None
 
-@st.cache_data(ttl=10, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def get_data(sheet_name):
     sh = connect_to_gsheet()
     if sh:
@@ -2529,6 +2529,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
