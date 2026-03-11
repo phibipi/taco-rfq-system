@@ -1785,6 +1785,11 @@ def admin_dashboard():
                             disp_md = sub_md[cols_to_show].reset_index(drop=True)
                             disp_md.columns = header_names
                             st.dataframe(disp_md, use_container_width=True, hide_index=True)
+
+                            if 'catatan_tambahan' in sub_md.columns:
+                                v_note = str(sub_md.iloc[0]['catatan_tambahan']).strip()
+                                if v_note and v_note.lower() != "nan" and v_note != "None":
+                                    st.info(f"📝 **Catatan Tambahan Vendor:**\n{v_note}")
                         else:
                             st.info("Data Multidrop belum diinput oleh vendor.")
                     else:
@@ -2495,7 +2500,19 @@ def vendor_dashboard(email):
                             "Biaya Buruh": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d")
                         }
                         ed_md = st.data_editor(df_md_ui, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_md)
-
+                        st.markdown("<br><b>📝 Catatan Tambahan (Opsional)</b>", unsafe_allow_html=True)
+                        
+                        prev_note = ""
+                        if not md_source.empty and 'catatan_tambahan' in md_source.columns:
+                            prev_note = str(md_source.iloc[0]['catatan_tambahan'])
+                            if prev_note.lower() == "nan": prev_note = ""
+                            
+                        vendor_note = st.text_area(
+                            "Keterangan lain yang perlu diinfokan (jika ada):", 
+                            value=prev_note, 
+                            disabled=is_lock,
+                            height=100
+                        )
                     # SAVE BUTTON
                     st.write("")
                     if st.form_submit_button(f"Simpan Data {cur_load} {g_name} (Tahap {cur_round})", type="primary") and not is_lock:
@@ -2520,7 +2537,7 @@ def vendor_dashboard(email):
                         mid = f"M_{email}_{gid}_{cur_val}_{cur_round}"
 
                         save_data("Price_Data", f_data)
-                        save_data("Multidrop_Data", [[mid, email, cur_val, gid, mi, mo, ml, ts]])
+                        save_data("Multidrop_Data", [[mid, email, cur_val, gid, mi, mo, ml, ts, vendor_note]])
                         
                         st.session_state['temp_success_msg'] = f"Sukses! Data Tahap {cur_round} tersimpan."
                         st.cache_data.clear()
@@ -2529,6 +2546,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
