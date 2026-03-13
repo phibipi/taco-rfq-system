@@ -2260,11 +2260,11 @@ def vendor_dashboard(email):
                     
                     # --- BAGIAN A: DOWNLOAD SPH ---
                     with st.container(border=True):
-                        st.markdown("#### Langkah 1: Download SPH")
+                        st.markdown("#### Step 1: Download SPH")
                         if df_print.empty:
                             st.info("Tidak ada data untuk kombinasi filter ini.")
                         else:
-                            st.write(f"Ditemukan **{len(df_print)} rute** yang siap dicetak SPH.")
+                            st.write(f"Ditemukan **{len(df_print)} rute** yang siap dicetak SPH. Mohon dapat dicap dan ditandangani, lalu diupload pada langkah selanjutnya")
                             
                             if st.button("📄 Buat Dokumen SPH (Word)", type="primary"):
                                 tpl_sph = "template_sph.docx"
@@ -2289,10 +2289,10 @@ def vendor_dashboard(email):
 
                     # --- BAGIAN B: UPLOAD SPH ---
                     with st.container(border=True):
-                        st.markdown("#### Langkah 2: Upload SPH yang Sudah Ditandatangani")
+                        st.markdown("#### Step 2: Upload SPH yang Sudah di Cap & Tanda Tangan")
                         st.write(f"Upload untuk: **{sel_lt} | Periode {sel_val} | Tahap {sel_rnd}**")
                         
-                        uploaded_file = st.file_uploader("Pilih file SPH (PDF / Gambar)", type=['pdf', 'png', 'jpg', 'jpeg'])
+                        uploaded_file = st.file_uploader("Pilih file SPH (PDF", type=['pdf', 'png', 'jpg', 'jpeg'])
                         
                         if st.button("📤 Upload Dokumen SPH", type="primary", use_container_width=True):
                             if uploaded_file is not None:
@@ -2546,6 +2546,7 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
+
 
 
 
