@@ -1824,16 +1824,15 @@ def admin_dashboard():
                 df_view = df_master[(df_master['validity'] == sel_val) & (df_master['load_type'] == sel_load)].copy()
                 df_view = df_view[df_view['price'] > 0]
                 
-                # 2. Tambahan Filter Origin & Search Bar
-                avail_orgs = ["Semua Origin"] + sorted(df_view['origin'].dropna().unique().tolist())
-                sel_org = c3.selectbox("Filter Origin", avail_orgs, key="es_org")
+                # 2. Tambahan Filter Kota Asal & Search Bar
+                avail_asal = ["Semua Kota Asal"] + sorted(df_view['kota_asal'].dropna().unique().tolist())
+                sel_asal = c3.selectbox("Filter Kota Asal", avail_asal, key="es_asal")
                 
-                # Labelnya diubah agar lebih umum
                 search_keyword = c4.text_input("🔍 Cari Lokasi", placeholder="Ketik Asal/Tujuan...", key="es_dest").strip().lower()
                 
-                # 3. Terapkan Filter Origin & Pencarian Universal
-                if sel_org != "Semua Origin":
-                    df_view = df_view[df_view['origin'] == sel_org]
+                # 3. Terapkan Filter Kota Asal & Pencarian Universal
+                if sel_asal != "Semua Kota Asal":
+                    df_view = df_view[df_view['kota_asal'] == sel_asal]
                     
                 if search_keyword:
                     # Cek kata kunci di 3 kolom berbeda
@@ -1849,12 +1848,13 @@ def admin_dashboard():
                     unique_origins = sorted(df_view['origin'].unique())
                 
                     for org in unique_origins:
-                        with st.expander(f"📍 Origin: {org}", expanded=True):
-                            sub_df = df_view[df_view['origin'] == org].copy() # Pakai .copy()
+                        # Expander tetap per Origin Area agar tetap rapi pengelompokannya
+                        with st.expander(f"📍 Origin Area: {org}", expanded=True):
+                            sub_df = df_view[df_view['origin'] == org].copy()
                         
-                            # Ranking Logic
-                            sub_df = sub_df.sort_values(by=['kota_tujuan', 'unit_type', 'price'])
-                            sub_df['Ranking'] = sub_df.groupby(['kota_tujuan', 'unit_type']).cumcount() + 1
+                            # Ranking Logic (Diperbarui: Tambah kota_asal agar Top 3 dihitung per rute spesifik)
+                            sub_df = sub_df.sort_values(by=['kota_asal', 'kota_tujuan', 'unit_type', 'price'])
+                            sub_df['Ranking'] = sub_df.groupby(['kota_asal', 'kota_tujuan', 'unit_type']).cumcount() + 1
                         
                             # ▼▼▼ FILTER HANYA TOP 3 ▼▼▼
                             sub_df = sub_df[sub_df['Ranking'] <= 3]
@@ -1862,19 +1862,22 @@ def admin_dashboard():
                         
                             sub_df['price_fmt'] = sub_df['price'].apply(lambda x: f"Rp {int(x):,}".replace(",", "."))
                         
-                            st.dataframe(sub_df[['kota_tujuan', 'unit_type', 'Ranking', 'vendor_name', 'price_fmt', 'lead_time', 'top']],
-                            use_container_width=True,
-                            column_config={
-                                "kota_tujuan": "Tujuan",
-                                "unit_type": "Unit",
-                                "price_fmt": "Harga",
-                                "vendor_name": "Vendor"
-                            },
-                            hide_index=True
-                        )
+                            # Menampilkan 'kota_asal' di dalam tabel
+                            st.dataframe(
+                                sub_df[['kota_asal', 'kota_tujuan', 'unit_type', 'Ranking', 'vendor_name', 'price_fmt', 'lead_time', 'top']],
+                                use_container_width=True,
+                                column_config={
+                                    "kota_asal": "Kota Asal",
+                                    "kota_tujuan": "Kota Tujuan",
+                                    "unit_type": "Unit",
+                                    "price_fmt": "Harga",
+                                    "vendor_name": "Vendor"
+                                },
+                                hide_index=True
+                            )
                 else:
                     st.warning("Data tidak ditemukan.")
-
+                    
         # --- TAB 8: PRINT FILE (SK & SPK TERPISAH) ---
         with tabs[3]:
             st.subheader("🖨️ Print Dokumen")
@@ -2566,19 +2569,6 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
