@@ -1813,18 +1813,31 @@ def admin_dashboard():
             if df_master.empty:
                 st.info("Belum ada data harga masuk.")
             else:
-                c1, c2 = st.columns(2)
+                c1, c2, c3, c4 = st.columns(4)
                 avail_val = sorted(df_master['validity'].unique().tolist())
                 avail_load = sorted(df_master['load_type'].unique().tolist())
             
                 sel_val = c1.selectbox("Filter Periode", avail_val, key="es_val")
                 sel_load = c2.selectbox("Filter Tipe Muatan", avail_load, key="es_load")
             
+                # 1. Filter Awal (Periode & Muatan)
                 df_view = df_master[(df_master['validity'] == sel_val) & (df_master['load_type'] == sel_load)].copy()
-                
-                # --- TAMBAHAN FILTER HARGA 0 ---
                 df_view = df_view[df_view['price'] > 0]
                 
+                # 2. Tambahan Filter Origin & Search Bar
+                avail_orgs = ["Semua Origin"] + sorted(df_view['origin'].dropna().unique().tolist())
+                sel_org = c3.selectbox("Filter Origin", avail_orgs, key="es_org")
+                
+                search_dest = c4.text_input("🔍 Cari Tujuan", placeholder="Ketik kota...", key="es_dest").strip().lower()
+                
+                # 3. Terapkan Filter Origin & Tujuan (Jika diisi)
+                if sel_org != "Semua Origin":
+                    df_view = df_view[df_view['origin'] == sel_org]
+                    
+                if search_dest:
+                    df_view = df_view[df_view['kota_tujuan'].str.lower().str.contains(search_dest, na=False)]
+                
+                # 4. Tampilkan Hasilnya
                 if not df_view.empty:
                     unique_origins = sorted(df_view['origin'].unique())
                 
