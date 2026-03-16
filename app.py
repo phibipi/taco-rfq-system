@@ -2064,7 +2064,7 @@ def vendor_dashboard(email):
     
     # --- STEP 1: DASHBOARD / PROFIL ---
     if step == "dashboard":
-        t1, t2, t3 = st.tabs(["🛣️ Pilih Rute & Isi Harga", "📋 Isi Data Perusahaan", "📄 Download & Upload SPH"])
+        t1, t2 = st.tabs(["🛣️ Pilih Rute & Isi Harga", "📋 Isi Data Perusahaan"])
         
         # Tab 2: Profil
         with t2:
@@ -2215,7 +2215,7 @@ def vendor_dashboard(email):
                                     c4.markdown(status_ui, unsafe_allow_html=True)
                                     st.markdown("<hr>", unsafe_allow_html=True)
 # --- TAB 3: DOWNLOAD & UPLOAD SPH RESMI ---
-        with t3:
+        if False:
             st.markdown("### 📄 SPH (Surat Penawaran Harga)")
             st.info("Anda dapat mendownload SPH untuk data yang **sudah di-Lock** oleh Panitia Tender.")
             
