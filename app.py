@@ -1828,14 +1828,21 @@ def admin_dashboard():
                 avail_orgs = ["Semua Origin"] + sorted(df_view['origin'].dropna().unique().tolist())
                 sel_org = c3.selectbox("Filter Origin", avail_orgs, key="es_org")
                 
-                search_dest = c4.text_input("🔍 Cari Tujuan", placeholder="Ketik kota...", key="es_dest").strip().lower()
+                # Labelnya diubah agar lebih umum
+                search_keyword = c4.text_input("🔍 Cari Lokasi", placeholder="Ketik Asal/Tujuan...", key="es_dest").strip().lower()
                 
-                # 3. Terapkan Filter Origin & Tujuan (Jika diisi)
+                # 3. Terapkan Filter Origin & Pencarian Universal
                 if sel_org != "Semua Origin":
                     df_view = df_view[df_view['origin'] == sel_org]
                     
-                if search_dest:
-                    df_view = df_view[df_view['kota_tujuan'].str.lower().str.contains(search_dest, na=False)]
+                if search_keyword:
+                    # Cek kata kunci di 3 kolom berbeda
+                    match_org = df_view['origin'].fillna("").str.lower().str.contains(search_keyword)
+                    match_asal = df_view['kota_asal'].fillna("").str.lower().str.contains(search_keyword)
+                    match_tujuan = df_view['kota_tujuan'].fillna("").str.lower().str.contains(search_keyword)
+                    
+                    # Gabungkan dengan logika OR (|) -> jika salah satu cocok, tampilkan!
+                    df_view = df_view[match_org | match_asal | match_tujuan]
                 
                 # 4. Tampilkan Hasilnya
                 if not df_view.empty:
