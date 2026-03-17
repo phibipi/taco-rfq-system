@@ -1863,7 +1863,19 @@ def admin_dashboard():
         # --- TAB 7: SUMMARY ---   
         with tabs[2]:
             st.subheader("📊 Summary & Ranking Vendor")
-            # 1. Filter Awal (Periode & Muatan)
+            
+            if df_master.empty:
+                st.info("Belum ada data harga masuk.")
+            else:
+                # --- FILTER HARUS DI ATAS ---
+                c1, c2, c3, c4 = st.columns(4)
+                avail_val = sorted(df_master['validity'].unique().tolist())
+                avail_load = sorted(df_master['load_type'].unique().tolist())
+            
+                sel_val = c1.selectbox("Filter Periode", avail_val, key="es_val")
+                sel_load = c2.selectbox("Filter Tipe Muatan", avail_load, key="es_load")
+            
+                # 1. Filter Awal (Periode & Muatan)
                 df_view = df_master[(df_master['validity'] == sel_val) & (df_master['load_type'] == sel_load)].copy()
                 df_view = df_view[df_view['price'] > 0]
                 
@@ -1873,56 +1885,46 @@ def admin_dashboard():
                 
                 search_keyword = c4.text_input("🔍 Cari Lokasi", placeholder="Ketik Asal/Tujuan...", key="es_dest").strip().lower()
                 
-                # ▼▼▼ PASTE KODE EXPANDER DOWNLOAD EXCEL DI SINI ▼▼▼
+                # --- TOMBOL DOWNLOAD BARU DI SINI ---
                 with st.expander("📥 Download Master Summary (Excel)", expanded=False):
                     st.write("Unduh rekap seluruh rute sesuai filter di atas. Rute yang belum diisi vendor akan tetap muncul dengan harga Rp 0.")
                     
                     if not df_r.empty and not df_g.empty and not df_units.empty:
-                        # 1. Bersihkan ID
+                        # Bersihkan ID
                         df_r_clean = df_r.copy()
                         df_r_clean['route_id'] = df_r_clean['route_id'].astype(str).str.strip()
                         df_r_clean['group_id'] = df_r_clean['group_id'].astype(str).str.strip()
-                        
                         df_g_clean = df_g.copy()
                         df_g_clean['group_id'] = df_g_clean['group_id'].astype(str).str.strip()
-                        
                         df_u_clean = df_units.copy()
                         df_u_clean['group_id'] = df_u_clean['group_id'].astype(str).str.strip()
 
-                        # 2. Gabungkan Master Rute + Group + Unit
+                        # Gabungkan Master
                         base_df = pd.merge(df_r_clean, df_g_clean, on='group_id', how='left')
                         base_df = pd.merge(base_df, df_u_clean, on='group_id', how='left')
                         
-                        # 3. TERAPKAN FILTER KE BASE_DF (Agar sinkron dengan UI)
+                        # Terapkan Filter UI ke Base Excel
                         base_df = base_df[base_df['load_type'] == sel_load]
-                        
                         if sel_asal != "Semua Kota Asal":
                             base_df = base_df[base_df['kota_asal'] == sel_asal]
-                            
                         if search_keyword:
                             match_org = base_df['origin'].fillna("").str.lower().str.contains(search_keyword)
                             match_asal = base_df['kota_asal'].fillna("").str.lower().str.contains(search_keyword)
                             match_tujuan = base_df['kota_tujuan'].fillna("").str.lower().str.contains(search_keyword)
                             base_df = base_df[match_org | match_asal | match_tujuan]
 
-                        # 4. Siapkan Data Harga 
+                        # Siapkan Harga & Vendor
                         prices_clean = df_p.copy() if not df_p.empty else pd.DataFrame(columns=['route_id', 'unit_type', 'vendor_email', 'price', 'validity', 'round', 'lead_time'])
                         if not prices_clean.empty:
                             prices_clean['route_id'] = prices_clean['route_id'].astype(str).str.strip()
                             prices_clean['price'] = pd.to_numeric(prices_clean['price'], errors='coerce').fillna(0)
-                            
-                            # LOGIKA PENTING: Filter Hanya Harga > 0 & Sesuai Periode (Buang vendor yang isi 0)
                             prices_clean = prices_clean[(prices_clean['price'] > 0) & (prices_clean['validity'] == sel_val)]
                             
-                            # Gabung dengan nama vendor
-                            if not df_u.empty:
-                                v_names = df_u[df_u['role'] == 'vendor'][['email', 'vendor_name']]
-                                prices_clean = pd.merge(prices_clean, v_names, left_on='vendor_email', right_on='email', how='left')
-                                prices_clean['vendor_name'] = prices_clean['vendor_name'].fillna(prices_clean['vendor_email'])
-                            else:
-                                prices_clean['vendor_name'] = prices_clean['vendor_email']
+                            v_names = df_u[df_u['role'] == 'vendor'][['email', 'vendor_name']]
+                            prices_clean = pd.merge(prices_clean, v_names, left_on='vendor_email', right_on='email', how='left')
+                            prices_clean['vendor_name'] = prices_clean['vendor_name'].fillna(prices_clean['vendor_email'])
 
-                        # 5. Merge Semua Rute dengan Harga (LEFT JOIN)
+                        # Merge Left Join
                         if not prices_clean.empty:
                             summary_df = pd.merge(
                                 base_df, 
@@ -1938,37 +1940,26 @@ def admin_dashboard():
                             summary_df['round'] = '-'
                             summary_df['lead_time'] = '-'
 
-                        # 6. Hitung Prioritas (Ranking) berdasarkan harga termurah
-                        # Akali harga 0 agar selalu berada di urutan paling bawah saat di-ranking
+                        # Prioritas, Rapikan Kosong & Format
                         summary_df['price_sort'] = summary_df['price'].replace(0, float('inf'))
                         summary_df = summary_df.sort_values(by=['origin', 'kota_asal', 'kota_tujuan', 'unit_type', 'price_sort'])
-                        
                         summary_df['Prioritas'] = summary_df.groupby(['origin', 'kota_asal', 'kota_tujuan', 'unit_type']).cumcount() + 1
-                        
-                        # Hapus angka prioritas jika harganya Rp 0 (belum ada penawaran)
                         summary_df['Prioritas'] = summary_df.apply(lambda x: x['Prioritas'] if x['price'] > 0 else '-', axis=1)
 
-                        # 7. Rapikan Data Kosong (Rute tanpa harga)
                         summary_df['price'] = summary_df['price'].fillna(0)
                         summary_df['vendor_name'] = summary_df['vendor_name'].fillna('Belum Ada Penawaran')
                         summary_df['validity'] = summary_df['validity'].fillna(sel_val).replace('nan', sel_val)
                         summary_df['round'] = summary_df['round'].fillna('-').replace('nan', '-')
                         summary_df['lead_time'] = summary_df['lead_time'].fillna('-').replace('nan', '-')
-                        
-                        # Format Rupiah
                         summary_df['Harga Penawaran'] = summary_df['price'].apply(lambda x: f"Rp {int(x):,}".replace(",", "."))
                         
-                        # Ambil kolom yang mau ditampilkan saja (Dengan Tambahan Prioritas)
                         cols_to_keep = ['origin', 'kota_asal', 'kota_tujuan', 'route_group', 'load_type', 'unit_type', 'Prioritas', 'vendor_name', 'Harga Penawaran', 'lead_time', 'validity', 'round']
-                        
                         for c in cols_to_keep:
-                            if c not in summary_df.columns:
-                                summary_df[c] = '-'
-                                
+                            if c not in summary_df.columns: summary_df[c] = '-'
                         summary_df = summary_df[cols_to_keep]
                         summary_df.columns = ['Origin', 'Kota Asal', 'Kota Tujuan', 'Nama Grup Rute', 'Tipe Muatan', 'Unit', 'Prioritas', 'Nama Vendor', 'Harga Penawaran', 'Lead Time', 'Periode', 'Tahap']
                         
-                        # 8. Generate Excel
+                        # Bikin Excel
                         output = io.BytesIO()
                         with pd.ExcelWriter(output, engine='openpyxl') as writer:
                             summary_df.to_excel(writer, index=False, sheet_name='Master Summary')
@@ -1986,41 +1977,19 @@ def admin_dashboard():
                     else:
                         st.warning("Data Master Rute, Group, atau Unit masih kosong. Tidak bisa mengunduh summary.")
                 
-                st.write("") 
-
-            if df_master.empty:
-                st.info("Belum ada data harga masuk.")
-            else:
-                c1, c2, c3, c4 = st.columns(4)
-                avail_val = sorted(df_master['validity'].unique().tolist())
-                avail_load = sorted(df_master['load_type'].unique().tolist())
-            
-                sel_val = c1.selectbox("Filter Periode", avail_val, key="es_val")
-                sel_load = c2.selectbox("Filter Tipe Muatan", avail_load, key="es_load")
-            
-                # 1. Filter Awal (Periode & Muatan)
-                df_view = df_master[(df_master['validity'] == sel_val) & (df_master['load_type'] == sel_load)].copy()
-                df_view = df_view[df_view['price'] > 0]
+                st.write("")
                 
-                # 2. Tambahan Filter Kota Asal & Search Bar
-                avail_asal = ["Semua Kota Asal"] + sorted(df_view['kota_asal'].dropna().unique().tolist())
-                sel_asal = c3.selectbox("Filter Kota Asal", avail_asal, key="es_asal")
-                
-               
-                # 3. Terapkan Filter Kota Asal & Pencarian Universal
+                # --- LANJUTAN FILTER TAMPILAN UI ---
                 if sel_asal != "Semua Kota Asal":
                     df_view = df_view[df_view['kota_asal'] == sel_asal]
                     
                 if search_keyword:
-                    # Cek kata kunci di 3 kolom berbeda
                     match_org = df_view['origin'].fillna("").str.lower().str.contains(search_keyword)
                     match_asal = df_view['kota_asal'].fillna("").str.lower().str.contains(search_keyword)
                     match_tujuan = df_view['kota_tujuan'].fillna("").str.lower().str.contains(search_keyword)
-                    
-                    # Gabungkan dengan logika OR (|) -> jika salah satu cocok, tampilkan!
                     df_view = df_view[match_org | match_asal | match_tujuan]
-                
-                # 4. Tampilkan Hasilnya
+
+                # 4. Tampilkan Hasilnya ke Layar
                 if not df_view.empty:
                     unique_origins = sorted(df_view['origin'].unique())
                 
