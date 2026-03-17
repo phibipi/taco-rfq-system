@@ -979,14 +979,14 @@ def get_target_price(df_all, route_id, unit_type, cur_validity):
                 if min_prev < min_curr:
                     target_price = min_prev * 0.95 
                 else:
-                    target_price = min_curr * 0.92 
+                    target_price = min_curr * 0.90 
             else:
-                target_price = min_curr * 0.92
+                target_price = min_curr * 0.90
         else:
-            target_price = min_curr * 0.92
+            target_price = min_curr * 0.90
             
     except:
-        target_price = min_curr * 0.92
+        target_price = min_curr * 0.90
         
     return int(target_price)
 
