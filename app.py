@@ -2697,7 +2697,7 @@ def vendor_dashboard(email):
                         df_sp = pd.DataFrame(sp_data)
                         cf_sp = {
                             "Jenis Unit": st.column_config.TextColumn(disabled=True),
-                            "Kapasitas Berat Bersih (Kg)": st.column_config.NumberColumn(min_value=0, format="%d", step=1),
+                            "Kapasitas Berat Bersih (Kg)": st.column_config.NumberColumn(min_value=0, format="%,d", step=1),
                             "Kapasitas Kubikasi Dalam (CBM)": st.column_config.NumberColumn(min_value=0, format="%.2f", step=0.1)
                         }
                         ed_sp = st.data_editor(df_sp, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_sp)
@@ -2737,10 +2737,10 @@ def vendor_dashboard(email):
                         
                         cols_order = ["Route ID", "Kota Asal", "Kota Tujuan", "Lead Time (Hari)"]
                         for u in u_types:
-                            cf_pr[f"Harga {u} per trip"] = st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d", required=True, width="medium")
+                            cf_pr[f"Harga {u} per trip"] = st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %,d", required=True, width="medium")
                             target_col = f"Target {u}"
                             if target_col in df_pr.columns:
-                                cf_pr[target_col] = st.column_config.NumberColumn(format="Rp %d", disabled=True, width="medium")
+                                cf_pr[target_col] = st.column_config.NumberColumn(format="Rp %,d", disabled=True, width="medium")
                                 cols_order.append(target_col)
                             cols_order.append(f"Harga {u} per trip")
                         
@@ -2772,9 +2772,9 @@ def vendor_dashboard(email):
                         df_md_ui = pd.DataFrame([{"Multidrop Dalam Kota": ic, "Multidrop Luar Kota": oc, "Biaya Buruh": lc}])
                         
                         cf_md = {
-                            "Multidrop Dalam Kota": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d"),
-                            "Multidrop Luar Kota": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d"),
-                            "Biaya Buruh": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %d")
+                            "Multidrop Dalam Kota": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %,d"),
+                            "Multidrop Luar Kota": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %,d"),
+                            "Biaya Buruh": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %,d")
                         }
                         ed_md = st.data_editor(df_md_ui, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_md)
                         st.markdown("<br><b>📝 Catatan Tambahan (Opsional)</b>", unsafe_allow_html=True)
