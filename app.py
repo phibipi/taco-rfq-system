@@ -520,7 +520,7 @@ def send_rejection_email(to_email, vendor_name, load_type, validity, group_name,
     <body>
         <h3 style="color: #d9534f;">⚠️ Pemberitahuan Revisi Penawaran Harga</h3>
         <p>Dear <b>{vendor_name}</b>,</p>
-        <p>Admin TACO Group telah meninjau penawaran harga Anda untuk detail berikut:</p>
+        <p>Panitia tender TACO Group telah meninjau penawaran harga Anda untuk detail berikut:</p>
         <ul>
             <li><b>Periode:</b> {validity}</li>
             <li><b>Tipe Armada:</b> {load_type}</li>
