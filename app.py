@@ -683,6 +683,7 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     output_filename = f"SK_Result_{int(time.time())}.docx"
     doc.save(output_filename)
     return output_filename
+    
 # --- FUNGSI GENERATE SPH VENDOR ---
 def create_docx_sph(template_file, vendor_name, vendor_address, validity, load_type, round_num, df_data):
     doc = DocxTemplate(template_file)
@@ -692,7 +693,6 @@ def create_docx_sph(template_file, vendor_name, vendor_address, validity, load_t
     today = datetime.now()
     tgl_sph = f"{today.day} {bulan_indo[today.month]} {today.year}"
 
-    # Helper Format
     def fmt_rp(x):
         try: return f"Rp {int(x):,}".replace(",", ".")
         except: return "Rp 0"
@@ -722,47 +722,90 @@ def create_docx_sph(template_file, vendor_name, vendor_address, validity, load_t
         tblHeader.set(qn('w:val'), "true")
         trPr.append(tblHeader)
 
-    # --- TABEL DATA ---
     sd = doc.new_subdoc()
-    headers = ['No', 'Origin', 'Tujuan', 'Unit', 'Lead Time', 'Harga Penawaran']
+    
+    # --- TABEL 1: HARGA UTAMA ---
+    headers = ['No', 'Origin', 'Tujuan', 'Unit', 'Lead Time', 'Harga Penawaran', 'Keterangan']
     table = sd.add_table(rows=1, cols=len(headers))
     table.style = 'Table Grid'
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    
     set_repeat_table_header(table.rows[0])
     
-    # Header Styling
     hdr_cells = table.rows[0].cells
     for i, h in enumerate(headers):
         shading_elm = parse_xml(r'<w:shd {} w:fill="ED7D31"/>'.format(nsdecls('w')))
         hdr_cells[i]._tc.get_or_add_tcPr().append(shading_elm)
-        format_cell(hdr_cells[i], h, bold=True, size=9)
+        format_cell(hdr_cells[i], h, bold=True, size=8)
 
-    # Isi Data
     for idx, row in df_data.iterrows():
         row_cells = table.add_row().cells
         
         lt_raw = str(row.get('lead_time', '-'))
         lt_fmt = f"{lt_raw} Hari" if (lt_raw.isdigit() or lt_raw.replace('.','',1).isdigit()) and lt_raw not in ["-","0",""] else "-"
+        
+        ket = str(row.get('keterangan', '-'))
+        if ket.lower() in ["nan", "none", ""]: ket = "-"
 
         vals = [
             str(idx + 1),
-            row.get('origin', '-'),
-            row.get('kota_tujuan', '-'),
-            row.get('unit_type', '-'),
+            str(row.get('origin', '-')),
+            str(row.get('kota_tujuan', '-')),
+            str(row.get('unit_type', '-')),
             lt_fmt,
-            fmt_rp(row.get('price', 0))
+            fmt_rp(row.get('price', 0)),
+            ket
         ]
-        
         for i, v in enumerate(vals):
-            align = WD_ALIGN_PARAGRAPH.LEFT if i in [1, 2] else WD_ALIGN_PARAGRAPH.CENTER
+            align = WD_ALIGN_PARAGRAPH.LEFT if i in [1, 2, 6] else WD_ALIGN_PARAGRAPH.CENTER
             if i == 5: align = WD_ALIGN_PARAGRAPH.RIGHT
-            format_cell(row_cells[i], v, align, size=8)
+            format_cell(row_cells[i], v, align, size=7.5)
 
-    # --- UPDATE LEBAR KOLOM ---
-    # No(1.0), Origin(2.5), Tujuan(3.5), Unit(2.5), Lead Time(2.0), Harga(3.5)
-    col_widths = [Cm(1.0), Cm(2.5), Cm(3.5), Cm(2.5), Cm(2.0), Cm(3.5)]
+    # Lebar Kolom Tabel 1
+    col_widths = [Cm(0.8), Cm(2.0), Cm(2.5), Cm(2.0), Cm(1.5), Cm(2.5), Cm(3.0)]
     set_col_widths(table, col_widths)
+
+    sd.add_paragraph("") # Spasi Antar Tabel
+
+    # --- TABEL 2: MULTIDROP & CATATAN ---
+    p = sd.add_paragraph("Tabel Biaya Multidrop & Keterangan Tambahan:")
+    p.runs[0].bold = True
+    p.runs[0].font.name = 'Calibri'
+    p.runs[0].font.size = Pt(9)
+    
+    headers_md = ['Origin', 'MD Dalam', 'MD Luar', 'Biaya Buruh', 'Catatan Tambahan Vendor']
+    table_md = sd.add_table(rows=1, cols=len(headers_md))
+    table_md.style = 'Table Grid'
+    table_md.alignment = WD_TABLE_ALIGNMENT.CENTER
+    set_repeat_table_header(table_md.rows[0])
+    
+    hdr_cells_md = table_md.rows[0].cells
+    for i, h in enumerate(headers_md):
+        shading_elm = parse_xml(r'<w:shd {} w:fill="ED7D31"/>'.format(nsdecls('w')))
+        hdr_cells_md[i]._tc.get_or_add_tcPr().append(shading_elm)
+        format_cell(hdr_cells_md[i], h, bold=True, size=8)
+
+    # Filter Multidrop agar unik (muncul per Origin saja)
+    df_md_uniq = df_data[['origin', 'inner_city_price', 'outer_city_price', 'labor_cost', 'catatan_tambahan']].drop_duplicates(subset=['origin'])
+    
+    for _, row in df_md_uniq.iterrows():
+        row_cells = table_md.add_row().cells
+        ctt = str(row.get('catatan_tambahan', '-'))
+        if ctt.lower() in ["nan", "none", ""]: ctt = "-"
+
+        vals_md = [
+            str(row.get('origin', '-')),
+            fmt_rp(row.get('inner_city_price', 0)),
+            fmt_rp(row.get('outer_city_price', 0)),
+            fmt_rp(row.get('labor_cost', 0)),
+            ctt
+        ]
+        for i, v in enumerate(vals_md):
+            align = WD_ALIGN_PARAGRAPH.LEFT if i in [0, 4] else WD_ALIGN_PARAGRAPH.RIGHT
+            format_cell(row_cells[i], v, align, size=7.5)
+            
+    # Lebar Kolom Tabel 2
+    col_widths_md = [Cm(2.5), Cm(2.2), Cm(2.2), Cm(2.2), Cm(5.2)]
+    set_col_widths(table_md, col_widths_md)
 
     context = {
         'tanggal': tgl_sph,
@@ -2284,7 +2327,21 @@ def vendor_dashboard(email):
                     
                     m1 = pd.merge(my_prices, df_r[['route_id', 'group_id', 'kota_tujuan']], on='route_id', how='left')
                     df_final = pd.merge(m1, df_g[['group_id', 'origin', 'load_type']], on='group_id', how='left')
-                    
+                    # --- TAMBAHAN MERGE MULTIDROP & CATATAN ---
+                    df_m = get_data("Multidrop_Data")
+                    if not df_m.empty:
+                        df_m['group_id'] = df_m['group_id'].astype(str).str.strip()
+                        df_m['md_round'] = df_m['id_multidrop'].apply(lambda x: str(x).split('_')[-1] if '_' in str(x) else '1')
+                        df_m_sub = df_m[['vendor_email', 'validity', 'group_id', 'md_round', 'inner_city_price', 'outer_city_price', 'labor_cost', 'catatan_tambahan']]
+                        
+                        df_final = pd.merge(
+                            df_final, df_m_sub, 
+                            left_on=['vendor_email', 'validity', 'group_id', 'round'],
+                            right_on=['vendor_email', 'validity', 'group_id', 'md_round'],
+                            how='left'
+                        )
+                    else:
+                        for c in ['inner_city_price', 'outer_city_price', 'labor_cost', 'catatan_tambahan']: df_final[c] = 0
                     # 3. UI Filter (Periode, Load Type, Tahap)
                     c1, c2, c3 = st.columns(3)
                     avail_val = sorted(df_final['validity'].unique().tolist())
@@ -2356,6 +2413,9 @@ def vendor_dashboard(email):
                                     try: return f"Rp {int(x):,}".replace(",", ".")
                                     except: return "Rp 0"
                                 df_excel['Harga Penawaran'] = df_excel['price'].apply(fmt_rp)
+                                df_excel['Multidrop Dalam Kota'] = df_excel['inner_city_price'].apply(fmt_rp)
+                                df_excel['Multidrop Luar Kota'] = df_excel['outer_city_price'].apply(fmt_rp)
+                                df_excel['Biaya Buruh'] = df_excel['labor_cost'].apply(fmt_rp)
                                 
                                 def fmt_lt(x):
                                     x_str = str(x)
@@ -2363,10 +2423,14 @@ def vendor_dashboard(email):
                                     return "-" if x_str in ["-", "", "nan", "None"] else x_str
                                 df_excel['Lead Time (Hari)'] = df_excel['lead_time'].apply(fmt_lt)
                                 
+                                # Bersihkan teks kosong
+                                df_excel['keterangan'] = df_excel.get('keterangan', '-').fillna('-').replace(['nan', 'None', ''], '-')
+                                df_excel['catatan_tambahan'] = df_excel.get('catatan_tambahan', '-').fillna('-').replace(['nan', 'None', ''], '-')
+                                
                                 # Ambil kolom yang diperlukan saja dan ganti judulnya
-                                cols_to_keep = ['No', 'origin', 'kota_tujuan', 'unit_type', 'Lead Time (Hari)', 'Harga Penawaran']
+                                cols_to_keep = ['No', 'origin', 'kota_tujuan', 'unit_type', 'Lead Time (Hari)', 'Harga Penawaran', 'keterangan', 'Multidrop Dalam Kota', 'Multidrop Luar Kota', 'Biaya Buruh', 'catatan_tambahan']
                                 df_excel = df_excel[cols_to_keep]
-                                df_excel.columns = ['No', 'Origin', 'Tujuan', 'Unit', 'Lead Time', 'Harga Penawaran']
+                                df_excel.columns = ['No', 'Origin', 'Tujuan', 'Unit', 'Lead Time', 'Harga Penawaran', 'Keterangan Rute', 'MD Dalam Kota', 'MD Luar Kota', 'Biaya Buruh', 'Catatan Tambahan Vendor']
                                 
                                 # Ubah ke format file Excel (BytesIO)
                                 output = io.BytesIO()
