@@ -2137,8 +2137,11 @@ def vendor_dashboard(email):
 
             data_list = []
             for _, acc in my_access.iterrows():
-                gid = acc['group_id']
-                val = acc['validity']
+                # PENGAMAN: Gunakan .get()
+                gid = acc.get('group_id')
+                val = acc.get('validity')
+                if not gid or not val: continue
+                
                 g_info = df_grps[df_grps['group_id'] == gid]
                 if not g_info.empty:
                     row = g_info.iloc[0]
@@ -2183,7 +2186,9 @@ def vendor_dashboard(email):
                         df_sub = df_view[df_view['load_type'] == t_code]
                         # Disini tidak perlu cek empty lagi, karena tab dibuat hanya jika data ada
                         
-                        for org in sorted(df_sub['origin'].unique(),key=lambda x: str(x).strip().lower()):
+                        # PENGAMAN: Cegah error origin kosong/tidak terbaca
+                        unique_orgs = [o for o in df_sub['origin'].dropna().unique() if str(o).strip() != ""]
+                        for org in sorted(unique_orgs, key=lambda x: str(x).strip().lower()):
                             with st.container(border=True):
                                 st.markdown(f"#### 📍 {org}")
 
@@ -2220,8 +2225,11 @@ def vendor_dashboard(email):
                                             if "Locked" in sub_p['status'].values: is_locked_btn = True
                                     
                                     c1, c2, c3, c4 = st.columns([3, 4, 2, 2])
-                                    c1.write(f"**{grp_name}**")
-                                    dests = r_data['kota_tujuan'].unique().tolist() if not r_data.empty else []
+                                    c1_grp.write(f"**{grp_name}**")
+                                    
+                                    # PENGAMAN: Cek apakah kolom kota_tujuan benar-benar ada
+                                    dests = r_data['kota_tujuan'].unique().tolist() if (not r_data.empty and 'kota_tujuan' in r_data.columns) else []
+                                    
                                     if len(dests) > 5: preview_txt = f"{', '.join(dests[:5])}, +{len(dests)-5} kota lainnya"
                                     else: preview_txt = ", ".join(dests)
                                     c2.markdown(f"<span class='route-dest-list'>{preview_txt}</span>", unsafe_allow_html=True)
