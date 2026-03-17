@@ -2423,9 +2423,12 @@ def vendor_dashboard(email):
                                     return "-" if x_str in ["-", "", "nan", "None"] else x_str
                                 df_excel['Lead Time (Hari)'] = df_excel['lead_time'].apply(fmt_lt)
                                 
-                                # Bersihkan teks kosong
-                                df_excel['keterangan'] = df_excel.get('keterangan', '-').fillna('-').replace(['nan', 'None', ''], '-')
-                                df_excel['catatan_tambahan'] = df_excel.get('catatan_tambahan', '-').fillna('-').replace(['nan', 'None', ''], '-')
+                                # Bersihkan teks kosong (PENGAMAN BARU)
+                                if 'keterangan' not in df_excel.columns: df_excel['keterangan'] = '-'
+                                df_excel['keterangan'] = df_excel['keterangan'].fillna('-').astype(str).replace(['nan', 'None', ''], '-')
+                                
+                                if 'catatan_tambahan' not in df_excel.columns: df_excel['catatan_tambahan'] = '-'
+                                df_excel['catatan_tambahan'] = df_excel['catatan_tambahan'].fillna('-').astype(str).replace(['nan', 'None', ''], '-')
                                 
                                 # Ambil kolom yang diperlukan saja dan ganti judulnya
                                 cols_to_keep = ['No', 'origin', 'kota_tujuan', 'unit_type', 'Lead Time (Hari)', 'Harga Penawaran', 'keterangan', 'Multidrop Dalam Kota', 'Multidrop Luar Kota', 'Biaya Buruh', 'catatan_tambahan']
