@@ -502,7 +502,55 @@ def send_reminder_email(to_email, vendor_name, load_type, validity, round_num, p
         return True
     except Exception as e:
         return False  
-
+        
+# --- FUNGSI KIRIM EMAIL REVISI / ALERT ---
+def send_rejection_email(to_email, vendor_name, load_type, validity, group_name, reason):
+    if "email_config" not in st.secrets: return False
+    sender_email = st.secrets["email_config"]["sender_email"]
+    sender_password = st.secrets["email_config"]["sender_password"]
+    
+    # CC ke PIC Internal
+    cc_list = ["firli.mandaras@taco.co.id", "budhi.yuono@taco.co.id"]
+    cc_string = ", ".join(cc_list)
+    
+    subject = f"REVISI DIBUTUHKAN: Penawaran Harga Tender {load_type} - {validity}"
+    
+    body = f"""
+    <html>
+    <body>
+        <h3 style="color: #d9534f;">⚠️ Pemberitahuan Revisi Penawaran Harga</h3>
+        <p>Dear <b>{vendor_name}</b>,</p>
+        <p>Admin TACO Group telah meninjau penawaran harga Anda untuk detail berikut:</p>
+        <ul>
+            <li><b>Periode:</b> {validity}</li>
+            <li><b>Tipe Armada:</b> {load_type}</li>
+            <li><b>Group Rute:</b> {group_name}</li>
+        </ul>
+        <p>Saat ini penawaran Anda <b>membutuhkan revisi</b> dengan catatan sebagai berikut:</p>
+        <blockquote style="background-color: #f9f9f9; padding: 10px; border-left: 5px solid #d9534f; margin-left: 0;">
+            <i>"{reason}"</i>
+        </blockquote>
+        <p>Mohon segera login kembali, dan perbaiki sesuai catatan di atas, lalu simpan ulang penawaran Anda.</p>
+        <p><b>Link App:</b> <a href="https://taco-transport.streamlit.app/">http://bit.ly/TACOtender</a></p>
+        <p>Terima Kasih,<br>Procurement Team TACO</p>
+    </body>
+    </html>
+    """
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = sender_email
+        msg['To'] = to_email
+        msg['Cc'] = cc_string 
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'html'))
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+        server.login(sender_email, sender_password)
+        server.send_message(msg) 
+        server.quit()
+        return True
+    except Exception as e:
+        return False
+        
 # --- FUNGSI GENERATE WORD (OPTIMIZED: SUPER CEPAT & RAPI) ---
 def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     doc = DocxTemplate(template_file)
@@ -1805,7 +1853,11 @@ def admin_dashboard():
                 if subset_pr.empty: continue
                 
                 is_locked = "Locked" in subset_pr['status'].values
-                status_icon = "🔒 LOCKED" if is_locked else "🟢 OPEN"
+                is_revision = "Need Revision" in subset_pr['status'].values
+                
+                if is_locked: status_icon = "🔒 LOCKED"
+                elif is_revision: status_icon = "⚠️ REVISI"
+                else: status_icon = "🟢 OPEN"
                 
                 # UPDATE 2: Ambil Load Type dari data baris pertama grup ini
                 l_type = subset_pr.iloc[0]['load_type']
@@ -1862,8 +1914,13 @@ def admin_dashboard():
                         st.info("Database Multidrop masih kosong.")
                     
                     st.divider()
-                    c1, c2 = st.columns([1, 4])
+                    st.markdown("**D. Alert Revisi ke Vendor**")
+                    reason = st.text_input("Catatan Revisi:", key=f"rsn_{key}", placeholder="Contoh: Harga unit Tronton terlalu tinggi, mohon dicek kembali.")
+                    
+                    c1, c2 = st.columns([1, 3])
                     ids = subset_pr['id_transaksi'].tolist()
+                    
+                    # Tombol Lock/Unlock
                     if is_locked:
                         if c1.button("🔓 UNLOCK DATA", key=f"ul_{key}"):
                             update_status_locked(ids, "Open")
@@ -1872,6 +1929,24 @@ def admin_dashboard():
                         if c1.button("🔒 LOCK DATA", key=f"lk_{key}", type="primary"):
                             update_status_locked(ids, "Locked")
                             st.success("Locked!"); time.sleep(0.5); st.rerun()
+                            
+                    # Tombol Kirim Email Alert
+                    if c2.button("📨 Kirim Alert Revisi", key=f"rj_{key}"):
+                        if not reason:
+                            st.warning("Mohon isi catatan revisi di kotak atas terlebih dahulu.")
+                        else:
+                            with st.spinner("Mengirim email alert ke Vendor..."):
+                                v_name = df_u[df_u['email']==vendor]['vendor_name'].iloc[0] if not df_u.empty and not df_u[df_u['email']==vendor].empty else vendor
+                                res = send_rejection_email(vendor, v_name, l_type, validity, g_name, reason)
+                                
+                                if res:
+                                    # Ubah status di database menjadi Need Revision
+                                    update_status_locked(ids, "Need Revision")
+                                    st.success("Berhasil! Email alert terkirim dan status vendor berubah menjadi Revisi.")
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error("Gagal mengirim email alert.")
     
         # --- TAB 7: SUMMARY ---   
         with tabs[2]:
@@ -2381,7 +2456,11 @@ def vendor_dashboard(email):
                                             (df_price['round'] == sel_round)
                                         ]
                                         if not sub_p.empty:
-                                            status_ui = '<span class="status-done">✅Sudah Terisi</span>'
+                                            if "Need Revision" in sub_p['status'].values:
+                                                status_ui = '<span class="status-pending" style="color: #9A3412 !important; background-color: #FFEDD5 !important; border-color: #FDBA74 !important;">⚠️ Revisi</span>'
+                                            else:
+                                                status_ui = '<span class="status-done">✅ Sudah Terisi</span>'
+                                                
                                             if "Locked" in sub_p['status'].values: is_locked_btn = True
                                     
                                     c1, c2, c3, c4 = st.columns([3, 4, 2, 2])
@@ -2799,11 +2878,12 @@ def vendor_dashboard(email):
                         ts = (datetime.utcnow() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
                         
                         for _, r in ed_pr.iterrows():
-                            rid = str(r['Route ID']); lt = int(r['Lead Time (Hari)'])
+                            rid = str(r['Route ID'])
                             lt = int(clean_numeric(r['Lead Time (Hari)']) or 0)
                             ket = str(r['Keterangan'])
                             
                             for u in u_types:
+                                # ... lanjutannya biarkan sama ...:
                                 pr = int(clean_numeric(r[f"Harga {u} per trip"]) or 0)
                                 w = str(c_spec.get(u,{}).get('w','')); c = str(c_spec.get(u,{}).get('c',''))
                                 tid = f"{email}_{cur_val}_{rid}_{u}_{cur_round}".replace(" ","")
