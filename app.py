@@ -2212,11 +2212,12 @@ def vendor_dashboard(email):
                                     status_ui = '<span class="status-pending">❌ Belum Ada Data</span>'
                                     is_locked_btn = False
                                     
-                                    if not df_price.empty and not r_data.empty:
+                                    # PENGAMAN: Pastikan kolom vendor_email benar-benar ada
+                                    if not df_price.empty and not r_data.empty and 'vendor_email' in df_price.columns:
                                         if 'round' not in df_price.columns: df_price['round'] = '1'
                                         sub_p = df_price[
-                                            (df_price['vendor_email']==email) & 
-                                            (df_price['validity']==sel_val) & 
+                                            (df_price['vendor_email'] == email) & 
+                                            (df_price['validity'] == sel_val) & 
                                             (df_price['route_id'].isin(r_data['route_id'])) &
                                             (df_price['round'] == sel_round)
                                         ]
