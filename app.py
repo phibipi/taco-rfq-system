@@ -246,30 +246,77 @@ def upload_to_drive(file_buffer, filename, mimetype, folder_id):
         st.error(f"Error API Drive: {e}")
         return None
 
-# --- FUNGSI SAVE (UPSERT UNTUK ID UNIK) ---
 def save_data(sheet_name, new_data_list):
     sh = connect_to_gsheet()
-    if sh:
-        try:
-            ws = sh.worksheet(sheet_name)
-            existing_data = ws.get_all_values()
-            if not existing_data or len(existing_data) < 2:
-                ws.append_rows(new_data_list)
-                get_data.clear()
-                return True
-            headers = existing_data[0]
-            old_rows = existing_data[1:]
-            new_ids = {str(row[0]) for row in new_data_list}
-            kept_rows = [row for row in old_rows if str(row[0]) not in new_ids]
-            final_rows = kept_rows + new_data_list
-            ws.clear()
-            ws.append_rows([headers] + final_rows)
+    if not sh:
+        st.error("Tidak bisa konek ke Google Sheets.")
+        return False
+
+    try:
+        ws = sh.worksheet(sheet_name)
+        existing_data = ws.get_all_values()
+
+        # If sheet is empty, just append everything
+        if not existing_data:
+            ws.append_rows(new_data_list)
             get_data.clear()
             return True
-        except Exception as e:
-            st.error(f"Error: {str(e)}")
+
+        headers = existing_data[0]
+        
+        # Safety check: make sure sheet has an ID column
+        if not headers:
+            st.error(f"Sheet '{sheet_name}' tidak punya header.")
             return False
-    return False
+
+        # Build a dict: { id_value -> row_number (1-indexed, skipping header) }
+        id_to_row = {}
+        for row_idx, row in enumerate(existing_data[1:], start=2):
+            if row and str(row[0]).strip():
+                id_to_row[str(row[0]).strip()] = row_idx
+
+        rows_to_append = []
+
+        for new_row in new_data_list:
+            new_id = str(new_row[0]).strip()
+
+            if new_id in id_to_row:
+                # --- UPDATE existing row in place ---
+                target_row_num = id_to_row[new_id]
+
+                # Convert new_row to list of strings
+                str_row = [str(v) if v is not None else "" for v in new_row]
+
+                # Update the entire row at once using A1 notation
+                num_cols = len(str_row)
+                end_col_letter = col_num_to_letter(num_cols)
+                cell_range = f"A{target_row_num}:{end_col_letter}{target_row_num}"
+
+                # FIX: Gspread terbaru lebih suka format list of lists untuk update range
+                ws.update([str_row], cell_range) 
+
+            else:
+                # --- QUEUE new row for appending ---
+                rows_to_append.append(new_row)
+
+        # Append all new rows in one batch call (efficient)
+        if rows_to_append:
+            ws.append_rows(rows_to_append)
+
+        get_data.clear()
+        return True
+
+    except Exception as e:
+        st.error(f"Gagal menyimpan data: {str(e)}")
+        return False
+
+def col_num_to_letter(n):
+    """Convert column number to letter. 1=A, 2=B, 26=Z, 27=AA, etc."""
+    result = ""
+    while n > 0:
+        n, remainder = divmod(n - 1, 26)
+        result = chr(65 + remainder) + result
+    return result
 
 # --- FUNGSI UPDATE STATUS LOCK/UNLOCK (OPTIMIZED) ---
 def update_status_locked(ids_to_lock, status_value="Locked"):
