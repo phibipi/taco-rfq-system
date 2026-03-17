@@ -2786,7 +2786,30 @@ def vendor_dashboard(email):
                         st.markdown(f"#### 💰 Penawaran Harga")
                         p_data = []
                         for _, row in my_r.iterrows():
-                            rid = row['route_id']
+                            rid = str(row['route_id']).strip()
+                            
+                            # ▼▼▼ LOGIKA BARU: SEMBUNYIKAN RUTE KOSONG DI TAHAP 2/3 ▼▼▼
+                            if str(cur_round) != "1":
+                                has_prev_bid = False
+                                if not df_p.empty:
+                                    # Cari histori harga di tahap sebelumnya untuk rute ini
+                                    cek_prev = df_p[
+                                        (df_p['vendor_email'] == email) & 
+                                        (df_p['validity'] == cur_val) & 
+                                        (df_p['route_id'] == rid) & 
+                                        (df_p['round'] == prev_round)
+                                    ]
+                                    if not cek_prev.empty:
+                                        # Cek apakah ada unit yang harganya di atas Rp 0
+                                        harga_prev = pd.to_numeric(cek_prev['price'], errors='coerce').fillna(0)
+                                        if (harga_prev > 0).any():
+                                            has_prev_bid = True
+                                            
+                                # Jika tidak ada histori harga > 0, buang rute ini dari layar!
+                                if not has_prev_bid:
+                                    continue 
+                            # ▲▲▲ BATAS LOGIKA BARU ▲▲▲
+
                             rd = {
                                 "Route ID": rid, "Kota Asal": row['kota_asal'], "Kota Tujuan": row['kota_tujuan'],
                                 "Keterangan": row.get('keterangan', '-'),
@@ -2803,7 +2826,18 @@ def vendor_dashboard(email):
                                 rd[f"Harga {u} per trip"] = ex_price.get((rid, u), 0)
                             p_data.append(rd)
                         
-                        df_pr = pd.DataFrame(p_data)
+                        # --- Pengaman Jika Tabel Menjadi Kosong ---
+                        if not p_data:
+                            st.info("⚠️ Anda tidak memberikan penawaran harga untuk rute manapun di grup ini pada tahap sebelumnya.")
+                            # Buat kerangka kolom kosong agar sistem tidak error
+                            cols_dummy = ["Route ID", "Kota Asal", "Kota Tujuan", "Lead Time (Hari)"]
+                            for u in u_types:
+                                if cur_round == "2": cols_dummy.append(f"Target {u}")
+                                cols_dummy.append(f"Harga {u} per trip")
+                            cols_dummy.append("Keterangan")
+                            df_pr = pd.DataFrame(columns=cols_dummy)
+                        else:
+                            df_pr = pd.DataFrame(p_data)
                         
                         # Config
                         cf_pr = {
@@ -2826,7 +2860,7 @@ def vendor_dashboard(email):
                         cols_order.append("Keterangan")
 
                         df_pr = df_pr[cols_order]
-                        ed_pr = st.data_editor(df_pr, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_pr)
+                        ed_pr = st.data_editor(df_pr, hide_index=True, use_container_width=True, disabled=is_lock or df_pr.empty, column_config=cf_pr)
 
                     # 3. MULTIDROP
                     with st.container(border=True):
