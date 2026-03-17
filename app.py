@@ -2313,26 +2313,78 @@ def vendor_dashboard(email):
                         else:
                             st.write(f"Ditemukan **{len(df_print)} rute** yang siap dicetak SPH-nya. Mohon dapat dicap dan ditandatangani, lalu diupload pada langkah selanjutnya.")
                             
-                            if st.button("📄 Buat Dokumen SPH (Word)", type="primary"):
-                                tpl_sph = "template_sph.docx"
-                                if not os.path.exists(tpl_sph): 
-                                    st.error("Sistem error: Template SPH tidak ditemukan di server. Hubungi Admin!")
-                                    st.stop()
-                                    
-                                with st.spinner("Merakit Dokumen SPH..."):
-                                    try:
-                                        v_addr = "-"
-                                        if not df_prof.empty:
-                                            vp = df_prof[df_prof['email'] == email]
-                                            if not vp.empty: v_addr = str(vp.iloc[0].get('address', '-'))
+                            # --- MEMBUAT 2 TOMBOL BERSEBELAHAN ---
+                            c_btn1, c_btn2 = st.columns(2)
+                            
+                            # TOMBOL KIRI (WORD SPH RESMI)
+                            with c_btn1:
+                                if st.button("📄 Buat Dokumen SPH (Word)", type="primary", use_container_width=True):
+                                    tpl_sph = "template_sph.docx"
+                                    if not os.path.exists(tpl_sph): 
+                                        st.error("Sistem error: Template SPH tidak ditemukan di server. Hubungi Admin!")
+                                        st.stop()
                                         
-                                        df_print = df_print.sort_values(by=['origin', 'kota_tujuan', 'unit_type']).reset_index(drop=True)
-                                        file_sph = create_docx_sph(tpl_sph, v_name, v_addr, sel_val, sel_lt, sel_rnd, df_print)
-                                        
-                                        with open(file_sph, "rb") as f:
-                                            st.download_button(label="⬇️ Download File SPH", data=f, file_name=f"SPH_{v_name}_{sel_lt}_Tahap{sel_rnd}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", type="primary")
-                                        os.remove(file_sph)
-                                    except Exception as e: st.error(f"Gagal: {e}")
+                                    with st.spinner("Merakit Dokumen SPH..."):
+                                        try:
+                                            v_addr = "-"
+                                            if not df_prof.empty:
+                                                vp = df_prof[df_prof['email'] == email]
+                                                if not vp.empty: v_addr = str(vp.iloc[0].get('address', '-'))
+                                            
+                                            df_print_word = df_print.sort_values(by=['origin', 'kota_tujuan', 'unit_type']).reset_index(drop=True)
+                                            file_sph = create_docx_sph(tpl_sph, v_name, v_addr, sel_val, sel_lt, sel_rnd, df_print_word)
+                                            
+                                            with open(file_sph, "rb") as f:
+                                                st.download_button(
+                                                    label="⬇️ Klik di sini untuk Download Word", 
+                                                    data=f, 
+                                                    file_name=f"SPH_{v_name}_{sel_lt}_Tahap{sel_rnd}.docx", 
+                                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
+                                                    type="primary",
+                                                    use_container_width=True
+                                                )
+                                            os.remove(file_sph)
+                                        except Exception as e: st.error(f"Gagal: {e}")
+                            
+                            # TOMBOL KANAN (EXCEL TABEL SAJA)
+                            with c_btn2:
+                                df_excel = df_print.sort_values(by=['origin', 'kota_tujuan', 'unit_type']).reset_index(drop=True)
+                                df_excel['No'] = range(1, len(df_excel) + 1)
+                                
+                                # Rapikan isi kolom sebelum di-export
+                                def fmt_rp(x):
+                                    try: return f"Rp {int(x):,}".replace(",", ".")
+                                    except: return "Rp 0"
+                                df_excel['Harga Penawaran'] = df_excel['price'].apply(fmt_rp)
+                                
+                                def fmt_lt(x):
+                                    x_str = str(x)
+                                    if x_str.isdigit() or x_str.replace('.','',1).isdigit(): return f"{x_str} Hari"
+                                    return "-" if x_str in ["-", "", "nan", "None"] else x_str
+                                df_excel['Lead Time (Hari)'] = df_excel['lead_time'].apply(fmt_lt)
+                                
+                                # Ambil kolom yang diperlukan saja dan ganti judulnya
+                                cols_to_keep = ['No', 'origin', 'kota_tujuan', 'unit_type', 'Lead Time (Hari)', 'Harga Penawaran']
+                                df_excel = df_excel[cols_to_keep]
+                                df_excel.columns = ['No', 'Origin', 'Tujuan', 'Unit', 'Lead Time', 'Harga Penawaran']
+                                
+                                # Ubah ke format file Excel (BytesIO)
+                                output = io.BytesIO()
+                                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                                    df_excel.to_excel(writer, index=False, sheet_name='Tabel SPH')
+                                excel_data = output.getvalue()
+                                
+                                safe_ven_xls = "".join(x for x in v_name if x.isalnum())
+                                
+                                # Munculkan tombol Download langsung
+                                st.download_button(
+                                    label="📊 Download Tabel (Excel)", 
+                                    data=excel_data, 
+                                    file_name=f"Tabel_SPH_{safe_ven_xls}_{sel_lt}_Tahap{sel_rnd}.xlsx", 
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    type="primary",
+                                    use_container_width=True
+                                )
 
                     # --- BAGIAN B: UPLOAD SPH ---
                     with st.container(border=True):
