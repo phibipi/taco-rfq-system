@@ -980,26 +980,26 @@ def get_target_price(df_all, route_id, unit_type, cur_validity):
             # Jika harga prev dan curr sama-sama ada isinya
             if min_prev > 0 and min_curr > 0:
                 if min_prev < min_curr:
-                    target_price = min_prev * 0.95 
+                    target_price = min_prev * 0.92 
                 else:
-                    target_price = min_curr * 0.92 
+                    target_price = min_curr * 0.90 
             # Jika hanya harga histori yang ada (Vendor belum isi di Tahap 1 sekarang)
             elif min_prev > 0 and min_curr == 0:
-                target_price = min_prev * 0.95
+                target_price = min_prev * 0.92
             # Jika hanya harga Tahap 1 sekarang yang ada
             elif min_prev == 0 and min_curr > 0:
-                target_price = min_curr * 0.92
+                target_price = min_curr * 0.90
             else:
                 target_price = 0
         else:
             # Jika tidak ada data histori, murni pakai harga terendah Tahap 1
             if min_curr > 0:
-                target_price = min_curr * 0.92
+                target_price = min_curr * 0.90
             else:
                 target_price = 0
             
     except:
-        if min_curr > 0: target_price = min_curr * 0.92
+        if min_curr > 0: target_price = min_curr * 0.90
         else: target_price = 0
         
     return int(target_price)
