@@ -2226,7 +2226,7 @@ def vendor_dashboard(email):
                                             if "Locked" in sub_p['status'].values: is_locked_btn = True
                                     
                                     c1, c2, c3, c4 = st.columns([3, 4, 2, 2])
-                                    c1_grp.write(f"**{grp_name}**")
+                                    c1.write(f"**{grp_name}**")
                                     
                                     # PENGAMAN: Cek apakah kolom kota_tujuan benar-benar ada
                                     dests = r_data['kota_tujuan'].unique().tolist() if (not r_data.empty and 'kota_tujuan' in r_data.columns) else []
