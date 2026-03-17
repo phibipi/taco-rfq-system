@@ -921,27 +921,29 @@ def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic
     doc.save(fn)
     return fn
 
-# --- HELPER: HITUNG TARGET PRICE (FIX: TYPE ERROR) ---
+# --- HELPER: HITUNG TARGET PRICE (FIX: FILTER HARGA 0) ---
 def get_target_price(df_all, route_id, unit_type, cur_validity):
     # SAFETY: Pastikan kolom price dibaca sebagai angka
-    # Kita buat copy agar tidak merusak dataframe asli
     df_safe = df_all.copy()
     if 'price' in df_safe.columns:
         df_safe['price'] = pd.to_numeric(df_safe['price'], errors='coerce').fillna(0)
+        # ▼▼▼ LOGIKA BARU: BUANG HARGA 0 AGAR TIDAK JADI NILAI MINIMUM ▼▼▼
+        df_safe = df_safe[df_safe['price'] > 0]
     else:
         return 0
 
-    # 1. Ambil Harga Terendah Periode SAAT INI
+    # 1. Ambil Harga Terendah Periode SAAT INI (Tahap 1)
     df_curr = df_safe[
         (df_safe['validity'] == cur_validity) & 
         (df_safe['route_id'] == str(route_id)) & 
         (df_safe['unit_type'] == unit_type)
     ]
     
-    if df_curr.empty: return 0 
-    
-    min_curr = df_curr['price'].min()
-    if min_curr == 0: return 0
+    # Jika belum ada yang isi sama sekali, kita set 0 dulu untuk cari di histori masa lalu
+    if df_curr.empty: 
+        min_curr = 0 
+    else:
+        min_curr = df_curr['price'].min()
 
     # 2. Tentukan Periode "SEBELUMNYA"
     target_price = 0
@@ -975,21 +977,32 @@ def get_target_price(df_all, route_id, unit_type, cur_validity):
         if not df_prev.empty:
             min_prev = df_prev['price'].min()
             
-            if min_prev > 0:
+            # Jika harga prev dan curr sama-sama ada isinya
+            if min_prev > 0 and min_curr > 0:
                 if min_prev < min_curr:
                     target_price = min_prev * 0.95 
                 else:
-                    target_price = min_curr * 0.90 
+                    target_price = min_curr * 0.92 
+            # Jika hanya harga histori yang ada (Vendor belum isi di Tahap 1 sekarang)
+            elif min_prev > 0 and min_curr == 0:
+                target_price = min_prev * 0.95
+            # Jika hanya harga Tahap 1 sekarang yang ada
+            elif min_prev == 0 and min_curr > 0:
+                target_price = min_curr * 0.92
             else:
-                target_price = min_curr * 0.90
+                target_price = 0
         else:
-            target_price = min_curr * 0.90
+            # Jika tidak ada data histori, murni pakai harga terendah Tahap 1
+            if min_curr > 0:
+                target_price = min_curr * 0.92
+            else:
+                target_price = 0
             
     except:
-        target_price = min_curr * 0.90
+        if min_curr > 0: target_price = min_curr * 0.92
+        else: target_price = 0
         
     return int(target_price)
-
 def main():
     st.markdown('<div id="top-page"></div>', unsafe_allow_html=True)
     init_style()
