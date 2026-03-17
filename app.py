@@ -1548,7 +1548,8 @@ def admin_dashboard():
                     
                     # Variabel untuk Statistik
                     total_vendors = 0
-                    completed_vendors = 0
+                    completed_vendors = 0  # Untuk yang selesai FULL
+                    started_vendors = 0    # Untuk yang sudah mulai (Minimal 1)
                     total_groups_assigned = 0
                     total_groups_filled = 0
                     
@@ -1557,7 +1558,7 @@ def admin_dashboard():
                         
                         v_acc_subset = acc_target[acc_target['vendor_email'] == vendor]
                         assigned_groups = sorted(v_acc_subset['route_group'].dropna().tolist())
-                        assigned_origins = v_acc_subset['origin'].dropna().unique().tolist() # Untuk fitur search origin
+                        assigned_origins = v_acc_subset['origin'].dropna().unique().tolist()
                         
                         submitted_groups = []
                         if not sub_master.empty:
@@ -1568,8 +1569,14 @@ def admin_dashboard():
                         
                         # Hitung Statistik Global
                         total_vendors += 1
+                        
+                        # Jika selesai FULL
                         if len(pending_groups) == 0 and len(assigned_groups) > 0:
                             completed_vendors += 1
+                            
+                        # Jika sudah mengisi MINIMAL 1
+                        if len(filled_groups) > 0:
+                            started_vendors += 1
                             
                         total_groups_assigned += len(assigned_groups)
                         total_groups_filled += len(filled_groups)
@@ -1588,11 +1595,13 @@ def admin_dashboard():
                     
                     # --- 2. TAMPILKAN UI STATISTIK ---
                     st.divider()
-                    col_stat1, col_stat2 = st.columns(2)
+                    col_stat1, col_stat2, col_stat3 = st.columns(3)
                     with col_stat1:
-                        st.info(f"🏆 **Vendor Selesai (Full):** {completed_vendors} dari {total_vendors} Vendor")
+                        st.info(f"🏆 **Selesai (Full):** {completed_vendors} / {total_vendors} Vendor")
                     with col_stat2:
-                        st.info(f"📝 **Grup Rute Terisi:** {total_groups_filled} dari {total_groups_assigned} Grup")
+                        st.info(f"🏃 **Sudah Mulai (Min. 1):** {started_vendors} / {total_vendors} Vendor")
+                    with col_stat3:
+                        st.info(f"📝 **Grup Rute Terisi:** {total_groups_filled} / {total_groups_assigned} Grup")
                     
                     # --- 3. TAMPILKAN SEARCH BAR ---
                     search_query = st.text_input("🔍 Cari berdasarkan Nama Vendor atau Origin (Area)...", placeholder="Contoh: Logistik atau Jakarta").strip().lower()
