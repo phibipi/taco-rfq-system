@@ -513,7 +513,7 @@ def send_rejection_email(to_email, vendor_name, load_type, validity, group_name,
     cc_list = ["firli.mandaras@taco.co.id", "budhi.yuono@taco.co.id"]
     cc_string = ", ".join(cc_list)
     
-    subject = f"REVISI DIBUTUHKAN: Penawaran Harga Tender {load_type} - {validity}"
+    subject = f"REVISI: Penawaran Harga Tender {load_type} - {validity}"
     
     body = f"""
     <html>
