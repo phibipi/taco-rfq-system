@@ -1642,7 +1642,7 @@ def admin_dashboard():
                     with col_stat1:
                         st.info(f"🏆 **Selesai (Full):** {completed_vendors} / {total_vendors} Vendor")
                     with col_stat2:
-                        st.info(f"🏃 **Sudah Mulai (Min. 1):** {started_vendors} / {total_vendors} Vendor")
+                        st.info(f"🏃 **Sudah Isi (Min. 1):** {started_vendors} / {total_vendors} Vendor")
                     with col_stat3:
                         st.info(f"📝 **Grup Rute Terisi:** {total_groups_filled} / {total_groups_assigned} Grup")
                     
