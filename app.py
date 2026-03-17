@@ -2542,6 +2542,9 @@ def vendor_dashboard(email):
                     df_print = df_final[(df_final['validity'] == sel_val) & (df_final['load_type'] == sel_lt) & (df_final['round'] == sel_rnd)].copy()
                     v_name = st.session_state['user_info'].get('vendor_name', email)
                     
+                    # ▼▼▼ TAMBAHAN: Buang rute yang harganya Rp 0 dari SPH ▼▼▼
+                    df_print = df_print[df_print['price'] > 0]
+                    
                     # --- CEK APAKAH SEMUA STATUS SUDAH LOCKED ---
                     is_all_locked = False
                     if not df_print.empty:
