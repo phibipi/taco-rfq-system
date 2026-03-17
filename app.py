@@ -1534,6 +1534,7 @@ def admin_dashboard():
         df_prof = get_data("Vendor_Profile")
         df_md = get_data("Multidrop_Data")
         df_acc = get_data("Access_Rights")
+        df_units = get_data("Master_Units")
     
         # BIG MERGE MASTER (Untuk Tab 2, 3, 4)
         df_master = pd.DataFrame()
@@ -1862,6 +1863,91 @@ def admin_dashboard():
         # --- TAB 7: SUMMARY ---   
         with tabs[2]:
             st.subheader("📊 Summary & Ranking Vendor")
+            # --- TAMBAHAN FITUR DOWNLOAD SUMMARY MASTER ---
+            with st.expander("📥 Download Master Summary (Excel)", expanded=False):
+                st.write("Unduh rekap seluruh rute dari semua Origin, Asal, dan Tujuan. Rute yang belum diisi vendor akan tetap muncul dengan harga Rp 0.")
+                
+                if not df_r.empty and not df_g.empty and not df_units.empty:
+                    # 1. Bersihkan ID agar bisa digabung dengan pas
+                    df_r_clean = df_r.copy()
+                    df_r_clean['route_id'] = df_r_clean['route_id'].astype(str).str.strip()
+                    df_r_clean['group_id'] = df_r_clean['group_id'].astype(str).str.strip()
+                    
+                    df_g_clean = df_g.copy()
+                    df_g_clean['group_id'] = df_g_clean['group_id'].astype(str).str.strip()
+                    
+                    df_u_clean = df_units.copy()
+                    df_u_clean['group_id'] = df_u_clean['group_id'].astype(str).str.strip()
+
+                    # 2. Gabungkan Master Rute + Group + Unit
+                    base_df = pd.merge(df_r_clean, df_g_clean, on='group_id', how='left')
+                    base_df = pd.merge(base_df, df_u_clean, on='group_id', how='left')
+
+                    # 3. Siapkan Data Harga
+                    prices_clean = df_p.copy() if not df_p.empty else pd.DataFrame(columns=['route_id', 'unit_type', 'vendor_email', 'price', 'validity', 'round', 'lead_time'])
+                    if not prices_clean.empty:
+                        prices_clean['route_id'] = prices_clean['route_id'].astype(str).str.strip()
+                        prices_clean['price'] = pd.to_numeric(prices_clean['price'], errors='coerce').fillna(0)
+                        
+                        # Gabung dengan nama vendor
+                        v_names = df_u[df_u['role'] == 'vendor'][['email', 'vendor_name']]
+                        prices_clean = pd.merge(prices_clean, v_names, left_on='vendor_email', right_on='email', how='left')
+                        prices_clean['vendor_name'] = prices_clean['vendor_name'].fillna(prices_clean['vendor_email'])
+
+                    # 4. Merge Semua Rute dengan Harga (LEFT JOIN)
+                    if not prices_clean.empty:
+                        summary_df = pd.merge(
+                            base_df, 
+                            prices_clean[['route_id', 'unit_type', 'vendor_name', 'price', 'validity', 'round', 'lead_time']], 
+                            on=['route_id', 'unit_type'], 
+                            how='left'
+                        )
+                    else:
+                        summary_df = base_df.copy()
+                        summary_df['vendor_name'] = '-'
+                        summary_df['price'] = 0
+                        summary_df['validity'] = '-'
+                        summary_df['round'] = '-'
+                        summary_df['lead_time'] = '-'
+
+                    # 5. Rapikan Data Kosong (Rute tanpa harga)
+                    summary_df['price'] = summary_df['price'].fillna(0)
+                    summary_df['vendor_name'] = summary_df['vendor_name'].fillna('Belum Ada Penawaran')
+                    summary_df['validity'] = summary_df['validity'].fillna('-').replace('nan', '-')
+                    summary_df['round'] = summary_df['round'].fillna('-').replace('nan', '-')
+                    
+                    # Format Rupiah
+                    summary_df['Harga Penawaran'] = summary_df['price'].apply(lambda x: f"Rp {int(x):,}".replace(",", "."))
+                    
+                    # Ambil kolom yang mau ditampilkan saja
+                    cols_to_keep = ['origin', 'kota_asal', 'kota_tujuan', 'route_group', 'load_type', 'unit_type', 'vendor_name', 'Harga Penawaran', 'lead_time', 'validity', 'round']
+                    
+                    for c in cols_to_keep:
+                        if c not in summary_df.columns:
+                            summary_df[c] = '-'
+                            
+                    summary_df = summary_df[cols_to_keep]
+                    summary_df.columns = ['Origin', 'Kota Asal', 'Kota Tujuan', 'Nama Grup Rute', 'Tipe Muatan', 'Unit', 'Nama Vendor', 'Harga Penawaran', 'Lead Time', 'Periode', 'Tahap']
+                    
+                    # 6. Generate Excel
+                    output = io.BytesIO()
+                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                        summary_df.to_excel(writer, index=False, sheet_name='Master Summary')
+                    excel_data = output.getvalue()
+                    
+                    st.download_button(
+                        label="📊 Download Master Summary (.xlsx)",
+                        data=excel_data,
+                        file_name=f"Master_Summary_Tarif_{int(time.time())}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        type="primary",
+                        use_container_width=True
+                    )
+                else:
+                    st.warning("Data Master Rute, Group, atau Unit masih kosong. Tidak bisa mengunduh summary.")
+            
+            st.write("")
+            
             if df_master.empty:
                 st.info("Belum ada data harga masuk.")
             else:
