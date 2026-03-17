@@ -2096,7 +2096,7 @@ def vendor_dashboard(email):
     
     # --- STEP 1: DASHBOARD / PROFIL ---
     if step == "dashboard":
-        t1, t2 = st.tabs(["🛣️ Pilih Rute & Isi Harga", "📋 Isi Data Perusahaan"])
+        t1, t2, t3 = st.tabs(["🛣️ Pilih Rute & Isi Harga", "📋 Isi Data Perusahaan", "📄 Surat Penawaran Harga"])
         
         # Tab 2: Profil
         with t2:
@@ -2256,9 +2256,9 @@ def vendor_dashboard(email):
                                     c4.markdown(status_ui, unsafe_allow_html=True)
                                     st.markdown("<hr>", unsafe_allow_html=True)
 # --- TAB 3: DOWNLOAD & UPLOAD SPH RESMI ---
-        if False:
+        with t3:
             st.markdown("### 📄 SPH (Surat Penawaran Harga)")
-            st.info("Anda dapat mendownload SPH untuk data yang **sudah di-Lock** oleh Panitia Tender.")
+            st.info("Anda dapat mendownload draf SPH kapan saja. Namun, **fitur Upload baru terbuka setelah SEMUA rute Anda di-Lock oleh Admin**.")
             
             df_p = get_data("Price_Data")
             df_r = get_data("Master_Routes")
@@ -2268,13 +2268,13 @@ def vendor_dashboard(email):
             if df_p.empty or df_g.empty:
                 st.warning("Belum ada data penawaran.")
             else:
-                # 1. Filter Hanya Milik Vendor Ini, Status Locked, dan Harga > 0
-                my_prices = df_p[(df_p['vendor_email'] == email) & (df_p['status'] == 'Locked')].copy()
+                # 1. Filter Milik Vendor Ini (SEMUA STATUS: Open & Locked) dan Harga > 0
+                my_prices = df_p[df_p['vendor_email'] == email].copy()
                 my_prices['price'] = pd.to_numeric(my_prices['price'], errors='coerce').fillna(0)
                 my_prices = my_prices[my_prices['price'] > 0]
                 
                 if my_prices.empty:
-                    st.warning("Belum ada data harga Anda yang di-Lock oleh Admin, atau semua harga Anda masih Rp 0.")
+                    st.warning("Belum ada data harga Anda, atau semua harga Anda masih Rp 0.")
                 else:
                     # 2. Merge Data
                     my_prices['route_id'] = my_prices['route_id'].astype(str).str.strip()
@@ -2299,13 +2299,19 @@ def vendor_dashboard(email):
                     df_print = df_final[(df_final['validity'] == sel_val) & (df_final['load_type'] == sel_lt) & (df_final['round'] == sel_rnd)].copy()
                     v_name = st.session_state['user_info'].get('vendor_name', email)
                     
+                    # --- CEK APAKAH SEMUA STATUS SUDAH LOCKED ---
+                    is_all_locked = False
+                    if not df_print.empty:
+                        # Cek apakah seluruh baris di tabel df_print statusnya 'Locked'
+                        is_all_locked = (df_print['status'] == 'Locked').all()
+                    
                     # --- BAGIAN A: DOWNLOAD SPH ---
                     with st.container(border=True):
                         st.markdown("#### Step 1: Download SPH")
                         if df_print.empty:
                             st.info("Tidak ada data untuk kombinasi filter ini.")
                         else:
-                            st.write(f"Ditemukan **{len(df_print)} rute** yang siap dicetak SPH. Mohon dapat dicap dan ditandangani, lalu diupload pada langkah selanjutnya")
+                            st.write(f"Ditemukan **{len(df_print)} rute** yang siap dicetak SPH-nya. Mohon dapat dicap dan ditandatangani, lalu diupload pada langkah selanjutnya.")
                             
                             if st.button("📄 Buat Dokumen SPH (Word)", type="primary"):
                                 tpl_sph = "template_sph.docx"
@@ -2319,7 +2325,7 @@ def vendor_dashboard(email):
                                         if not df_prof.empty:
                                             vp = df_prof[df_prof['email'] == email]
                                             if not vp.empty: v_addr = str(vp.iloc[0].get('address', '-'))
-                                            
+                                        
                                         df_print = df_print.sort_values(by=['origin', 'kota_tujuan', 'unit_type']).reset_index(drop=True)
                                         file_sph = create_docx_sph(tpl_sph, v_name, v_addr, sel_val, sel_lt, sel_rnd, df_print)
                                         
@@ -2331,33 +2337,37 @@ def vendor_dashboard(email):
                     # --- BAGIAN B: UPLOAD SPH ---
                     with st.container(border=True):
                         st.markdown("#### Step 2: Upload SPH yang Sudah di Cap & Tanda Tangan")
-                        st.write(f"Upload untuk: **{sel_lt} | Periode {sel_val} | Tahap {sel_rnd}**")
                         
-                        uploaded_file = st.file_uploader("Pilih file SPH (PDF", type=['pdf', 'png', 'jpg', 'jpeg'])
-                        
-                        if st.button("📤 Upload Dokumen SPH", type="primary", use_container_width=True):
-                            if uploaded_file is not None:
-                                # MASUKKAN ID FOLDER GOOGLE DRIVE ANDA DI SINI
-                                DRIVE_FOLDER_ID = "0AMIguJ49asOLUk9PVA" 
-                                
-                                safe_ven = "".join(x for x in v_name if x.isalnum())
-                                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                ext = uploaded_file.name.split(".")[-1]
-                                new_filename = f"SPH_{safe_ven}_{sel_lt}_T{sel_rnd}_{timestamp}.{ext}"
-                                
-                                with st.spinner("⏳ Sedang mengirim file ke Google Drive... Mohon tunggu..."):
-                                    # Panggil fungsi upload ke Drive
-                                    file_url = upload_to_drive(uploaded_file, new_filename, uploaded_file.type, DRIVE_FOLDER_ID)
+                        if not is_all_locked:
+                            # 🛑 Jika belum locked semua, fitur upload disembunyikan dan muncul peringatan
+                            st.warning("⏳ **Fitur Upload Terkunci!**\nAdmin TACO harus me-Lock SEMUA penawaran Anda di periode dan tahap ini terlebih dahulu sebelum Anda bisa mengupload dokumen SPH final.")
+                        else:
+                            # ✅ Jika sudah locked semua, tampilkan uploader
+                            st.write(f"Upload untuk: **{sel_lt} | Periode {sel_val} | Tahap {sel_rnd}**")
+                            
+                            uploaded_file = st.file_uploader("Pilih file SPH (PDF)", type=['pdf', 'png', 'jpg', 'jpeg'])
+                            
+                            if st.button("📤 Upload Dokumen SPH", type="primary", use_container_width=True):
+                                if uploaded_file is not None:
+                                    # MASUKKAN ID FOLDER GOOGLE DRIVE ANDA DI SINI
+                                    DRIVE_FOLDER_ID = "0AMIguJ49asOLUk9PVA" 
                                     
-                                    if file_url:
-                                        # Simpan URL Drive-nya ke dalam Google Sheets, BUKAN nama filenya lagi
-                                        id_up = f"UPL_{safe_ven}_{timestamp}"
-                                        save_data("SPH_Uploads", [[id_up, email, v_name, sel_val, sel_lt, sel_rnd, file_url, timestamp]])
-                                        st.success("✅ Sukses! Dokumen SPH telah tersimpan aman di Server TACO.")
-                                    else:
-                                        st.error("⚠️ Gagal mengirim dokumen ke server. Coba lagi.")
-                            else:
-                                st.error("⚠️ Silakan pilih file terlebih dahulu sebelum klik Upload.") 
+                                    safe_ven = "".join(x for x in v_name if x.isalnum())
+                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                    ext = uploaded_file.name.split(".")[-1]
+                                    new_filename = f"SPH_{safe_ven}_{sel_lt}_T{sel_rnd}_{timestamp}.{ext}"
+                                    
+                                    with st.spinner("⏳ Sedang mengirim file ke Google Drive... Mohon tunggu..."):
+                                        file_url = upload_to_drive(uploaded_file, new_filename, uploaded_file.type, DRIVE_FOLDER_ID)
+                                        
+                                        if file_url:
+                                            id_up = f"UPL_{safe_ven}_{timestamp}"
+                                            save_data("SPH_Uploads", [[id_up, email, v_name, sel_val, sel_lt, sel_rnd, file_url, timestamp]])
+                                            st.success("✅ Sukses! Dokumen SPH telah tersimpan aman di Server TACO.")
+                                        else:
+                                            st.error("⚠️ Gagal mengirim dokumen ke server. Coba lagi.")
+                                else:
+                                    st.error("⚠️ Silakan pilih file terlebih dahulu sebelum klik Upload.")
     
     # --- STEP 2: INPUT HARGA ---
     elif step == "input":
