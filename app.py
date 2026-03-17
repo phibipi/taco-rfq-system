@@ -2800,17 +2800,18 @@ def vendor_dashboard(email):
                         
                         for _, r in ed_pr.iterrows():
                             rid = str(r['Route ID']); lt = int(r['Lead Time (Hari)'])
+                            lt = int(clean_numeric(r['Lead Time (Hari)']) or 0)
                             ket = str(r['Keterangan'])
                             
                             for u in u_types:
-                                pr = int(r[f"Harga {u} per trip"])
+                                pr = int(clean_numeric(r[f"Harga {u} per trip"]) or 0)
                                 w = str(c_spec.get(u,{}).get('w','')); c = str(c_spec.get(u,{}).get('c',''))
                                 tid = f"{email}_{cur_val}_{rid}_{u}_{cur_round}".replace(" ","")
                                 f_data.append([tid, email, "Open", cur_val, rid, u, lt, pr, w, c, ket, ts, cur_round])
                         
-                        mi = int(ed_md.iloc[0]["Multidrop Dalam Kota"])
-                        mo = int(ed_md.iloc[0]["Multidrop Luar Kota"])
-                        ml = int(ed_md.iloc[0]["Biaya Buruh"])
+                        mi = int(clean_numeric(ed_md.iloc[0]["Multidrop Dalam Kota"]) or 0)
+                        mo = int(clean_numeric(ed_md.iloc[0]["Multidrop Luar Kota"]) or 0)
+                        ml = int(clean_numeric(ed_md.iloc[0]["Biaya Buruh"]) or 0)
                         mid = f"M_{email}_{gid}_{cur_val}_{cur_round}"
 
                         save_data("Price_Data", f_data)
