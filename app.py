@@ -18,6 +18,7 @@ import urllib.parse
 import io
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
+import hashlib
 
 
 # --- MAIN APP ---
@@ -1099,6 +1100,24 @@ def get_target_price(df_all, route_id, unit_type, cur_validity):
         else: target_price = 0
         
     return int(target_price)
+
+def generate_session_token(email, password):
+    raw = f"{email}:{password}:taco_secret_2025"
+    return hashlib.sha256(raw.encode()).hexdigest()[:32]
+
+def try_restore_session(df_users):
+    try:
+        token_in_url = st.query_params.get("session", "")
+        if not token_in_url or df_users.empty:
+            return None
+        for _, user in df_users.iterrows():
+            expected = generate_session_token(user['email'], user['password'])
+            if expected == token_in_url:
+                return user.to_dict()
+    except:
+        pass
+    return None
+
 def main():
     st.markdown('<div id="top-page"></div>', unsafe_allow_html=True)
     init_style()
@@ -1110,7 +1129,13 @@ def main():
 
     if 'user_info' not in st.session_state: st.session_state['user_info'] = None
     if 'vendor_step' not in st.session_state: st.session_state['vendor_step'] = "dashboard" 
-    if 'admin_step' not in st.session_state: st.session_state['admin_step'] = "home" # <--- TAMBAHAN BARU
+    if 'admin_step' not in st.session_state: st.session_state['admin_step'] = "home" 
+    # Restore session from URL if page was refreshed
+    if st.session_state['user_info'] is None:
+        df_users = get_data("Users")
+        restored = try_restore_session(df_users)
+        if restored:
+            st.session_state['user_info'] = restored
     
     for k in ['selected_group_id', 'selected_validity', 'sel_origin', 'sel_load', 'focused_group_id', 'temp_success_msg']:
         if k not in st.session_state: st.session_state[k] = None
@@ -1130,7 +1155,10 @@ def main():
                         if not df.empty:
                             u = df[(df['email']==email) & (df['password']==pw)]
                             if not u.empty:
-                                st.session_state['user_info'] = u.iloc[0].to_dict()
+                                user_dict = u.iloc[0].to_dict()
+                                st.session_state['user_info'] = user_dict
+                                token = generate_session_token(email, pw)
+                                st.query_params["session"] = token
                                 st.rerun()
                             else: st.error("Gagal Login")
                         else: st.error("DB Kosong")
@@ -1150,6 +1178,7 @@ def main():
                     st.session_state['user_info'] = None
                     st.session_state['vendor_step'] = "dashboard"
                     st.cache_data.clear()
+                    st.query_params.clear()
                     st.rerun()
         
         st.markdown("---")
