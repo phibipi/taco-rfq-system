@@ -18,6 +18,7 @@ import urllib.parse
 import io
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
+from streamlit_autorefresh import st_autorefresh
 
 # --- MAIN APP ---
 st.set_page_config(page_title="TACO Procurement", layout="wide", page_icon="🚛")
@@ -1102,6 +1103,7 @@ def main():
     st.markdown('<div id="top-page"></div>', unsafe_allow_html=True)
     init_style()
     add_scroll_to_top()
+    st_autorefresh(interval=10 * 60 * 1000, key="anti_logout_ping")
     c_logo, _ = st.columns([1, 6])
     with c_logo:
         if os.path.exists("image_2.png"): st.image("image_2.png", width=120)
@@ -2745,6 +2747,7 @@ def vendor_dashboard(email):
         st.markdown(f"### Input Penawaran Harga {cur_load}: {cur_org}")
         st.caption(f"Periode: {cur_val} | **Tahap Penawaran: {cur_round}**")
 
+        
         df_acc = get_data("Access_Rights"); df_grps = get_data("Master_Groups")
         if 'round' not in df_acc.columns: df_acc['round'] = '1'
         my_acc = df_acc[(df_acc['vendor_email']==email) & (df_acc['validity']==cur_val) & (df_acc['round']==cur_round)]
