@@ -193,7 +193,7 @@ def connect_to_gsheet():
         st.error(f"GAGAL KONEKSI: {e}")
         return None
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def get_data(sheet_name):
     sh = connect_to_gsheet()
     if sh:
@@ -248,6 +248,7 @@ def upload_to_drive(file_buffer, filename, mimetype, folder_id):
         st.error(f"Error API Drive: {e}")
         return None
 
+# --- FUNGSI SAVE (BATCH UPDATE: SUPER CEPAT & ANTI-LIMIT) ---
 def save_data(sheet_name, new_data_list):
     sh = connect_to_gsheet()
     if not sh:
@@ -258,55 +259,61 @@ def save_data(sheet_name, new_data_list):
         ws = sh.worksheet(sheet_name)
         existing_data = ws.get_all_values()
 
-        # If sheet is empty, just append everything
+        # Jika sheet kosong, langsung append semua
         if not existing_data:
             ws.append_rows(new_data_list)
             get_data.clear()
             return True
 
         headers = existing_data[0]
-        
-        # Safety check: make sure sheet has an ID column
         if not headers:
             st.error(f"Sheet '{sheet_name}' tidak punya header.")
             return False
 
-        # Build a dict: { id_value -> row_number (1-indexed, skipping header) }
+        # Petakan ID ke Nomor Baris
         id_to_row = {}
         for row_idx, row in enumerate(existing_data[1:], start=2):
             if row and str(row[0]).strip():
                 id_to_row[str(row[0]).strip()] = row_idx
 
         rows_to_append = []
+        updates_batch = []
 
         for new_row in new_data_list:
             new_id = str(new_row[0]).strip()
 
             if new_id in id_to_row:
-                # --- UPDATE existing row in place ---
+                # Masukkan ke keranjang UPDATE
                 target_row_num = id_to_row[new_id]
-
-                # Convert new_row to list of strings
                 str_row = [str(v) if v is not None else "" for v in new_row]
-
-                # Update the entire row at once using A1 notation
+                
                 num_cols = len(str_row)
                 end_col_letter = col_num_to_letter(num_cols)
                 cell_range = f"A{target_row_num}:{end_col_letter}{target_row_num}"
-
-                # FIX: Gspread terbaru lebih suka format list of lists untuk update range
-                ws.update([str_row], cell_range) 
-
+                
+                updates_batch.append({
+                    'range': cell_range,
+                    'values': [str_row]
+                })
             else:
-                # --- QUEUE new row for appending ---
+                # Masukkan ke keranjang baris BARU
                 rows_to_append.append(new_row)
 
-        # Append all new rows in one batch call (efficient)
+        # 1. Eksekusi semua Update sekaligus (Hanya 1x panggil API)
+        if updates_batch:
+            ws.batch_update(updates_batch, value_input_option='USER_ENTERED')
+
+        # 2. Eksekusi baris baru sekaligus (Hanya 1x panggil API)
         if rows_to_append:
             ws.append_rows(rows_to_append)
 
         get_data.clear()
         return True
+
+    except Exception as e:
+        # Jika gagal, print errornya ke layar
+        st.error(f"Gagal menyimpan data ke {sheet_name}: {str(e)}")
+        return False
 
     except Exception as e:
         st.error(f"Gagal menyimpan data: {str(e)}")
@@ -2998,7 +3005,6 @@ def vendor_dashboard(email):
                             ket = str(r['Keterangan'])
                             
                             for u in u_types:
-                                # ... lanjutannya biarkan sama ...:
                                 pr = int(clean_numeric(r[f"Harga {u} per trip"]) or 0)
                                 w = str(c_spec.get(u,{}).get('w','')); c = str(c_spec.get(u,{}).get('c',''))
                                 tid = f"{email}_{cur_val}_{rid}_{u}_{cur_round}".replace(" ","")
@@ -3009,12 +3015,17 @@ def vendor_dashboard(email):
                         ml = int(clean_numeric(ed_md.iloc[0]["Biaya Buruh"]) or 0)
                         mid = f"M_{email}_{gid}_{cur_val}_{cur_round}"
 
-                        save_data("Price_Data", f_data)
-                        save_data("Multidrop_Data", [[mid, email, cur_val, gid, mi, mo, ml, ts, vendor_note]])
-                        
-                        st.session_state['temp_success_msg'] = f"Sukses! Data Tahap {cur_round} tersimpan."
-                        st.cache_data.clear()
-                        st.rerun()
+                        # ▼▼▼ PERBAIKAN: CEK STATUS KEBERHASILAN SAVE ▼▼▼
+                        with st.spinner("Menyimpan ke server..."):
+                            res_price = save_data("Price_Data", f_data)
+                            res_md = save_data("Multidrop_Data", [[mid, email, cur_val, gid, mi, mo, ml, ts, vendor_note]])
+                            
+                            if res_price and res_md:
+                                st.session_state['temp_success_msg'] = f"Sukses! Data Tahap {cur_round} tersimpan."
+                                st.cache_data.clear()
+                                st.rerun()
+                            else:
+                                st.error("⚠️ Proses simpan terganggu oleh server Google. Silakan klik Simpan 1x lagi.")
                         
                         
 if __name__ == "__main__":
