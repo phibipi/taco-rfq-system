@@ -8,4 +8,3 @@ docxcompose
 python-docx
 google-api-python-client==2.108.0
 openpyxl
-streamlit-autorefresh
