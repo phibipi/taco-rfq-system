@@ -2154,7 +2154,7 @@ def admin_dashboard():
                 # ▼▼▼ TAMBAHAN FITUR: DOWNLOAD TARGET PRICE ▼▼▼
                 # ==========================================================
                 with st.expander("🎯 Download Target Price (Excel)", expanded=False):
-                    st.write("Unduh estimasi Target Price untuk putaran negosiasi selanjutnya. Sistem akan otomatis menghitung diskon dari harga terendah saat ini atau dari data historis.")
+                    st.write("Download estimasi Target Price untuk fase negosiasi selanjutnya.")
                     
                     if not df_r.empty and not df_g.empty and not df_units.empty:
                         # 1. Siapkan kerangka data (Sama dengan Master Summary)
