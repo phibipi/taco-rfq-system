@@ -2150,7 +2150,77 @@ def admin_dashboard():
                         st.warning("Data Master Rute, Group, atau Unit masih kosong. Tidak bisa mengunduh summary.")
                 
                 st.write("")
-                
+                # ==========================================================
+                # ▼▼▼ TAMBAHAN FITUR: DOWNLOAD TARGET PRICE ▼▼▼
+                # ==========================================================
+                with st.expander("🎯 Download Target Price (Excel)", expanded=False):
+                    st.write("Unduh estimasi Target Price untuk putaran negosiasi selanjutnya. Sistem akan otomatis menghitung diskon dari harga terendah saat ini atau dari data historis.")
+                    
+                    if not df_r.empty and not df_g.empty and not df_units.empty:
+                        # 1. Siapkan kerangka data (Sama dengan Master Summary)
+                        tp_df = pd.merge(df_r_clean, df_g_clean, on='group_id', how='left')
+                        tp_df = pd.merge(tp_df, df_u_clean, on='group_id', how='left')
+                        
+                        # 2. Terapkan Filter yang sedang aktif di UI
+                        tp_df = tp_df[tp_df['load_type'] == sel_load]
+                        if sel_asal != "Semua Kota Asal":
+                            tp_df = tp_df[tp_df['kota_asal'] == sel_asal]
+                        if search_keyword:
+                            match_org_tp = tp_df['origin'].fillna("").str.lower().str.contains(search_keyword)
+                            match_asal_tp = tp_df['kota_asal'].fillna("").str.lower().str.contains(search_keyword)
+                            match_tujuan_tp = tp_df['kota_tujuan'].fillna("").str.lower().str.contains(search_keyword)
+                            tp_df = tp_df[match_org_tp | match_asal_tp | match_tujuan_tp]
+
+                        # 3. Hitung Target Price Menggunakan Fungsi yang Sudah Ada
+                        if st.button("🔄 Generate Data Target Price", key="btn_gen_tp", use_container_width=True):
+                            with st.spinner("Menghitung algoritma Target Price untuk seluruh rute..."):
+                                tp_results = []
+                                prices_for_tp = df_p.copy() if not df_p.empty else pd.DataFrame()
+                                
+                                for _, row in tp_df.iterrows():
+                                    rid = row['route_id']
+                                    unit = row['unit_type']
+                                    
+                                    # Panggil fungsi ajaib get_target_price
+                                    kalkulasi_tp = get_target_price(prices_for_tp, rid, unit, sel_val)
+                                    
+                                    tp_results.append({
+                                        'Origin': row.get('origin', '-'),
+                                        'Kota Asal': row.get('kota_asal', '-'),
+                                        'Kota Tujuan': row.get('kota_tujuan', '-'),
+                                        'Nama Grup Rute': row.get('route_group', '-'),
+                                        'Tipe Muatan': row.get('load_type', '-'),
+                                        'Unit': unit,
+                                        'Target Price (Angka)': kalkulasi_tp,
+                                        'Target Price (Format)': f"Rp {int(kalkulasi_tp):,}".replace(",", ".") if kalkulasi_tp > 0 else "Belum Ada Data"
+                                    })
+                                
+                                df_tp_export = pd.DataFrame(tp_results)
+                                
+                                # 4. Bikin Excel
+                                output_tp = io.BytesIO()
+                                with pd.ExcelWriter(output_tp, engine='openpyxl') as writer:
+                                    df_tp_export.to_excel(writer, index=False, sheet_name='Target Price')
+                                excel_tp = output_tp.getvalue()
+                                
+                                safe_val_name = str(sel_val).replace(" - ", "-").replace(" ", "_")
+                                
+                                st.download_button(
+                                    label="⬇️ Download Target Price (.xlsx)",
+                                    data=excel_tp,
+                                    file_name=f"Target_Price_{sel_load}_{safe_val_name}_{int(time.time())}.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    type="primary",
+                                    use_container_width=True
+                                )
+                    else:
+                        st.warning("Data Master masih kosong.")
+                # ==========================================================
+                # ▲▲▲ AKHIR TAMBAHAN FITUR TARGET PRICE ▲▲▲
+                # ==========================================================
+
+
+
                 # --- LANJUTAN FILTER TAMPILAN UI ---
                 if sel_asal != "Semua Kota Asal":
                     df_view = df_view[df_view['kota_asal'] == sel_asal]
