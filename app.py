@@ -1035,12 +1035,16 @@ def get_target_price(df_all, route_id, unit_type, cur_validity):
         df_safe = df_safe[df_safe['price'] > 0]
     else:
         return 0
-
+    
+    if 'round' not in df_safe.columns:
+        df_safe['round'] = '1'
+   
     # 1. Ambil Harga Terendah Periode SAAT INI (Tahap 1)
     df_curr = df_safe[
         (df_safe['validity'] == cur_validity) & 
         (df_safe['route_id'] == str(route_id)) & 
-        (df_safe['unit_type'] == unit_type)
+        (df_safe['unit_type'] == unit_type) &
+        (df_safe['round'] == '1')
     ]
     
     # Jika belum ada yang isi sama sekali, kita set 0 dulu untuk cari di histori masa lalu
@@ -2469,13 +2473,29 @@ def admin_dashboard():
                             else:
                                 st.error("❌ Link Error")               
                                 
+
 # ================= VENDOR DASHBOARD (UPDATE: DYNAMIC TABS) =================
 def vendor_dashboard(email):
     step = st.session_state['vendor_step']
     
     # --- STEP 1: DASHBOARD / PROFIL ---
     if step == "dashboard":
-        t1, t2, t3 = st.tabs(["🛣️ Pilih Rute & Isi Harga", "📋 Isi Data Perusahaan", "📄 Surat Penawaran Harga"])
+        # ▼▼▼ CEK STATUS LOCK VENDOR INI ▼▼▼
+        df_p_check = get_data("Price_Data")
+        has_locked = False
+        if not df_p_check.empty and 'status' in df_p_check.columns and 'vendor_email' in df_p_check.columns:
+            if "Locked" in df_p_check[df_p_check['vendor_email'] == email]['status'].values:
+                has_locked = True
+                
+        # Bikin Tabs Dinamis
+        tab_names = ["🛣️ Pilih Rute & Isi Harga", "📋 Isi Data Perusahaan"]
+        if has_locked: 
+            tab_names.append("📄 Surat Penawaran Harga")
+            
+        tabs_ui = st.tabs(tab_names)
+        t1 = tabs_ui[0]
+        t2 = tabs_ui[1]
+        # ▲▲▲ BATAS CEK STATUS ▲▲▲
         
         # Tab 2: Profil
         with t2:
@@ -2639,198 +2659,204 @@ def vendor_dashboard(email):
                                     c4.markdown(status_ui, unsafe_allow_html=True)
                                     st.markdown("<hr>", unsafe_allow_html=True)
 # --- TAB 3: DOWNLOAD & UPLOAD SPH RESMI ---
-        with t3:
-            st.markdown("### 📄 SPH (Surat Penawaran Harga)")
-            st.info("Anda dapat mendownload draf SPH kapan saja. Namun, **fitur Upload baru terbuka setelah SEMUA rute Anda di-Lock oleh Admin**.")
+        if has_locked:
+            t3 = tabs_ui[2]
+            with t3:
+                st.markdown("### 📄 SPH (Surat Penawaran Harga)")
+                st.info("Anda dapat mendownload draf SPH kapan saja. Namun, **fitur Upload baru terbuka setelah SEMUA rute Anda di-Lock oleh Admin**.")
             
-            df_p = get_data("Price_Data")
-            df_r = get_data("Master_Routes")
-            df_g = get_data("Master_Groups")
-            df_prof = get_data("Vendor_Profile")
+                df_p = get_data("Price_Data")
+                df_r = get_data("Master_Routes")
+                df_g = get_data("Master_Groups")
+                df_prof = get_data("Vendor_Profile")
             
-            if df_p.empty or df_g.empty:
-                st.warning("Belum ada data penawaran.")
-            else:
-                # 1. Filter Milik Vendor Ini (SEMUA STATUS: Open & Locked) dan Harga > 0
-                my_prices = df_p[df_p['vendor_email'] == email].copy()
-                my_prices['price'] = pd.to_numeric(my_prices['price'], errors='coerce').fillna(0)
-                my_prices = my_prices[my_prices['price'] > 0]
-                
-                if my_prices.empty:
-                    st.warning("Belum ada data harga Anda, atau semua harga Anda masih Rp 0.")
+                # ▼▼▼ MULAI DARI SINI SUDAH SAYA DORONG KE KANAN (DI DALAM with t3:) ▼▼▼
+                if df_p.empty or df_g.empty:
+                    st.warning("Belum ada data penawaran.")
                 else:
-                    # 2. Merge Data
-                    my_prices['route_id'] = my_prices['route_id'].astype(str).str.strip()
-                    df_r['route_id'] = df_r['route_id'].astype(str).str.strip()
-                    df_g['group_id'] = df_g['group_id'].astype(str).str.strip()
-                    if 'round' not in my_prices.columns: my_prices['round'] = '1'
+                    # 1. Filter Milik Vendor Ini (SEMUA STATUS: Open & Locked) dan Harga > 0
+                    my_prices = df_p[df_p['vendor_email'] == email].copy()
+                    my_prices['price'] = pd.to_numeric(my_prices['price'], errors='coerce').fillna(0)
+                    my_prices = my_prices[my_prices['price'] > 0]
                     
-                    m1 = pd.merge(my_prices, df_r[['route_id', 'group_id', 'kota_tujuan']], on='route_id', how='left')
-                    df_final = pd.merge(m1, df_g[['group_id', 'origin', 'load_type']], on='group_id', how='left')
-                    # --- TAMBAHAN MERGE MULTIDROP & CATATAN ---
-                    df_m = get_data("Multidrop_Data")
-                    if not df_m.empty:
-                        df_m['group_id'] = df_m['group_id'].astype(str).str.strip()
-                        df_m['md_round'] = df_m['id_multidrop'].apply(lambda x: str(x).split('_')[-1] if '_' in str(x) else '1')
-                        df_m_sub = df_m[['vendor_email', 'validity', 'group_id', 'md_round', 'inner_city_price', 'outer_city_price', 'labor_cost', 'catatan_tambahan']]
-                        
-                        df_final = pd.merge(
-                            df_final, df_m_sub, 
-                            left_on=['vendor_email', 'validity', 'group_id', 'round'],
-                            right_on=['vendor_email', 'validity', 'group_id', 'md_round'],
-                            how='left'
-                        )
+                    if my_prices.empty:
+                        st.warning("Belum ada data harga Anda, atau semua harga Anda masih Rp 0.")
                     else:
-                        for c in ['inner_city_price', 'outer_city_price', 'labor_cost', 'catatan_tambahan']: df_final[c] = 0
-                    # 3. UI Filter (Periode, Load Type, Tahap)
-                    c1, c2, c3 = st.columns(3)
-                    avail_val = sorted(df_final['validity'].unique().tolist())
-                    sel_val = c1.selectbox("Pilih Periode", avail_val, key="sph_val")
-                    
-                    avail_lt = sorted(df_final['load_type'].dropna().unique().tolist())
-                    sel_lt = c2.selectbox("Pilih Tipe Armada", avail_lt, key="sph_lt")
-                    
-                    avail_rnd = sorted(df_final['round'].unique().tolist())
-                    sel_rnd = c3.selectbox("Pilih Tahap Penawaran", avail_rnd, key="sph_rnd")
-                    
-                    df_print = df_final[(df_final['validity'] == sel_val) & (df_final['load_type'] == sel_lt) & (df_final['round'] == sel_rnd)].copy()
-                    v_name = st.session_state['user_info'].get('vendor_name', email)
-                    
-                    # ▼▼▼ TAMBAHAN: Buang rute yang harganya Rp 0 dari SPH ▼▼▼
-                    df_print = df_print[df_print['price'] > 0]
-                    
-                    # --- CEK APAKAH SEMUA STATUS SUDAH LOCKED ---
-                    is_all_locked = False
-                    if not df_print.empty:
-                        # Cek apakah seluruh baris di tabel df_print statusnya 'Locked'
-                        is_all_locked = (df_print['status'] == 'Locked').all()
-                    
-                    # --- BAGIAN A: DOWNLOAD SPH ---
-                    with st.container(border=True):
-                        st.markdown("#### Step 1: Download SPH")
-                        if df_print.empty:
-                            st.info("Tidak ada data untuk kombinasi filter ini.")
-                        else:
-                            st.write(f"Ditemukan **{len(df_print)} rute** yang siap dicetak SPH-nya. Mohon dapat dicap dan ditandatangani, lalu diupload pada langkah selanjutnya.")
-                            
-                            # --- MEMBUAT 2 TOMBOL BERSEBELAHAN ---
-                            c_btn1, c_btn2 = st.columns(2)
-                            
-                            # TOMBOL KIRI (WORD SPH RESMI)
-                            with c_btn1:
-                                if st.button("📄 Buat Dokumen SPH (Word)", type="primary", use_container_width=True):
-                                    tpl_sph = "template_sph.docx"
-                                    if not os.path.exists(tpl_sph): 
-                                        st.error("Sistem error: Template SPH tidak ditemukan di server. Hubungi Admin!")
-                                        st.stop()
-                                        
-                                    with st.spinner("Merakit Dokumen SPH..."):
-                                        try:
-                                            v_addr = "-"
-                                            if not df_prof.empty:
-                                                vp = df_prof[df_prof['email'] == email]
-                                                if not vp.empty: v_addr = str(vp.iloc[0].get('address', '-'))
-                                            
-                                            df_print_word = df_print.sort_values(by=['origin', 'kota_tujuan', 'unit_type']).reset_index(drop=True)
-                                            file_sph = create_docx_sph(tpl_sph, v_name, v_addr, sel_val, sel_lt, sel_rnd, df_print_word)
-                                            
-                                            with open(file_sph, "rb") as f:
-                                                st.download_button(
-                                                    label="⬇️ Klik di sini untuk Download Word", 
-                                                    data=f, 
-                                                    file_name=f"SPH_{v_name}_{sel_lt}_Tahap{sel_rnd}.docx", 
-                                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
-                                                    type="primary",
-                                                    use_container_width=True
-                                                )
-                                            os.remove(file_sph)
-                                        except Exception as e: st.error(f"Gagal: {e}")
-                            
-                            # TOMBOL KANAN (EXCEL TABEL SAJA)
-                            with c_btn2:
-                                df_excel = df_print.sort_values(by=['origin', 'kota_tujuan', 'unit_type']).reset_index(drop=True)
-                                df_excel['No'] = range(1, len(df_excel) + 1)
-                                
-                                # Rapikan isi kolom sebelum di-export
-                                def fmt_rp(x):
-                                    try: return f"Rp {int(x):,}".replace(",", ".")
-                                    except: return "Rp 0"
-                                df_excel['Harga Penawaran'] = df_excel['price'].apply(fmt_rp)
-                                df_excel['Multidrop Dalam Kota'] = df_excel['inner_city_price'].apply(fmt_rp)
-                                df_excel['Multidrop Luar Kota'] = df_excel['outer_city_price'].apply(fmt_rp)
-                                df_excel['Biaya Buruh'] = df_excel['labor_cost'].apply(fmt_rp)
-                                
-                                def fmt_lt(x):
-                                    x_str = str(x)
-                                    if x_str.isdigit() or x_str.replace('.','',1).isdigit(): return f"{x_str} Hari"
-                                    return "-" if x_str in ["-", "", "nan", "None"] else x_str
-                                df_excel['Lead Time (Hari)'] = df_excel['lead_time'].apply(fmt_lt)
-                                
-                                # Bersihkan teks kosong (PENGAMAN BARU)
-                                if 'keterangan' not in df_excel.columns: df_excel['keterangan'] = '-'
-                                df_excel['keterangan'] = df_excel['keterangan'].fillna('-').astype(str).replace(['nan', 'None', ''], '-')
-                                
-                                if 'catatan_tambahan' not in df_excel.columns: df_excel['catatan_tambahan'] = '-'
-                                df_excel['catatan_tambahan'] = df_excel['catatan_tambahan'].fillna('-').astype(str).replace(['nan', 'None', ''], '-')
-                                
-                                # Ambil kolom yang diperlukan saja dan ganti judulnya
-                                cols_to_keep = ['No', 'origin', 'kota_tujuan', 'unit_type', 'Lead Time (Hari)', 'Harga Penawaran', 'keterangan', 'Multidrop Dalam Kota', 'Multidrop Luar Kota', 'Biaya Buruh', 'catatan_tambahan']
-                                df_excel = df_excel[cols_to_keep]
-                                df_excel.columns = ['No', 'Origin', 'Tujuan', 'Unit', 'Lead Time', 'Harga Penawaran', 'Keterangan Rute', 'MD Dalam Kota', 'MD Luar Kota', 'Biaya Buruh', 'Catatan Tambahan Vendor']
-                                
-                                # Ubah ke format file Excel (BytesIO)
-                                output = io.BytesIO()
-                                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                                    df_excel.to_excel(writer, index=False, sheet_name='Tabel SPH')
-                                excel_data = output.getvalue()
-                                
-                                safe_ven_xls = "".join(x for x in v_name if x.isalnum())
-                                
-                                # Munculkan tombol Download langsung
-                                st.download_button(
-                                    label="📊 Download Tabel (Excel)", 
-                                    data=excel_data, 
-                                    file_name=f"Tabel_SPH_{safe_ven_xls}_{sel_lt}_Tahap{sel_rnd}.xlsx", 
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                    type="primary",
-                                    use_container_width=True
-                                )
-
-                    # --- BAGIAN B: UPLOAD SPH ---
-                    with st.container(border=True):
-                        st.markdown("#### Step 2: Upload SPH yang Sudah di Cap & Tanda Tangan")
+                        # 2. Merge Data
+                        my_prices['route_id'] = my_prices['route_id'].astype(str).str.strip()
+                        df_r['route_id'] = df_r['route_id'].astype(str).str.strip()
+                        df_g['group_id'] = df_g['group_id'].astype(str).str.strip()
+                        if 'round' not in my_prices.columns: my_prices['round'] = '1'
                         
-                        if not is_all_locked:
-                            # 🛑 Jika belum locked semua, fitur upload disembunyikan dan muncul peringatan
-                            st.warning("⏳ **Fitur Upload Terkunci!**\nAdmin TACO harus me-Lock SEMUA penawaran Anda di periode dan tahap ini terlebih dahulu sebelum Anda bisa mengupload dokumen SPH final.")
+                        m1 = pd.merge(my_prices, df_r[['route_id', 'group_id', 'kota_tujuan']], on='route_id', how='left')
+                        df_final = pd.merge(m1, df_g[['group_id', 'origin', 'load_type']], on='group_id', how='left')
+                        
+                        # --- TAMBAHAN MERGE MULTIDROP & CATATAN ---
+                        df_m = get_data("Multidrop_Data")
+                        if not df_m.empty:
+                            df_m['group_id'] = df_m['group_id'].astype(str).str.strip()
+                            df_m['md_round'] = df_m['id_multidrop'].apply(lambda x: str(x).split('_')[-1] if '_' in str(x) else '1')
+                            df_m_sub = df_m[['vendor_email', 'validity', 'group_id', 'md_round', 'inner_city_price', 'outer_city_price', 'labor_cost', 'catatan_tambahan']]
+                            
+                            df_final = pd.merge(
+                                df_final, df_m_sub, 
+                                left_on=['vendor_email', 'validity', 'group_id', 'round'],
+                                right_on=['vendor_email', 'validity', 'group_id', 'md_round'],
+                                how='left'
+                            )
                         else:
-                            # ✅ Jika sudah locked semua, tampilkan uploader
-                            st.write(f"Upload untuk: **{sel_lt} | Periode {sel_val} | Tahap {sel_rnd}**")
+                            for c in ['inner_city_price', 'outer_city_price', 'labor_cost', 'catatan_tambahan']: df_final[c] = 0
                             
-                            uploaded_file = st.file_uploader("Pilih file SPH (PDF)", type=['pdf', 'png', 'jpg', 'jpeg'])
+                        # 3. UI Filter (Periode, Load Type, Tahap)
+                        c1, c2, c3 = st.columns(3)
+                        avail_val = sorted(df_final['validity'].unique().tolist())
+                        sel_val = c1.selectbox("Pilih Periode", avail_val, key="sph_val")
+                        
+                        avail_lt = sorted(df_final['load_type'].dropna().unique().tolist())
+                        sel_lt = c2.selectbox("Pilih Tipe Armada", avail_lt, key="sph_lt")
+                        
+                        avail_rnd = sorted(df_final['round'].unique().tolist())
+                        sel_rnd = c3.selectbox("Pilih Tahap Penawaran", avail_rnd, key="sph_rnd")
+                        
+                        df_print = df_final[(df_final['validity'] == sel_val) & (df_final['load_type'] == sel_lt) & (df_final['round'] == sel_rnd)].copy()
+                        v_name = st.session_state['user_info'].get('vendor_name', email)
+                        
+                        # ▼▼▼ TAMBAHAN: Buang rute yang harganya Rp 0 dari SPH ▼▼▼
+                        df_print = df_print[df_print['price'] > 0]
+                        
+                        # --- CEK APAKAH SEMUA STATUS SUDAH LOCKED ---
+                        is_all_locked = False
+                        if not df_print.empty:
+                            # Cek apakah seluruh baris di tabel df_print statusnya 'Locked'
+                            is_all_locked = (df_print['status'] == 'Locked').all()
+                        
+                        # --- BAGIAN A: DOWNLOAD SPH ---
+                        with st.container(border=True):
+                            st.markdown("#### Step 1: Download SPH")
+                            if df_print.empty:
+                                st.info("Tidak ada data untuk kombinasi filter ini.")
+                            else:
+                                st.write(f"Ditemukan **{len(df_print)} rute** yang siap dicetak SPH-nya. Mohon dapat dicap dan ditandatangani, lalu diupload pada langkah selanjutnya.")
+                                
+                                # --- MEMBUAT 2 TOMBOL BERSEBELAHAN ---
+                                c_btn1, c_btn2 = st.columns(2)
+                                
+                                # TOMBOL KIRI (WORD SPH RESMI)
+                                with c_btn1:
+                                    if st.button("📄 Buat Dokumen SPH (Word)", type="primary", use_container_width=True):
+                                        tpl_sph = "template_sph.docx"
+                                        if not os.path.exists(tpl_sph): 
+                                            st.error("Sistem error: Template SPH tidak ditemukan di server. Hubungi Admin!")
+                                            st.stop()
+                                            
+                                        with st.spinner("Merakit Dokumen SPH..."):
+                                            try:
+                                                v_addr = "-"
+                                                if not df_prof.empty:
+                                                    vp = df_prof[df_prof['email'] == email]
+                                                    if not vp.empty: v_addr = str(vp.iloc[0].get('address', '-'))
+                                                
+                                                df_print_word = df_print.sort_values(by=['origin', 'kota_tujuan', 'unit_type']).reset_index(drop=True)
+                                                file_sph = create_docx_sph(tpl_sph, v_name, v_addr, sel_val, sel_lt, sel_rnd, df_print_word)
+                                                
+                                                with open(file_sph, "rb") as f:
+                                                    st.download_button(
+                                                        label="⬇️ Klik di sini untuk Download Word", 
+                                                        data=f, 
+                                                        file_name=f"SPH_{v_name}_{sel_lt}_Tahap{sel_rnd}.docx", 
+                                                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
+                                                        type="primary",
+                                                        use_container_width=True
+                                                    )
+                                                os.remove(file_sph)
+                                            except Exception as e: st.error(f"Gagal: {e}")
+                                
+                                # TOMBOL KANAN (EXCEL TABEL SAJA)
+                                with c_btn2:
+                                    df_excel = df_print.sort_values(by=['origin', 'kota_tujuan', 'unit_type']).reset_index(drop=True)
+                                    df_excel['No'] = range(1, len(df_excel) + 1)
+                                    
+                                    # Rapikan isi kolom sebelum di-export
+                                    def fmt_rp(x):
+                                        try: return f"Rp {int(x):,}".replace(",", ".")
+                                        except: return "Rp 0"
+                                    df_excel['Harga Penawaran'] = df_excel['price'].apply(fmt_rp)
+                                    df_excel['Multidrop Dalam Kota'] = df_excel['inner_city_price'].apply(fmt_rp)
+                                    df_excel['Multidrop Luar Kota'] = df_excel['outer_city_price'].apply(fmt_rp)
+                                    df_excel['Biaya Buruh'] = df_excel['labor_cost'].apply(fmt_rp)
+                                    
+                                    def fmt_lt(x):
+                                        x_str = str(x)
+                                        if x_str.isdigit() or x_str.replace('.','',1).isdigit(): return f"{x_str} Hari"
+                                        return "-" if x_str in ["-", "", "nan", "None"] else x_str
+                                    df_excel['Lead Time (Hari)'] = df_excel['lead_time'].apply(fmt_lt)
+                                    
+                                    # Bersihkan teks kosong (PENGAMAN BARU)
+                                    if 'keterangan' not in df_excel.columns: df_excel['keterangan'] = '-'
+                                    df_excel['keterangan'] = df_excel['keterangan'].fillna('-').astype(str).replace(['nan', 'None', ''], '-')
+                                    
+                                    if 'catatan_tambahan' not in df_excel.columns: df_excel['catatan_tambahan'] = '-'
+                                    df_excel['catatan_tambahan'] = df_excel['catatan_tambahan'].fillna('-').astype(str).replace(['nan', 'None', ''], '-')
+                                    
+                                    # Ambil kolom yang diperlukan saja dan ganti judulnya
+                                    cols_to_keep = ['No', 'origin', 'kota_tujuan', 'unit_type', 'Lead Time (Hari)', 'Harga Penawaran', 'keterangan', 'Multidrop Dalam Kota', 'Multidrop Luar Kota', 'Biaya Buruh', 'catatan_tambahan']
+                                    df_excel = df_excel[cols_to_keep]
+                                    df_excel.columns = ['No', 'Origin', 'Tujuan', 'Unit', 'Lead Time', 'Harga Penawaran', 'Keterangan Rute', 'MD Dalam Kota', 'MD Luar Kota', 'Biaya Buruh', 'Catatan Tambahan Vendor']
+                                    
+                                    # Ubah ke format file Excel (BytesIO)
+                                    output = io.BytesIO()
+                                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                                        df_excel.to_excel(writer, index=False, sheet_name='Tabel SPH')
+                                    excel_data = output.getvalue()
+                                    
+                                    safe_ven_xls = "".join(x for x in v_name if x.isalnum())
+                                    
+                                    # Munculkan tombol Download langsung
+                                    st.download_button(
+                                        label="📊 Download Tabel (Excel)", 
+                                        data=excel_data, 
+                                        file_name=f"Tabel_SPH_{safe_ven_xls}_{sel_lt}_Tahap{sel_rnd}.xlsx", 
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                        type="primary",
+                                        use_container_width=True
+                                    )
+
+                        # --- BAGIAN B: UPLOAD SPH ---
+                        with st.container(border=True):
+                            st.markdown("#### Step 2: Upload SPH yang Sudah di Cap & Tanda Tangan")
                             
-                            if st.button("📤 Upload Dokumen SPH", type="primary", use_container_width=True):
-                                if uploaded_file is not None:
-                                    # MASUKKAN ID FOLDER GOOGLE DRIVE ANDA DI SINI
-                                    DRIVE_FOLDER_ID = "0AMIguJ49asOLUk9PVA" 
-                                    
-                                    safe_ven = "".join(x for x in v_name if x.isalnum())
-                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                    ext = uploaded_file.name.split(".")[-1]
-                                    new_filename = f"SPH_{safe_ven}_{sel_lt}_T{sel_rnd}_{timestamp}.{ext}"
-                                    
-                                    with st.spinner("⏳ Sedang mengirim file ke Google Drive... Mohon tunggu..."):
-                                        file_url = upload_to_drive(uploaded_file, new_filename, uploaded_file.type, DRIVE_FOLDER_ID)
+                            if not is_all_locked:
+                                # 🛑 Jika belum locked semua, fitur upload disembunyikan dan muncul peringatan
+                                st.warning("⏳ **Fitur Upload Terkunci!**\nAdmin TACO harus me-Lock SEMUA penawaran Anda di periode dan tahap ini terlebih dahulu sebelum Anda bisa mengupload dokumen SPH final.")
+                            else:
+                                # ✅ Jika sudah locked semua, tampilkan uploader
+                                st.write(f"Upload untuk: **{sel_lt} | Periode {sel_val} | Tahap {sel_rnd}**")
+                                
+                                uploaded_file = st.file_uploader("Pilih file SPH (PDF)", type=['pdf', 'png', 'jpg', 'jpeg'])
+                                
+                                if st.button("📤 Upload Dokumen SPH", type="primary", use_container_width=True):
+                                    if uploaded_file is not None:
+                                        # MASUKKAN ID FOLDER GOOGLE DRIVE ANDA DI SINI
+                                        DRIVE_FOLDER_ID = "0AMIguJ49asOLUk9PVA" 
                                         
-                                        if file_url:
-                                            id_up = f"UPL_{safe_ven}_{timestamp}"
-                                            save_data("SPH_Uploads", [[id_up, email, v_name, sel_val, sel_lt, sel_rnd, file_url, timestamp]])
-                                            st.success("✅ Sukses! Dokumen SPH telah tersimpan aman di Server TACO.")
-                                        else:
-                                            st.error("⚠️ Gagal mengirim dokumen ke server. Coba lagi.")
-                                else:
-                                    st.error("⚠️ Silakan pilih file terlebih dahulu sebelum klik Upload.")
-    
+                                        safe_ven = "".join(x for x in v_name if x.isalnum())
+                                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                        ext = uploaded_file.name.split(".")[-1]
+                                        new_filename = f"SPH_{safe_ven}_{sel_lt}_T{sel_rnd}_{timestamp}.{ext}"
+                                        
+                                        with st.spinner("⏳ Sedang mengirim file ke Google Drive... Mohon tunggu..."):
+                                            file_url = upload_to_drive(uploaded_file, new_filename, uploaded_file.type, DRIVE_FOLDER_ID)
+                                            
+                                            if file_url:
+                                                id_up = f"UPL_{safe_ven}_{timestamp}"
+                                                save_data("SPH_Uploads", [[id_up, email, v_name, sel_val, sel_lt, sel_rnd, file_url, timestamp]])
+                                                st.success("✅ Sukses! Dokumen SPH telah tersimpan aman di Server TACO.")
+                                            else:
+                                                st.error("⚠️ Gagal mengirim dokumen ke server. Coba lagi.")
+                                    else:
+                                        st.error("⚠️ Silakan pilih file terlebih dahulu sebelum klik Upload.")
+
+       
     # --- STEP 2: INPUT HARGA ---
     elif step == "input":
         if st.session_state.get('temp_success_msg'):
@@ -2946,28 +2972,6 @@ def vendor_dashboard(email):
                         for _, row in my_r.iterrows():
                             rid = str(row['route_id']).strip()
                             
-                            # ▼▼▼ LOGIKA BARU: SEMBUNYIKAN RUTE KOSONG DI TAHAP 2/3 ▼▼▼
-                            if str(cur_round) != "1":
-                                has_prev_bid = False
-                                if not df_p.empty:
-                                    # Cari histori harga di tahap sebelumnya untuk rute ini
-                                    cek_prev = df_p[
-                                        (df_p['vendor_email'] == email) & 
-                                        (df_p['validity'] == cur_val) & 
-                                        (df_p['route_id'] == rid) & 
-                                        (df_p['round'] == prev_round)
-                                    ]
-                                    if not cek_prev.empty:
-                                        # Cek apakah ada unit yang harganya di atas Rp 0
-                                        harga_prev = pd.to_numeric(cek_prev['price'], errors='coerce').fillna(0)
-                                        if (harga_prev > 0).any():
-                                            has_prev_bid = True
-                                            
-                                # Jika tidak ada histori harga > 0, buang rute ini dari layar!
-                                if not has_prev_bid:
-                                    continue 
-                            # ▲▲▲ BATAS LOGIKA BARU ▲▲▲
-
                             rd = {
                                 "Route ID": rid, "Kota Asal": row['kota_asal'], "Kota Tujuan": row['kota_tujuan'],
                                 "Keterangan": row.get('keterangan', '-'),
