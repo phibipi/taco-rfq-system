@@ -1898,13 +1898,14 @@ def admin_dashboard():
                 else:
                     st.info("Tidak ada data akses untuk filter ini.")
                     
-        # --- TAB 2: LOCK DATA ---
+# --- TAB 2: LOCK DATA ---
         with tabs[1]:
             st.subheader("Lock Data")
             df_price = get_data("Price_Data")
             df_routes = get_data("Master_Routes")
             df_md = get_data("Multidrop_Data")
             df_g = get_data("Master_Groups")
+            df_u = get_data("Users") # Tambahan untuk load nama vendor
         
             if df_price.empty:
                 st.info("Belum ada data harga masuk.")
@@ -1912,129 +1913,178 @@ def admin_dashboard():
                 df_price['route_id'] = df_price['route_id'].astype(str).str.strip()
                 df_routes['route_id'] = df_routes['route_id'].astype(str).str.strip()
             
-            merged_pr = pd.merge(df_price, df_routes[['route_id', 'group_id', 'kota_asal', 'kota_tujuan']], on='route_id', how='left')
-            
-            merged_pr['price'] = pd.to_numeric(merged_pr['price'], errors='coerce').fillna(0)
-            merged_pr = merged_pr[merged_pr['price'] > 0]
+                merged_pr = pd.merge(df_price, df_routes[['route_id', 'group_id', 'kota_asal', 'kota_tujuan']], on='route_id', how='left')
+                
+                merged_pr['price'] = pd.to_numeric(merged_pr['price'], errors='coerce').fillna(0)
+                merged_pr = merged_pr[merged_pr['price'] > 0]
+                            
+                merged_pr['group_id'] = merged_pr['group_id'].fillna('Unknown')
+                
+                if not df_g.empty:
+                    # Ambil kolom load_type dan origin dari Master Group
+                    merged_pr = pd.merge(merged_pr, df_g[['group_id', 'route_group', 'load_type', 'origin']], on='group_id', how='left')
+                else: 
+                    merged_pr['route_group'] = 'Unknown Group'
+                    merged_pr['load_type'] = '-'
+                    merged_pr['origin'] = '-'
+                    
+                merged_pr['route_group'] = merged_pr['route_group'].fillna('Unknown Group')
+                merged_pr['load_type'] = merged_pr['load_type'].fillna('-')
+                merged_pr['origin'] = merged_pr['origin'].fillna('-')
+                merged_pr['kota_asal'] = merged_pr['kota_asal'].fillna('Unknown')
+                merged_pr['kota_tujuan'] = merged_pr['kota_tujuan'].fillna('Unknown')
+                if 'round' not in merged_pr.columns: merged_pr['round'] = '1'
+
+                # --- MERGE VENDOR NAME UNTUK SEARCH BAR ---
+                if not df_u.empty:
+                    v_names = df_u[['email', 'vendor_name']]
+                    merged_pr = pd.merge(merged_pr, v_names, left_on='vendor_email', right_on='email', how='left')
+                    merged_pr['vendor_name'] = merged_pr['vendor_name'].fillna(merged_pr['vendor_email'])
+                else:
+                    merged_pr['vendor_name'] = merged_pr['vendor_email']
+
+                # ==========================================
+                # ▼▼▼ FILTER UI LOCK DATA ▼▼▼
+                # ==========================================
+                c1, c2, c3 = st.columns(3)
+                
+                avail_round = ["Semua Tahap"] + sorted(merged_pr['round'].unique().tolist())
+                sel_ld_round = c1.selectbox("Filter Tahap", avail_round, key="ld_round")
+                
+                avail_lt = ["Semua Muatan"] + sorted(merged_pr['load_type'].unique().tolist())
+                sel_ld_lt = c2.selectbox("Filter Tipe Muatan", avail_lt, key="ld_lt")
+                
+                avail_val = ["Semua Periode"] + sorted(merged_pr['validity'].unique().tolist())
+                sel_ld_val = c3.selectbox("Filter Periode", avail_val, key="ld_val")
+                
+                search_ld = st.text_input("🔍 Cari Origin atau Nama Vendor...", placeholder="Contoh: Surabaya atau Logistik...", key="ld_search").strip().lower()
+                st.write("")
+                
+                # --- APPLY FILTERS ---
+                if sel_ld_round != "Semua Tahap":
+                    merged_pr = merged_pr[merged_pr['round'] == sel_ld_round]
+                if sel_ld_lt != "Semua Muatan":
+                    merged_pr = merged_pr[merged_pr['load_type'] == sel_ld_lt]
+                if sel_ld_val != "Semua Periode":
+                    merged_pr = merged_pr[merged_pr['validity'] == sel_ld_val]
+                    
+                if search_ld:
+                    match_org = merged_pr['origin'].str.lower().str.contains(search_ld, na=False)
+                    match_ven = merged_pr['vendor_name'].str.lower().str.contains(search_ld, na=False)
+                    merged_pr = merged_pr[match_org | match_ven]
+                # ==========================================
+                # ▲▲▲ AKHIR FILTER UI ▲▲▲
+                # ==========================================
+
+                if merged_pr.empty:
+                    st.info("Tidak ada data yang sesuai dengan filter pencarian.")
+                else:
+                    # Update key_group agar memuat info tambahan (Tahap dan Nama Vendor)
+                    merged_pr['key_group'] = merged_pr['vendor_email'] + " | " + merged_pr['validity'] + " | " + merged_pr['route_group'] + " | " + merged_pr['group_id'] + " | " + merged_pr['vendor_name'] + " | " + merged_pr['round']
+                    unique_keys = merged_pr['key_group'].unique()
+                    
+                    for key in unique_keys:
+                        parts = key.split(" | ")
+                        vendor, validity, g_name, g_id, v_name_disp, round_disp = parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
+                        subset_pr = merged_pr[merged_pr['key_group'] == key]
+                        if subset_pr.empty: continue
                         
-            merged_pr['group_id'] = merged_pr['group_id'].fillna('Unknown')
-            
-            if not df_g.empty:
-                # UPDATE 1: Ambil kolom 'load_type' juga dari Master Group
-                merged_pr = pd.merge(merged_pr, df_g[['group_id', 'route_group', 'load_type']], on='group_id', how='left')
-            else: 
-                merged_pr['route_group'] = 'Unknown Group'
-                merged_pr['load_type'] = '-'
-                
-            merged_pr['route_group'] = merged_pr['route_group'].fillna('Unknown Group')
-            merged_pr['load_type'] = merged_pr['load_type'].fillna('-') # Handle jika kosong
-            merged_pr['kota_asal'] = merged_pr['kota_asal'].fillna('Unknown')
-            merged_pr['kota_tujuan'] = merged_pr['kota_tujuan'].fillna('Unknown')
-
-            merged_pr['key_group'] = merged_pr['vendor_email'] + " | " + merged_pr['validity'] + " | " + merged_pr['route_group'] + " | " + merged_pr['group_id']
-            unique_keys = merged_pr['key_group'].unique()
-            
-            for key in unique_keys:
-                parts = key.split(" | ")
-                vendor, validity, g_name, g_id = parts[0], parts[1], parts[2], parts[3]
-                subset_pr = merged_pr[merged_pr['key_group'] == key]
-                if subset_pr.empty: continue
-                
-                is_locked = "Locked" in subset_pr['status'].values
-                is_revision = "Need Revision" in subset_pr['status'].values
-                
-                if is_locked: status_icon = "🔒 LOCKED"
-                elif is_revision: status_icon = "⚠️ REVISI"
-                else: status_icon = "🟢 OPEN"
-                
-                # UPDATE 2: Ambil Load Type dari data baris pertama grup ini
-                l_type = subset_pr.iloc[0]['load_type']
-                
-                # Masukkan ke judul Expander
-                with st.expander(f"{status_icon} - {l_type} - {vendor} ({validity}) - {g_name}"):
-                    st.markdown("**A. Spesifikasi Armada**")
-                    if {'unit_type', 'weight_capacity', 'cubic_capacity'}.issubset(subset_pr.columns):
-                        df_specs = subset_pr[['unit_type', 'weight_capacity', 'cubic_capacity']].drop_duplicates().reset_index(drop=True)
-                        st.dataframe(df_specs, use_container_width=True, hide_index=True)
-                    
-                    st.markdown("**B. Matriks Harga**")
-                    try:
-                        subset_pr['price'] = pd.to_numeric(subset_pr['price'], errors='coerce')
-                        pivot_df = subset_pr.pivot_table(index=['kota_asal', 'kota_tujuan'], columns='unit_type', values='price', aggfunc='first').reset_index()
-                        st.dataframe(pivot_df, use_container_width=True, hide_index=True)
-                    except: st.dataframe(subset_pr, use_container_width=True)
-
-                    st.markdown("**C. Biaya Lain (Multidrop & Buruh)**")
-                    if not df_md.empty:
-                        df_md['vendor_email'] = df_md['vendor_email'].astype(str).str.strip()
-                        df_md['validity'] = df_md['validity'].astype(str).str.strip()
-                        df_md['group_id'] = df_md['group_id'].astype(str).str.strip()
+                        is_locked = "Locked" in subset_pr['status'].values
+                        is_revision = "Need Revision" in subset_pr['status'].values
                         
-                        curr_ven = str(vendor).strip()
-                        curr_val = str(validity).strip()
-                        curr_gid = str(g_id).strip()
-
-                        sub_md = df_md[
-                            (df_md['vendor_email'] == curr_ven) &
-                            (df_md['validity'] == curr_val) &
-                            (df_md['group_id'] == curr_gid)
-                        ]
-
-                        if not sub_md.empty:
-                            cols_to_show = ['inner_city_price', 'outer_city_price']
-                            header_names = ["Multidrop Dalam Kota", " Multidrop Luar Kota"]
-                            
-                            if 'labor_cost' in sub_md.columns:
-                                cols_to_show.append('labor_cost')
-                                header_names.append("Biaya Buruh")
-                            
-                            disp_md = sub_md[cols_to_show].reset_index(drop=True)
-                            disp_md.columns = header_names
-                            st.dataframe(disp_md, use_container_width=True, hide_index=True)
-
-                            if 'catatan_tambahan' in sub_md.columns:
-                                v_note = str(sub_md.iloc[0]['catatan_tambahan']).strip()
-                                if v_note and v_note.lower() != "nan" and v_note != "None":
-                                    st.info(f"📝 **Catatan Tambahan Vendor:**\n{v_note}")
-                        else:
-                            st.info("Data Multidrop belum diinput oleh vendor.")
-                    else:
-                        st.info("Database Multidrop masih kosong.")
+                        if is_locked: status_icon = "🔒 LOCKED"
+                        elif is_revision: status_icon = "⚠️ REVISI"
+                        else: status_icon = "🟢 OPEN"
+                        
+                        l_type = subset_pr.iloc[0]['load_type']
+                        
+                        # Masukkan ke judul Expander (Sekarang jauh lebih informatif!)
+                        with st.expander(f"{status_icon} - Tahap {round_disp} - {l_type} - {v_name_disp} ({validity}) - {g_name}"):
+                            st.markdown("**A. Spesifikasi Armada**")
+                            if {'unit_type', 'weight_capacity', 'cubic_capacity'}.issubset(subset_pr.columns):
+                                df_specs = subset_pr[['unit_type', 'weight_capacity', 'cubic_capacity']].drop_duplicates().reset_index(drop=True)
+                                st.dataframe(df_specs, use_container_width=True, hide_index=True)
                     
-                    st.divider()
-                    st.markdown("**D. Alert Revisi ke Vendor**")
-                    reason = st.text_input("Catatan Revisi:", key=f"rsn_{key}", placeholder="Contoh: Harga unit Tronton terlalu tinggi, mohon dicek kembali.")
+                            st.markdown("**B. Matriks Harga**")
+                            try:
+                                subset_pr['price'] = pd.to_numeric(subset_pr['price'], errors='coerce')
+                                pivot_df = subset_pr.pivot_table(index=['kota_asal', 'kota_tujuan'], columns='unit_type', values='price', aggfunc='first').reset_index()
+                                st.dataframe(pivot_df, use_container_width=True, hide_index=True)
+                            except: 
+                                st.dataframe(subset_pr, use_container_width=True)
+
+                            st.markdown("**C. Biaya Lain (Multidrop & Buruh)**")
+                            if not df_md.empty:
+                                df_md['vendor_email'] = df_md['vendor_email'].astype(str).str.strip()
+                                df_md['validity'] = df_md['validity'].astype(str).str.strip()
+                                df_md['group_id'] = df_md['group_id'].astype(str).str.strip()
+                        
+                                curr_ven = str(vendor).strip()
+                                curr_val = str(validity).strip()
+                                curr_gid = str(g_id).strip()
+
+                                sub_md = df_md[
+                                    (df_md['vendor_email'] == curr_ven) &
+                                    (df_md['validity'] == curr_val) &
+                                    (df_md['group_id'] == curr_gid)
+                                ]
+
+                                if not sub_md.empty:
+                                    cols_to_show = ['inner_city_price', 'outer_city_price']
+                                    header_names = ["Multidrop Dalam Kota", " Multidrop Luar Kota"]
+                                    
+                                    if 'labor_cost' in sub_md.columns:
+                                        cols_to_show.append('labor_cost')
+                                        header_names.append("Biaya Buruh")
+                                    
+                                    disp_md = sub_md[cols_to_show].reset_index(drop=True)
+                                    disp_md.columns = header_names
+                                    st.dataframe(disp_md, use_container_width=True, hide_index=True)
+
+                                    if 'catatan_tambahan' in sub_md.columns:
+                                        v_note = str(sub_md.iloc[0]['catatan_tambahan']).strip()
+                                        if v_note and v_note.lower() != "nan" and v_note != "None":
+                                            st.info(f"📝 **Catatan Tambahan Vendor:**\n{v_note}")
+                                else:    
+                                    st.info("Data Multidrop belum diinput oleh vendor.")
+                            else:
+                                st.info("Database Multidrop masih kosong.")
                     
-                    c1, c2 = st.columns([1, 3])
-                    ids = subset_pr['id_transaksi'].tolist()
+                            # ▼▼▼ BAGIAN D SEKARANG SEJAJAR DENGAN BAGIAN C ▼▼▼
+                            st.divider()
+                            st.markdown("**D. Alert Revisi ke Vendor**")
+                            reason = st.text_input("Catatan Revisi:", key=f"rsn_{key}", placeholder="Contoh: Harga unit Tronton terlalu tinggi, mohon dicek kembali.")
                     
-                    # Tombol Lock/Unlock
-                    if is_locked:
-                        if c1.button("🔓 UNLOCK DATA", key=f"ul_{key}"):
-                            update_status_locked(ids, "Open")
-                            st.success("Unlocked!"); time.sleep(0.5); st.rerun()
-                    else:
-                        if c1.button("🔒 LOCK DATA", key=f"lk_{key}", type="primary"):
-                            update_status_locked(ids, "Locked")
-                            st.success("Locked!"); time.sleep(0.5); st.rerun()
+                            c1, c2 = st.columns([1, 3])
+                            ids = subset_pr['id_transaksi'].tolist()
+                    
+                            # Tombol Lock/Unlock
+                            if is_locked:
+                                if c1.button("🔓 UNLOCK DATA", key=f"ul_{key}"):
+                                    update_status_locked(ids, "Open")
+                                    st.success("Unlocked!"); time.sleep(0.5); st.rerun()
+                            else:
+                                if c1.button("🔒 LOCK DATA", key=f"lk_{key}", type="primary"):
+                                    update_status_locked(ids, "Locked")
+                                    st.success("Locked!"); time.sleep(0.5); st.rerun()
                             
-                    # Tombol Kirim Email Alert
-                    if c2.button("📨 Kirim Alert Revisi", key=f"rj_{key}"):
-                        if not reason:
-                            st.warning("Mohon isi catatan revisi di kotak atas terlebih dahulu.")
-                        else:
-                            with st.spinner("Mengirim email alert ke Vendor..."):
-                                v_name = df_u[df_u['email']==vendor]['vendor_name'].iloc[0] if not df_u.empty and not df_u[df_u['email']==vendor].empty else vendor
-                                res = send_rejection_email(vendor, v_name, l_type, validity, g_name, reason)
-                                
-                                if res:
-                                    # Ubah status di database menjadi Need Revision
-                                    update_status_locked(ids, "Need Revision")
-                                    st.success("Berhasil! Email alert terkirim dan status vendor berubah menjadi Revisi.")
-                                    time.sleep(1)
-                                    st.rerun()
+                            # Tombol Kirim Email Alert
+                            if c2.button("📨 Kirim Alert Revisi", key=f"rj_{key}"):
+                                if not reason:
+                                    st.warning("Mohon isi catatan revisi di kotak atas terlebih dahulu.")
                                 else:
-                                    st.error("Gagal mengirim email alert.")
+                                    with st.spinner("Mengirim email alert ke Vendor..."):
+                                        v_name = df_u[df_u['email']==vendor]['vendor_name'].iloc[0] if not df_u.empty and not df_u[df_u['email']==vendor].empty else vendor
+                                        res = send_rejection_email(vendor, v_name, l_type, validity, g_name, reason)
+                                        
+                                        if res:
+                                            # Ubah status di database menjadi Need Revision
+                                            update_status_locked(ids, "Need Revision")
+                                            st.success("Berhasil! Email alert terkirim dan status vendor berubah menjadi Revisi.")
+                                            time.sleep(1)
+                                            st.rerun()
+                                        else:
+                                            st.error("Gagal mengirim email alert.")
     
         # --- TAB 7: SUMMARY ---   
         with tabs[2]:
