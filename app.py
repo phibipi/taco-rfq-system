@@ -3105,7 +3105,7 @@ def vendor_dashboard(email):
                             # Target MATI (Locked)
                             if f"Target {u}" in df_pr.columns:
                                 cf_pr[f"Target {u}"] = st.column_config.TextColumn(
-                                    label=f"🎯 {u}", disabled=True, width="small"
+                                    label=f"🎯 {u}", disabled=True, width=90
                                 )
 
                         # --- 4. TAMPILKAN EDITOR (Tanpa .style agar bisa diedit) ---
