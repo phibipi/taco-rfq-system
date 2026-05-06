@@ -2995,7 +2995,7 @@ def vendor_dashboard(email):
                     # Kalau Tahap 2 ke atas, cek unit mana yang ada harganya di Tahap 1
                     if not source_p_data.empty:
                         # Ambil unit_type yang punya price > 0 di data referensi (Tahap sebelumnya)
-                        submitted_units = source_p_data[source_p_data['price'] > 0]['unit_type'].unique().tolist()
+                        submitted_units = source_p_data[pd.to_numeric(source_p_data['price'], errors='coerce').fillna(0) > 0]['unit_type'].unique().tolist()
                         # Hanya masukkan unit yang memang pernah diisi harganya
                         u_types = [u for u in all_u_types if u in submitted_units]
                     
