@@ -3098,14 +3098,21 @@ def vendor_dashboard(email):
                         }
                         
                         for u in u_types:
-                            # Harga BISA EDIT
-                            cf_pr[f"Harga {u} per trip"] = st.column_config.NumberColumn(
-                                label=f"💰 Harga {u}", min_value=0, step=1000, format="Rp %,d"
+                            # 1. KOLOM HARGA: Kita kasih penekanan visual di judulnya
+                            price_col = f"Harga {u} per trip"
+                            cf_pr[price_col] = st.column_config.NumberColumn(
+                                label=f"🔻 INPUT HARGA {u.upper()}", # Pake caps biar kontras
+                                min_value=0, 
+                                step=1000, 
+                                format="Rp %,d"
                             )
-                            # Target MATI (Locked)
-                            if f"Target {u}" in df_pr.columns:
-                                cf_pr[f"Target {u}"] = st.column_config.TextColumn(
-                                    label=f"🟢 Target {u}", disabled=True
+                            
+                            # 2. KOLOM TARGET: Kita biarkan biasa atau pake emoji redup
+                            target_col = f"🎯Target {u}"
+                            if target_col in df_pr.columns:
+                                cf_pr[target_col] = st.column_config.TextColumn(
+                                    label=f"Ref: {target_col}", # "Ref" menandakan cuma referensi
+                                    disabled=True 
                                 )
 
                         # --- 4. TAMPILKAN EDITOR (Tanpa .style agar bisa diedit) ---
