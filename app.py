@@ -311,11 +311,6 @@ def save_data(sheet_name, new_data_list):
         return True
 
     except Exception as e:
-        # Jika gagal, print errornya ke layar
-        st.error(f"Gagal menyimpan data ke {sheet_name}: {str(e)}")
-        return False
-
-    except Exception as e:
         st.error(f"Gagal menyimpan data: {str(e)}")
         return False
 
@@ -2961,9 +2956,24 @@ def vendor_dashboard(email):
                 g_name = grp_names[gid]
                 my_r = df_r[df_r['group_id']==gid]
                 my_u = df_u[df_u['group_id']==gid]
-                u_types = my_u['unit_type'].unique().tolist()
-                
-                if my_r.empty or not u_types: st.warning("Data belum lengkap."); continue
+                all_u_types = my_u['unit_type'].unique().tolist()
+                u_types = []
+                if cur_round == "1":
+                    # Kalau Tahap 1, munculkan semua unit yang terdaftar di master
+                    u_types = all_u_types
+                else:
+                    # Kalau Tahap 2 ke atas, cek unit mana yang ada harganya di Tahap 1
+                    if not source_p_data.empty:
+                        # Ambil unit_type yang punya price > 0 di data referensi (Tahap sebelumnya)
+                        submitted_units = source_p_data[source_p_data['price'] > 0]['unit_type'].unique().tolist()
+                        # Hanya masukkan unit yang memang pernah diisi harganya
+                        u_types = [u for u in all_u_types if u in submitted_units]
+                    
+                    # Jika ternyata vendor tidak isi apa-apa di tahap 1 (u_types kosong)
+                    if not u_types:
+                        st.warning("⚠️ Anda tidak memberikan penawaran pada unit manapun di Tahap 1 untuk grup rute ini.")
+                        # Opsional: stop proses di sini agar tidak muncul tabel kosong
+                        return
 
                 ex_price = {}; ex_spec = {}
                 is_lock = False
@@ -3034,9 +3044,14 @@ def vendor_dashboard(email):
                             for u in u_types: 
                                 if cur_round == "2":
                                     tgt = get_target_price(df_p, rid, u, cur_val)
-                                    rd[f"Target {u}"] = tgt
+                                    # --- LOGIKA BARU: Jika 0 ubah jadi "-" ---
+                                    if tgt == 0:
+                                        rd[f"Target {u}"] = "-"
+                                    else:
+                                        # Tetap simpan sebagai angka diformat rupiah agar cantik
+                                        rd[f"Target {u}"] = f"Rp {int(tgt):,}".replace(",", ".")
+                                
                                 rd[f"Harga {u} per trip"] = ex_price.get((rid, u), 0)
-                            p_data.append(rd)
                         
                         # --- Pengaman Jika Tabel Menjadi Kosong ---
                         if not p_data:
@@ -3065,15 +3080,41 @@ def vendor_dashboard(email):
                             cf_pr[f"Harga {u} per trip"] = st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %,d", required=True, width="medium")
                             target_col = f"Target {u}"
                             if target_col in df_pr.columns:
-                                cf_pr[target_col] = st.column_config.NumberColumn(format="Rp %,d", disabled=True, width="medium")
+                                cf_pr[target_col] = st.column_config.TextColumn(label=f"🟢 {target_col}",
+                                    disabled=True,
+                                    width="medium")
                                 cols_order.append(target_col)
                             cols_order.append(f"Harga {u} per trip")
                         
                         cols_order.append("Keterangan")
 
+                        # 1. Apply column order
                         df_pr = df_pr[cols_order]
-                        ed_pr = st.data_editor(df_pr, hide_index=True, use_container_width=True, disabled=is_lock or df_pr.empty, column_config=cf_pr)
 
+                        # 2. Define the highlighting function
+                        def highlight_target(x):
+                            # Create an empty dataframe for styles
+                            df_color = pd.DataFrame('', index=x.index, columns=x.columns)
+                            # Identify columns that contain the word 'Target'
+                            target_cols = [c for c in x.columns if 'Target' in c]
+                            # Apply the green style to those columns
+                            for col in target_cols:
+                                df_color[col] = 'background-color: #d1fae5; color: #065f46; font-weight: bold;'
+                            return df_color
+
+                        # 3. Create the Styled object (axis=None is crucial for cross-column logic)
+                        df_pr_styled = df_pr.style.apply(highlight_target, axis=None)
+
+                        # 4. Display in the editor
+                        # Note: Because it is styled, this will be static/read-only in current Streamlit versions
+                        ed_pr = st.data_editor(
+                            df_pr_styled, 
+                            hide_index=True, 
+                            use_container_width=True, 
+                            disabled=True, # Explicitly lock it as requested
+                            column_config=cf_pr,
+                            key=f"editor_{gid}_{cur_round}"
+                        )
                     # 3. MULTIDROP
                     with st.container(border=True):
                         st.markdown("#### 📦 Biaya Multidrop & Buruh")
@@ -3123,7 +3164,7 @@ def vendor_dashboard(email):
                         f_data = []
                         ts = (datetime.utcnow() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
                         
-                        for _, r in ed_pr.iterrows():
+                        for _, r in df_pr.iterrows():
                             rid = str(r['Route ID'])
                             lt = int(clean_numeric(r['Lead Time (Hari)']) or 0)
                             ket = str(r['Keterangan'])
