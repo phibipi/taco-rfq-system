@@ -3004,11 +3004,21 @@ def vendor_dashboard(email):
                     # If we already have data for the current round, use it
                     source_p_data = current_p_data
 
-                if not source_p_data.empty:
-                    if not is_using_prev_data and "Locked" in source_p_data['status'].values: is_lock = True
+                # --- JIKA SOURCE MASIH KOSONG, KITA TETEP TAMPILIN LIST RUTENYA ---
+                if source_p_data.empty:
+                    # Ini kondisi kalau vendor bener-bener baru pertama kali buka rute ini
+                    for _, row in my_r.iterrows():
+                        rid = str(row['route_id']).strip()
+                        for u in u_types:
+                            ex_price[(rid, u)] = 0 # Default harga 0
+                else:
+                    # Ini kondisi kalau ada data lama (Tahap 1) atau data simpanan (Tahap 2)
+                    if not is_using_prev_data and "Locked" in source_p_data['status'].values: 
+                        is_lock = True
                     for _, row in source_p_data.iterrows():
                         harga_bersih = clean_numeric(row['price'])
-                        ex_price[(row['route_id'], row['unit_type'])] = int(harga_bersih) if harga_bersih else 0
+                        rid_clean = str(row['route_id']).strip()
+                        ex_price[(rid_clean, row['unit_type'])] = int(harga_bersih) if harga_bersih else 0
                         ex_spec[row['unit_type']] = {'w': row.get('weight_capacity'), 'c': row.get('cubic_capacity')}
 
                 with st.form(key=f"f_{gid}_{cur_round}"):
