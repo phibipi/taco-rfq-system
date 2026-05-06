@@ -3125,7 +3125,7 @@ def vendor_dashboard(email):
                             df_pr_styled, 
                             hide_index=True, 
                             use_container_width=True, 
-                            disabled=True, # Explicitly lock it as requested
+                            disabled=is_lock, # Explicitly lock it as requested
                             column_config=cf_pr,
                             key=f"editor_{gid}_{cur_round}"
                         )
