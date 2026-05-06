@@ -3064,7 +3064,7 @@ def vendor_dashboard(email):
                                         rd[f"Target {u}"] = f"Rp {int(tgt):,}".replace(",", ".")
                                 
                                 rd[f"Harga {u} per trip"] = ex_price.get((rid, u), 0)
-                        p_data.append(rd)
+                            p_data.append(rd)
                         
                         # --- Pengaman Jika Tabel Menjadi Kosong ---
                         if not p_data:
