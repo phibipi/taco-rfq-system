@@ -2977,27 +2977,33 @@ def vendor_dashboard(email):
 
                 ex_price = {}; ex_spec = {}
                 is_lock = False
+              
                 
-                # --- LOGIKA PRE-FILL ---
+                # --- 1. INITIALIZE (Anti-Crash) ---
                 source_p_data = pd.DataFrame() 
                 is_using_prev_data = False
                 current_p_data = pd.DataFrame()
+                
+                # --- 2. GET CURRENT ROUND DATA ---
                 if not df_p.empty:
                     current_p_data = df_p[
                         (df_p['vendor_email']==email) & (df_p['validity']==cur_val) & 
                         (df_p['route_id'].isin(my_r['route_id'])) & (df_p['round'] == cur_round)
                     ]
-                               
-                
+
+                # --- 3. DETERMINE REFERENCE DATA ---
                 if current_p_data.empty and cur_round != "1":
+                    # If empty, try to fetch Round 1 for target pricing/specs
                     if not df_p.empty:
                         source_p_data = df_p[
                             (df_p['vendor_email']==email) & (df_p['validity']==cur_val) & 
                             (df_p['route_id'].isin(my_r['route_id'])) & (df_p['round'] == prev_round)
                         ]
                         is_using_prev_data = True 
+                else:
+                    # If we already have data for the current round, use it
+                    source_p_data = current_p_data
 
-                source_p_data = current_p_data
                 if not source_p_data.empty:
                     if not is_using_prev_data and "Locked" in source_p_data['status'].values: is_lock = True
                     for _, row in source_p_data.iterrows():
