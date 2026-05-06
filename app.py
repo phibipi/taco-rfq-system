@@ -3090,51 +3090,38 @@ def vendor_dashboard(email):
                         
                         cols_order = ["Route ID", "Kota Asal", "Kota Tujuan", "Lead Time (Hari)"]
                         for u in u_types:
-                            cf_pr[f"Harga {u} per trip"] = st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %,d", required=True, width="medium")
+                            # A. KOLOM HARGA -> JANGAN DI-DISABLE!
+                            cf_pr[f"Harga {u} per trip"] = st.column_config.NumberColumn(
+                                label=f"💰 Harga {u}", # Kasih emoji biar vendor tau ini kolom input
+                                min_value=0, 
+                                step=1000, 
+                                format="Rp %,d"
+                            )
+                            
+                            # B. KOLOM TARGET -> WAJIB DISABLE (MATI)
                             target_col = f"Target {u}"
                             if target_col in df_pr.columns:
-                                cf_pr[target_col] = st.column_config.TextColumn(label=f"🟢 {target_col}",
-                                    disabled=True,
-                                    width="medium")
-                                cols_order.append(target_col)
-                            cols_order.append(f"Harga {u} per trip")
+                                cf_pr[target_col] = st.column_config.TextColumn(
+                                    label=f"🔒 {target_col}", # Kasih emoji gembok
+                                    disabled=True, # <--- INI KUNCINYA
+                                    help="Harga referensi ini tidak bisa diubah."
+                                )
                         
                         cols_order.append("Keterangan")
 
-                        # 1. SIAPKAN VIEW (Tanpa .style dulu di sini)
+                        # 1. SIAPKAN VIEW (WAJIB DATA MENTAH, JANGAN PAKAI .style)
                         cols_order = [c for c in cols_order if c in df_pr.columns]
                         df_p_view = df_pr[cols_order]
 
-                        # 2. KONFIGURASI KOLOM (Kunci di sini!)
-                        # Kita kasih bantuan visual lewat label (pake emoji atau teks)
-                        for u in u_types:
-                            # KOLOM TARGET (HIJAU/REFERENSI) -> WAJIB MATI
-                            target_col = f"Target {u}"
-                            if target_col in df_p_view.columns:
-                                cf_pr[target_col] = st.column_config.TextColumn(
-                                    label=f"🟢 {target_col} (Ref)", 
-                                    disabled=True,
-                                    help="Harga referensi (tidak bisa diubah)"
-                                )
-                            
-                            # KOLOM HARGA -> WAJIB BISA EDIT
-                            price_col = f"Harga {u} per trip"
-                            cf_pr[price_col] = st.column_config.NumberColumn(
-                                label=f"💰 {price_col}",
-                                min_value=0,
-                                format="Rp %,d",
-                                disabled=False # <--- Pastikan ini False!
-                            )
-
-                        # 3. TAMPILKAN EDITOR (HAPUS .style.apply)
-                        # Agar kolom HARGA bisa diedit, kita HARUS kirim DataFrame mentah
+                        # 2. TAMPILKAN EDITOR
+                        # Biar kelihatan beda, kita tandai kolom Target di column_config
                         ed_pr = st.data_editor(
-                            df_p_view, # <--- PAKAI DATA MENTAH, JANGAN PAKAI .style
+                            df_p_view, # <--- PAKAI DATA ASLI BIAR BISA DIKETIK
                             hide_index=True, 
                             use_container_width=True, 
                             key=f"editor_{gid}_{cur_round}",
-                            column_config=cf_pr,
-                            disabled=is_lock 
+                            column_config=cf_pr, # Settingan gembok kolom ada di sini
+                            disabled=is_lock     # Gembok total cuma kalau status 'Locked'
                         )
                     
                     # 3. MULTIDROP
