@@ -3085,7 +3085,7 @@ def vendor_dashboard(email):
                             "Kota Asal": st.column_config.TextColumn(disabled=True, width="small"),
                             "Kota Tujuan": st.column_config.TextColumn(disabled=True, width="small"),
                             "Keterangan": st.column_config.TextColumn(width="medium"),
-                            "Lead Time (Hari)": st.column_config.NumberColumn(min_value=0, step=1, width="small")
+                            "Lead Time (Hari)": st.column_config.NumberColumn(min_value=0, step=1, format="%d", width="small")
                         }
                         
                         cols_order = ["Route ID", "Kota Asal", "Kota Tujuan", "Lead Time (Hari)"]
