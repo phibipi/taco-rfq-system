@@ -2979,16 +2979,15 @@ def vendor_dashboard(email):
                 is_lock = False
                 
                 # --- LOGIKA PRE-FILL ---
+                source_p_data = pd.DataFrame() 
+                is_using_prev_data = False
                 current_p_data = pd.DataFrame()
                 if not df_p.empty:
                     current_p_data = df_p[
                         (df_p['vendor_email']==email) & (df_p['validity']==cur_val) & 
                         (df_p['route_id'].isin(my_r['route_id'])) & (df_p['round'] == cur_round)
                     ]
-                source_p_data = pd.DataFrame() 
-                is_using_prev_data = False
-                
-                
+                               
                 
                 if current_p_data.empty and cur_round != "1":
                     if not df_p.empty:
