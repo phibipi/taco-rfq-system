@@ -3041,87 +3041,81 @@ def vendor_dashboard(email):
                     with st.container(border=True):
                         st.markdown(f"#### 💰 Penawaran Harga")
                         p_data = []
+                        
+                        # --- 1. SUSUN DATA PER BARIS ---
                         for _, row in my_r.iterrows():
                             rid = str(row['route_id']).strip()
-                            
                             rd = {
-                                "Route ID": rid, "Kota Asal": row['kota_asal'], "Kota Tujuan": row['kota_tujuan'],
+                                "Route ID": rid, 
+                                "Kota Asal": row['kota_asal'], 
+                                "Kota Tujuan": row['kota_tujuan'],
                                 "Keterangan": row.get('keterangan', '-'),
                                 "Lead Time (Hari)": 0 
                             }
+                            
+                            # Ambil Lead Time histori
                             if not source_p_data.empty:
-                                temp_lt = source_p_data[source_p_data['route_id']==rid]['lead_time']
-                                if not temp_lt.empty: rd["Lead Time (Hari)"] = clean_numeric(temp_lt.iloc[0]) or 0
+                                temp_lt = source_p_data[source_p_data['route_id'].astype(str).str.strip()==rid]['lead_time']
+                                if not temp_lt.empty: rd["Lead Time (Hari)"] = int(clean_numeric(temp_lt.iloc[0]) or 0)
 
-                            for u in u_types: 
+                            # Input Harga & Target per Unit
+                            for u in u_types:
+                                # Kolom Target (Hanya muncul di Round 2)
                                 if cur_round == "2":
                                     tgt = get_target_price(df_p, rid, u, cur_val)
-                                    # --- LOGIKA BARU: Jika 0 ubah jadi "-" ---
-                                    if tgt == 0:
-                                        rd[f"Target {u}"] = "-"
-                                    else:
-                                        # Tetap simpan sebagai angka diformat rupiah agar cantik
-                                        rd[f"Target {u}"] = f"Rp {int(tgt):,}".replace(",", ".")
+                                    rd[f"Target {u}"] = f"Rp {int(tgt):,}".replace(",", ".") if tgt > 0 else "-"
                                 
+                                # Kolom Input Harga
                                 rd[f"Harga {u} per trip"] = ex_price.get((rid, u), 0)
+                            
                             p_data.append(rd)
-                        
-                        # --- Pengaman Jika Tabel Menjadi Kosong ---
+
+                        # --- 2. SETUP DATAFRAME & URUTAN KOLOM ---
                         if not p_data:
-                            st.info("⚠️ Anda tidak memberikan penawaran harga untuk rute manapun di grup ini pada tahap sebelumnya.")
-                            # Buat kerangka kolom kosong agar sistem tidak error
-                            cols_dummy = ["Route ID", "Kota Asal", "Kota Tujuan", "Lead Time (Hari)"]
-                            for u in u_types:
-                                if cur_round == "2": cols_dummy.append(f"Target {u}")
-                                cols_dummy.append(f"Harga {u} per trip")
-                            cols_dummy.append("Keterangan")
-                            df_pr = pd.DataFrame(columns=cols_dummy)
+                            st.warning("⚠️ Rute tidak ditemukan.")
+                            df_pr = pd.DataFrame()
                         else:
                             df_pr = pd.DataFrame(p_data)
-                        
-                        # Config
+                            
+                            # Susun urutan kolom agar rapi
+                            cols_order = ["Route ID", "Kota Asal", "Kota Tujuan", "Lead Time (Hari)"]
+                            for u in u_types:
+                                if cur_round == "2": cols_order.append(f"Target {u}")
+                                cols_order.append(f"Harga {u} per trip")
+                            cols_order.append("Keterangan")
+                            
+                            # Filter hanya kolom yang beneran ada di df_pr
+                            final_cols = [c for c in cols_order if c in df_pr.columns]
+                            df_pr = df_pr[final_cols]
+
+                        # --- 3. CONFIGURASI KOLOM (Kunci Target, Buka Harga) ---
                         cf_pr = {
                             "Route ID": None,
-                            "Kota Asal": st.column_config.TextColumn(disabled=True, width="small"),
-                            "Kota Tujuan": st.column_config.TextColumn(disabled=True, width="small"),
-                            "Keterangan": st.column_config.TextColumn(width="medium"),
-                            "Lead Time (Hari)": st.column_config.NumberColumn(min_value=0, step=1, format="%d", width="small")
+                            "Kota Asal": st.column_config.TextColumn(disabled=True),
+                            "Kota Tujuan": st.column_config.TextColumn(disabled=True),
+                            "Lead Time (Hari)": st.column_config.NumberColumn(format="%d", min_value=0),
+                            "Keterangan": st.column_config.TextColumn(),
                         }
                         
-                        cols_order = ["Route ID", "Kota Asal", "Kota Tujuan", "Lead Time (Hari)"]
                         for u in u_types:
-                            # A. KOLOM HARGA -> JANGAN DI-DISABLE!
+                            # Harga BISA EDIT
                             cf_pr[f"Harga {u} per trip"] = st.column_config.NumberColumn(
-                                label=f"💰 Harga {u}", # Kasih emoji biar vendor tau ini kolom input
-                                min_value=0, 
-                                step=1000, 
-                                format="Rp %,d"
+                                label=f"💰 Harga {u}", min_value=0, step=1000, format="Rp %,d"
                             )
-                            
-                            # B. KOLOM TARGET -> WAJIB DISABLE (MATI)
-                            target_col = f"Target {u}"
-                            if target_col in df_pr.columns:
-                                cf_pr[target_col] = st.column_config.TextColumn(
-                                    label=f"🔒 {target_col}", # Kasih emoji gembok
-                                    disabled=True, # <--- INI KUNCINYA
-                                    help="Harga referensi ini tidak bisa diubah."
+                            # Target MATI (Locked)
+                            if f"Target {u}" in df_pr.columns:
+                                cf_pr[f"Target {u}"] = st.column_config.TextColumn(
+                                    label=f"🟢 Target {u}", disabled=True
                                 )
-                        
-                        cols_order.append("Keterangan")
 
-                        # 1. SIAPKAN VIEW (WAJIB DATA MENTAH, JANGAN PAKAI .style)
-                        cols_order = [c for c in cols_order if c in df_pr.columns]
-                        df_p_view = df_pr[cols_order]
-
-                        # 2. TAMPILKAN EDITOR
-                        # Biar kelihatan beda, kita tandai kolom Target di column_config
+                        # --- 4. TAMPILKAN EDITOR (Tanpa .style agar bisa diedit) ---
                         ed_pr = st.data_editor(
-                            df_p_view, # <--- PAKAI DATA ASLI BIAR BISA DIKETIK
+                            df_pr, 
                             hide_index=True, 
                             use_container_width=True, 
+                            column_config=cf_pr,
                             key=f"editor_{gid}_{cur_round}",
-                            column_config=cf_pr, # Settingan gembok kolom ada di sini
-                            disabled=is_lock     # Gembok total cuma kalau status 'Locked'
+                            disabled=is_lock 
                         )
                     
                     # 3. MULTIDROP
