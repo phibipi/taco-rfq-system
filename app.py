@@ -2957,24 +2957,7 @@ def vendor_dashboard(email):
                 my_r = df_r[df_r['group_id']==gid]
                 my_u = df_u[df_u['group_id']==gid]
                 all_u_types = my_u['unit_type'].unique().tolist()
-                u_types = []
-                if cur_round == "1":
-                    # Kalau Tahap 1, munculkan semua unit yang terdaftar di master
-                    u_types = all_u_types
-                else:
-                    # Kalau Tahap 2 ke atas, cek unit mana yang ada harganya di Tahap 1
-                    if not source_p_data.empty:
-                        # Ambil unit_type yang punya price > 0 di data referensi (Tahap sebelumnya)
-                        submitted_units = source_p_data[source_p_data['price'] > 0]['unit_type'].unique().tolist()
-                        # Hanya masukkan unit yang memang pernah diisi harganya
-                        u_types = [u for u in all_u_types if u in submitted_units]
-                    
-                    # Jika ternyata vendor tidak isi apa-apa di tahap 1 (u_types kosong)
-                    if not u_types:
-                        st.warning("⚠️ Anda tidak memberikan penawaran pada unit manapun di Tahap 1 untuk grup rute ini.")
-                        # Opsional: stop proses di sini agar tidak muncul tabel kosong
-                        return
-
+                
                 ex_price = {}; ex_spec = {}
                 is_lock = False
               
@@ -3004,15 +2987,27 @@ def vendor_dashboard(email):
                     # Jika data sekarang sudah ada (atau ini Tahap 1), gunakan data sekarang
                     source_p_data = current_p_data
 
-                # --- JIKA SOURCE MASIH KOSONG (VENDOR BARU), TAMPILKAN LIST RUTENYA ---
-                if source_p_data.empty:
-                    for _, row in my_r.iterrows():
-                        rid = str(row['route_id']).strip()
-                        for u in u_types:
-                            ex_price[(rid, u)] = 0
+                u_types = []
+                if cur_round == "1":
+                    # Kalau Tahap 1, munculkan semua unit yang terdaftar di master
+                    u_types = all_u_types
                 else:
-                    # Kondisi data referensi atau data simpanan tersedia
-                    if not is_using_prev_data and "Locked" in source_p_data['status'].values: 
+                    # Kalau Tahap 2 ke atas, cek unit mana yang ada harganya di Tahap 1
+                    if not source_p_data.empty:
+                        # Ambil unit_type yang punya price > 0 di data referensi (Tahap sebelumnya)
+                        submitted_units = source_p_data[source_p_data['price'] > 0]['unit_type'].unique().tolist()
+                        # Hanya masukkan unit yang memang pernah diisi harganya
+                        u_types = [u for u in all_u_types if u in submitted_units]
+                    
+                    # Jika ternyata vendor tidak isi apa-apa di tahap 1 (u_types kosong)
+                    if not u_types:
+                        st.warning("⚠️ Anda tidak memberikan penawaran pada unit manapun di Tahap 1 untuk grup rute ini.")
+                        # Opsional: stop proses di sini agar tidak muncul tabel kosong
+                        continue
+
+                # --- STEP 5: POPULATE ex_price & ex_spec ---
+                if not source_p_data.empty:
+                    if not is_using_prev_data and "Locked" in source_p_data['status'].values:
                         is_lock = True
                     for _, row in source_p_data.iterrows():
                         harga_bersih = clean_numeric(row['price'])
@@ -3069,6 +3064,7 @@ def vendor_dashboard(email):
                                         rd[f"Target {u}"] = f"Rp {int(tgt):,}".replace(",", ".")
                                 
                                 rd[f"Harga {u} per trip"] = ex_price.get((rid, u), 0)
+                        p_data.append(rd)
                         
                         # --- Pengaman Jika Tabel Menjadi Kosong ---
                         if not p_data:
@@ -3106,6 +3102,7 @@ def vendor_dashboard(email):
                         cols_order.append("Keterangan")
 
                         # 1. Apply column order
+                        cols_order = [c for c in cols_order if c in df_pr.columns]
                         df_pr = df_pr[cols_order]
 
                         # 2. Define the highlighting function
