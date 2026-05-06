@@ -3173,7 +3173,7 @@ def vendor_dashboard(email):
                         f_data = []
                         ts = (datetime.utcnow() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
                         
-                        for _, r in ed_pr.iterrows():
+                        for _, r in df_pr.iterrows():
                             rid = str(r['Route ID'])
                             lt = int(clean_numeric(r['Lead Time (Hari)']) or 0)
                             ket = str(r['Keterangan'])
