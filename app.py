@@ -3040,7 +3040,7 @@ def vendor_dashboard(email):
                     # 2. PRICE
                     with st.container(border=True):
                         st.markdown(f"#### 💰 Penawaran Harga")
-                        if cur_round == 2:
+                        if cur_round == "2":
                             st.info("💡 **Catatan untuk Tahap 2:**\n\n"
                                 "🎯 = **Target Price** (Harga referensi dari tahap sebelumnya).\n\n"
                                 "Mohon dapat mengisi harga penawaran Anda **mendekati atau lebih kompetitif** dari target price yang tertera.")
