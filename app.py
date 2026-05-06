@@ -2981,8 +2981,8 @@ def vendor_dashboard(email):
                 
                 # --- 1. INITIALIZE (Anti-Crash) ---
                 source_p_data = pd.DataFrame() 
-                is_using_prev_data = False
                 current_p_data = pd.DataFrame()
+                is_using_prev_data = False
                 
                 # --- 2. GET CURRENT ROUND DATA ---
                 if not df_p.empty:
