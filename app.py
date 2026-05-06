@@ -3040,6 +3040,10 @@ def vendor_dashboard(email):
                     # 2. PRICE
                     with st.container(border=True):
                         st.markdown(f"#### 💰 Penawaran Harga")
+                        if cur_round == 2:
+                            st.info("💡 **Catatan untuk Tahap 2:**\n\n"
+                                "🎯 = **Target Price** (Harga referensi dari tahap sebelumnya).\n\n"
+                                "Mohon dapat mengisi harga penawaran Anda **mendekati atau lebih kompetitif** dari target price yang tertera.")
                         p_data = []
                         
                         # --- 1. SUSUN DATA PER BARIS ---
@@ -3105,7 +3109,7 @@ def vendor_dashboard(email):
                             # Target MATI (Locked)
                             if f"Target {u}" in df_pr.columns:
                                 cf_pr[f"Target {u}"] = st.column_config.TextColumn(
-                                    label=f"🎯 {u}", disabled=True, width=90, help="Harga Target"
+                                    label=f"🎯 {u}", disabled=True, width=90, help="Target Price"
                                 )
 
                         # --- 4. TAMPILKAN EDITOR (Tanpa .style agar bisa diedit) ---
