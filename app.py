@@ -3105,37 +3105,32 @@ def vendor_dashboard(email):
                         cols_order = [c for c in cols_order if c in df_pr.columns]
                         df_p_view = df_pr[cols_order]
 
-                        # 2. KONFIGURASI KOLOM (Kunci di sini!)
-                        # Kita kasih bantuan visual lewat label (pake emoji atau teks)
+                        # Tentukan kolom mana yang dikunci (hanya Target + kolom non-edit)
+                        locked_cols = ["Kota Asal", "Kota Tujuan", "Route ID"]
                         for u in u_types:
-                            # KOLOM TARGET (HIJAU/REFERENSI) -> WAJIB MATI
                             target_col = f"Target {u}"
                             if target_col in df_p_view.columns:
+                                locked_cols.append(target_col)
                                 cf_pr[target_col] = st.column_config.TextColumn(
-                                    label=f"🟢 {target_col} (Ref)", 
-                                    disabled=True,
+                                    label=f"🟢 {target_col} (Ref)",
                                     help="Harga referensi (tidak bisa diubah)"
                                 )
-                            
-                            # KOLOM HARGA -> WAJIB BISA EDIT
                             price_col = f"Harga {u} per trip"
                             cf_pr[price_col] = st.column_config.NumberColumn(
                                 label=f"💰 {price_col}",
                                 min_value=0,
                                 format="Rp %,d",
-                                disabled=False # <--- Pastikan ini False!
                             )
 
-                        # 3. TAMPILKAN EDITOR (HAPUS .style.apply)
-                        # Agar kolom HARGA bisa diedit, kita HARUS kirim DataFrame mentah
                         ed_pr = st.data_editor(
-                            df_p_view, # <--- PAKAI DATA MENTAH, JANGAN PAKAI .style
-                            hide_index=True, 
-                            use_container_width=True, 
+                            df_p_view,
+                            hide_index=True,
+                            use_container_width=True,
                             key=f"editor_{gid}_{cur_round}",
                             column_config=cf_pr,
-                            disabled=is_lock 
+                            disabled=locked_cols if not is_lock else True
                         )
+                    
                     # 3. MULTIDROP
                     with st.container(border=True):
                         st.markdown("#### 📦 Biaya Multidrop & Buruh")
