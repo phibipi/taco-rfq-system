@@ -3101,33 +3101,40 @@ def vendor_dashboard(email):
                         
                         cols_order.append("Keterangan")
 
-                        # 1. Apply column order
+                        # 1. SIAPKAN VIEW (Tanpa .style dulu di sini)
                         cols_order = [c for c in cols_order if c in df_pr.columns]
-                        df_pr = df_pr[cols_order]
+                        df_p_view = df_pr[cols_order]
 
-                        # 2. Define the highlighting function
-                        def highlight_target(x):
-                            # Create an empty dataframe for styles
-                            df_color = pd.DataFrame('', index=x.index, columns=x.columns)
-                            # Identify columns that contain the word 'Target'
-                            target_cols = [c for c in x.columns if 'Target' in c]
-                            # Apply the green style to those columns
-                            for col in target_cols:
-                                df_color[col] = 'background-color: #d1fae5; color: #065f46; font-weight: bold;'
-                            return df_color
+                        # 2. KONFIGURASI KOLOM (Kunci di sini!)
+                        # Kita kasih bantuan visual lewat label (pake emoji atau teks)
+                        for u in u_types:
+                            # KOLOM TARGET (HIJAU/REFERENSI) -> WAJIB MATI
+                            target_col = f"Target {u}"
+                            if target_col in df_p_view.columns:
+                                cf_pr[target_col] = st.column_config.TextColumn(
+                                    label=f"🟢 {target_col} (Ref)", 
+                                    disabled=True,
+                                    help="Harga referensi (tidak bisa diubah)"
+                                )
+                            
+                            # KOLOM HARGA -> WAJIB BISA EDIT
+                            price_col = f"Harga {u} per trip"
+                            cf_pr[price_col] = st.column_config.NumberColumn(
+                                label=f"💰 {price_col}",
+                                min_value=0,
+                                format="Rp %,d",
+                                disabled=False # <--- Pastikan ini False!
+                            )
 
-                        # 3. Create the Styled object (axis=None is crucial for cross-column logic)
-                        df_pr_styled = df_pr.style.apply(highlight_target, axis=None)
-
-                        # 4. Display in the editor
-                        # Note: Because it is styled, this will be static/read-only in current Streamlit versions
+                        # 3. TAMPILKAN EDITOR (HAPUS .style.apply)
+                        # Agar kolom HARGA bisa diedit, kita HARUS kirim DataFrame mentah
                         ed_pr = st.data_editor(
-                            df_pr_styled, 
+                            df_p_view, # <--- PAKAI DATA MENTAH, JANGAN PAKAI .style
                             hide_index=True, 
                             use_container_width=True, 
-                            disabled=is_lock, # Explicitly lock it as requested
+                            key=f"editor_{gid}_{cur_round}",
                             column_config=cf_pr,
-                            key=f"editor_{gid}_{cur_round}"
+                            disabled=is_lock 
                         )
                     # 3. MULTIDROP
                     with st.container(border=True):
