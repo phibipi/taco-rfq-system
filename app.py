@@ -1701,7 +1701,7 @@ def admin_dashboard():
             m4['price'] = pd.to_numeric(m4['price'], errors='coerce').fillna(0)
             df_master = m4
 
-        tabs = st.tabs(["⏳ Submit Monitor", "✅ Lock Data", "📊 Summary", "🖨️ Print Dokumen", "📥 SPH Uploads"])
+        tabs = st.tabs(["⏳ Submit Monitor", "✅ Lock Data", "📊 Summary", "🖨️ Print Dokumen", "📥 SPH Uploads", "Template"])
         
 # --- TAB 1: SUBMIT MONITOR (UPDATE: STATS & SEARCH BAR) ---
         with tabs[0]:
@@ -2517,7 +2517,82 @@ def admin_dashboard():
                                 st.markdown(f'<a href="{file_url}" target="_blank" style="background-color:#2563EB; color:white; padding:8px 12px; border-radius:8px; text-decoration:none; font-weight:bold; display:inline-block; text-align:center; width:100%;">🔗 Buka di Drive</a>', unsafe_allow_html=True)
                             else:
                                 st.error("❌ Link Error")               
+
+        with tabs[5]: # Tab Download Template
+            st.subheader("📄 Generate Template Excel Kosong")
+            st.caption("Gunakan fitur ini untuk membuat file Excel penawaran harga berdasarkan rute dan unit yang terdaftar di database.")
+
+            if not df_g.empty and not df_r.empty and not df_units.empty:
+                c1, c2 = st.columns(2)
+                
+                # 1. Filter Tipe Muatan (FTL/FCL)
+                avail_load_tmpl = sorted(df_g['load_type'].unique().tolist())
+                sel_load_tmpl = c1.selectbox("Pilih Tipe Muatan", avail_load_tmpl, key="tmpl_load")
+
+                # 2. Filter Origin (Dinamis sesuai Load Type)
+                avail_org_tmpl = sorted(df_g[df_g['load_type'] == sel_load_tmpl]['origin'].unique().tolist())
+                sel_org_tmpl = c2.multiselect("Pilih Origin (Bisa banyak)", avail_org_tmpl, key="tmpl_org")
+
+                if st.button("🚀 Generate Template Excel", type="primary"):
+                    if not sel_org_tmpl:
+                        st.warning("Pilih minimal satu Origin bejir.")
+                    else:
+                        # --- PROSES DATA ---
+                        output = io.BytesIO()
+                        # Filter Group yang sesuai pilihan
+                        target_groups = df_g[(df_g['load_type'] == sel_load_tmpl) & (df_g['origin'].isin(sel_org_tmpl))]
+                        
+                        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                            workbook = writer.book
+                            # Format Header
+                            fmt_header = workbook.add_format({'bold': True, 'bg_color': '#FCA568', 'border': 1, 'align': 'center'})
+                            fmt_border = workbook.add_format({'border': 1})
+                            
+                            for _, g_row in target_groups.iterrows():
+                                gid = g_row['group_id']
+                                g_name = g_row['route_group']
+                                g_origin = g_row['origin']
                                 
+                                # A. Ambil Rute untuk Group ini
+                                routes_sub = df_r[df_r['group_id'] == gid][['kota_asal', 'kota_tujuan']].drop_duplicates()
+                                
+                                # B. Ambil Unit untuk Group ini (Horizontal)
+                                units_sub = df_units[df_units['group_id'] == gid]['unit_type'].unique().tolist()
+                                
+                                if not routes_sub.empty:
+                                    # Tambahkan kolom unit kosong ke samping
+                                    for u in units_sub:
+                                        routes_sub[f"Harga {u}"] = ""
+                                    
+                                    # Beri nama sheet (max 31 char, buang karakter ilegal)
+                                    clean_sheet_name = "".join(x for x in g_name if x.isalnum() or x in " -")[:30]
+                                    
+                                    # Write ke Excel
+                                    routes_sub.to_excel(writer, sheet_name=clean_sheet_name, index=False)
+                                    
+                                    # Styling Sheet
+                                    sheet = writer.sheets[clean_sheet_name]
+                                    # Set lebar kolom (Asal & Tujuan)
+                                    sheet.set_column(0, 1, 25)
+                                    # Set lebar kolom (Harga unit-unit)
+                                    if len(units_sub) > 0:
+                                        sheet.set_column(2, 2 + len(units_sub) - 1, 18)
+                                    
+                                    # Terapkan format header
+                                    for col_num, value in enumerate(routes_sub.columns.values):
+                                        sheet.write(0, col_num, value, fmt_header)
+
+                        st.success(f"✅ Template Berhasil Dibuat! ({len(target_groups)} Group Rute)")
+                        
+                        st.download_button(
+                            label="⬇️ Download Excel Template",
+                            data=output.getvalue(),
+                            file_name=f"Template_RFQ_{sel_load_tmpl}_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True
+                        )
+            else:
+                st.error("Database Master (Groups/Routes/Units) masih kosong")                        
 
 # ================= VENDOR DASHBOARD (UPDATE: DYNAMIC TABS) =================
 def vendor_dashboard(email):
