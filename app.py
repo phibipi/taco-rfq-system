@@ -3118,7 +3118,7 @@ def vendor_dashboard(email):
                         if cur_round == "2":
                             st.info("💡 **Catatan untuk Tahap 2:**\n\n"
                                 "🎯 = **Target Price** (Harga referensi dari tahap sebelumnya).\n\n"
-                                "Mohon dapat mengisi harga penawaran Anda **mendekati atau lebih kompetitif** dari target price yang tertera.")
+                                "Mohon dapat mengganti harga penawaran di kolom harga **mendekati atau lebih kompetitif** dari target price yang tertera sebagai penawaran harga Tahap 2.")
                         p_data = []
                         
                         # --- 1. SUSUN DATA PER BARIS ---
