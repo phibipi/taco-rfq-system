@@ -3179,12 +3179,12 @@ def vendor_dashboard(email):
                         for u in u_types:
                             # Harga BISA EDIT
                             cf_pr[f"Harga {u} per trip"] = st.column_config.NumberColumn(
-                                label=f"💰 {u} per trip", min_value=0, step=1000, format="Rp %,d"
+                                label=f"💰Harga {u} per trip", min_value=0, step=1000, format="Rp %,d"
                             )
                             # Target MATI (Locked)
                             if f"Target {u}" in df_pr.columns:
                                 cf_pr[f"Target {u}"] = st.column_config.TextColumn(
-                                    label=f"🎯 {u}", disabled=True, width=90, help="Target Price"
+                                    label=f"🎯 Target {u}", disabled=True, width=90, help="Target Price"
                                 )
 
                         # --- 4. TAMPILKAN EDITOR (Tanpa .style agar bisa diedit) ---
