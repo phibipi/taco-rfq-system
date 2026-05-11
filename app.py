@@ -2092,12 +2092,14 @@ def admin_dashboard():
                 c1, c2, c3, c4 = st.columns(4)
                 avail_val = sorted(df_master['validity'].unique().tolist())
                 avail_load = sorted(df_master['load_type'].unique().tolist())
+                avail_round = sorted(df_master['round'].unique().tolist())
             
                 sel_val = c1.selectbox("Filter Periode", avail_val, key="es_val")
                 sel_load = c2.selectbox("Filter Tipe Muatan", avail_load, key="es_load")
+                sel_round = c3.selectbox("Filter Tahap", avail_round, key="es_round")
             
                 # 1. Filter Awal (Periode & Muatan)
-                df_view = df_master[(df_master['validity'] == sel_val) & (df_master['load_type'] == sel_load)].copy()
+                df_view = df_master[(df_master['validity'] == sel_val) & (df_master['load_type'] == sel_load) & (df_master['round'] == sel_round)].copy()
                 df_view = df_view[df_view['price'] > 0]
                 
                 # 2. Tambahan Filter Kota Asal & Search Bar
