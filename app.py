@@ -1701,7 +1701,7 @@ def admin_dashboard():
             m4['price'] = pd.to_numeric(m4['price'], errors='coerce').fillna(0)
             df_master = m4
 
-        tabs = st.tabs(["⏳ Submit Monitor", "✅ Lock Data", "📊 Summary", "🖨️ Print Dokumen", "📥 SPH Uploads", "Template"])
+        tabs = st.tabs(["⏳ Submit Monitor", "✅ Lock Data", "📊 Summary", "🖨️ Print Dokumen", "📥 SPH Uploads", "Template", "comparison"])
         
 # --- TAB 1: SUBMIT MONITOR (UPDATE: STATS & SEARCH BAR) ---
         with tabs[0]:
@@ -2594,7 +2594,110 @@ def admin_dashboard():
                             use_container_width=True
                         )
             else:
-                st.error("Database Master (Groups/Routes/Units) masih kosong")                        
+                st.error("Database Master (Groups/Routes/Units) masih kosong")        
+
+        with tabs[6]: # Tab Perbandingan
+            st.subheader("⚖️ Perbandingan Harga Tahap 1 vs Tahap 2")
+            st.caption("Gunakan tab ini untuk melihat penurunan harga per rute dan per vendor secara detail.")
+
+            if not df_p.empty:
+                # 1. Filter Kontrol
+                c1, c2, c3, c4 = st.columns(4)
+                
+                avail_val = sorted(df_p['validity'].unique().tolist())
+                sel_val_comp = c1.selectbox("Pilih Periode", avail_val, key="comp_val")
+                
+                avail_lt = sorted(df_g['load_type'].unique().tolist())
+                sel_lt_comp = c2.selectbox("Pilih Tipe Muatan", avail_lt, key="comp_lt")
+                
+                # Filter Vendor yang punya data di periode & tipe tersebut
+                # Merge dulu p dengan g buat tau load_type
+                df_p_merged = pd.merge(df_p, df_g[['group_id', 'load_type', 'origin']], on='group_id', how='left')
+                
+                vendor_list = sorted(df_p_merged[
+                    (df_p_merged['validity'] == sel_val_comp) & 
+                    (df_p_merged['load_type'] == sel_lt_comp)
+                ]['vendor_email'].unique().tolist())
+                
+                sel_ven_comp = c3.selectbox("Pilih Vendor", vendor_list, key="comp_ven")
+                
+                origin_list = sorted(df_p_merged[
+                    (df_p_merged['vendor_email'] == sel_ven_comp) & 
+                    (df_p_merged['load_type'] == sel_lt_comp)
+                ]['origin'].unique().tolist())
+                
+                sel_org_comp = c4.selectbox("Pilih Origin", ["Semua"] + origin_list, key="comp_org")
+
+                # 2. Proses Data Perbandingan
+                # Filter data vendor spesifik
+                df_v = df_p_merged[(df_p_merged['vendor_email'] == sel_ven_comp) & (df_p_merged['validity'] == sel_val_comp)]
+                if sel_org_comp != "Semua":
+                    df_v = df_v[df_v['origin'] == sel_org_comp]
+
+                if not df_v.empty:
+                    comparison_data = []
+                    
+                    # Grouping berdasarkan Rute dan Unit
+                    unique_routes = df_v[['route_id', 'unit_type']].drop_duplicates()
+                    
+                    for _, r_info in unique_routes.iterrows():
+                        rid = r_info['route_id']
+                        ut = r_info['unit_type']
+                        
+                        # Ambil info rute (Asal - Tujuan)
+                        r_detail = df_r[df_r['route_id'] == rid]
+                        asal_tujuan = f"{r_detail.iloc[0]['kota_asal']} ➡️ {r_detail.iloc[0]['kota_tujuan']}" if not r_detail.empty else rid
+                        
+                        # Ambil Harga Round 1
+                        p1_row = df_v[(df_v['route_id'] == rid) & (df_v['unit_type'] == ut) & (df_v['round'].astype(str) == "1")]
+                        p1 = pd.to_numeric(p1_row['price'], errors='coerce').fillna(0).max()
+                        
+                        # Ambil Harga Round 2
+                        p2_row = df_v[(df_v['route_id'] == rid) & (df_v['unit_type'] == ut) & (df_v['round'].astype(str) == "2")]
+                        p2 = pd.to_numeric(p2_row['price'], errors='coerce').fillna(0).max()
+                        
+                        # Hitung Selisih & Prosentase
+                        diff = p1 - p2 if (p1 > 0 and p2 > 0) else 0
+                        pct = (diff / p1 * 100) if (p1 > 0 and diff != 0) else 0
+                        
+                        comparison_data.append({
+                            "Rute": asal_tujuan,
+                            "Unit": ut,
+                            "Harga Tahap 1": p1,
+                            "Harga Tahap 2": p2,
+                            "Penurunan (Rp)": diff,
+                            "Penurunan (%)": round(pct, 2)
+                        })
+
+                    df_comp_final = pd.DataFrame(comparison_data)
+
+                    # 3. Tampilkan Tabel
+                    if not df_comp_final.empty:
+                        # Styling: Warna merah kalau tidak turun, hijau kalau turun
+                        def style_diff(val):
+                            color = 'green' if val > 0 else ('red' if val < 0 else 'black')
+                            return f'color: {color}'
+
+                        st.dataframe(
+                            df_comp_final.style.format({
+                                "Harga Tahap 1": "Rp {:,.0f}",
+                                "Harga Tahap 2": "Rp {:,.0f}",
+                                "Penurunan (Rp)": "Rp {:,.0f}",
+                                "Penurunan (%)": "{:.2f}%"
+                            }).applymap(style_diff, subset=['Penurunan (Rp)', 'Penurunan (%)']),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                        
+                        # Info Ringkasan
+                        total_nego = df_comp_final[df_comp_final['Penurunan (Rp)'] > 0].shape[0]
+                        st.success(f"💡 Vendor ini menurunkan harga pada **{total_nego}** dari **{len(df_comp_final)}** penawaran.")
+                    else:
+                        st.info("Data tidak ditemukan.")
+                else:
+                    st.warning("Vendor ini belum mengisi data pada filter yang dipilih.")
+            else:
+                st.error("Database Price_Data kosong.")
 
 # ================= VENDOR DASHBOARD (UPDATE: DYNAMIC TABS) =================
 def vendor_dashboard(email):
