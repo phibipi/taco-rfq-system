@@ -2701,7 +2701,7 @@ def admin_dashboard():
                                     "Harga Tahap 2": "Rp {:,.0f}",
                                     "Selisih (Rp)": "Rp {:,.0f}",
                                     "Turun (%)": "{:.2f}%"
-                                }).applymap(color_diff, subset=['Selisih (Rp)', 'Turun (%)']),
+                                }).map(color_diff, subset=['Selisih (Rp)', 'Turun (%)']),
                                 use_container_width=True,
                                 hide_index=True
                             )
