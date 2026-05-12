@@ -2598,106 +2598,124 @@ def admin_dashboard():
 
         with tabs[6]: # Tab Perbandingan
             st.subheader("⚖️ Perbandingan Harga Tahap 1 vs Tahap 2")
-            st.caption("Gunakan tab ini untuk melihat penurunan harga per rute dan per vendor secara detail.")
+            st.caption("Lihat penurunan harga per rute dan per vendor untuk negosiasi.")
 
-            if not df_p.empty:
-                # 1. Filter Kontrol
+            if not df_p.empty and not df_r.empty and not df_g.empty:
+                # --- 1. DATA PREPARATION (Fixing the Merge issue) ---
+                # Pastikan semua ID bersih
+                df_p_c = df_p.copy()
+                df_r_c = df_r.copy()
+                df_g_c = df_g.copy()
+                
+                df_p_c['route_id'] = df_p_c['route_id'].astype(str).str.strip()
+                df_r_c['route_id'] = df_r_c['route_id'].astype(str).str.strip()
+                df_r_c['group_id'] = df_r_c['group_id'].astype(str).str.strip()
+                df_g_c['group_id'] = df_g_c['group_id'].astype(str).str.strip()
+
+                # Merge Price -> Route -> Group
+                df_step1 = pd.merge(df_p_c, df_r_c[['route_id', 'group_id', 'kota_asal', 'kota_tujuan']], on='route_id', how='left')
+                df_p_merged = pd.merge(df_step1, df_g_c[['group_id', 'load_type', 'origin']], on='group_id', how='left')
+                
+                # Paksa kolom kritis jadi numeric
+                df_p_merged['price'] = pd.to_numeric(df_p_merged['price'], errors='coerce').fillna(0)
+                df_p_merged['round'] = pd.to_numeric(df_p_merged['round'], errors='coerce').fillna(1).astype(int)
+
+                # --- 2. FILTER CONTROLS ---
                 c1, c2, c3, c4 = st.columns(4)
                 
-                avail_val = sorted(df_p['validity'].unique().tolist())
-                sel_val_comp = c1.selectbox("Pilih Periode", avail_val, key="comp_val")
+                avail_val = sorted(df_p_merged['validity'].dropna().unique().tolist())
+                sel_val_comp = c1.selectbox("Pilih Periode", avail_val, key="comp_val_final")
                 
-                avail_lt = sorted(df_g['load_type'].unique().tolist())
-                sel_lt_comp = c2.selectbox("Pilih Tipe Muatan", avail_lt, key="comp_lt")
+                avail_lt = sorted(df_p_merged['load_type'].dropna().unique().tolist())
+                sel_lt_comp = c2.selectbox("Pilih Tipe Muatan", avail_lt, key="comp_lt_final")
                 
-                # Filter Vendor yang punya data di periode & tipe tersebut
-                # Merge dulu p dengan g buat tau load_type
-                df_p_merged = pd.merge(df_p, df_g[['group_id', 'load_type', 'origin']], on='group_id', how='left')
-                
+                # List Vendor berdasarkan muatan & periode
                 vendor_list = sorted(df_p_merged[
                     (df_p_merged['validity'] == sel_val_comp) & 
                     (df_p_merged['load_type'] == sel_lt_comp)
-                ]['vendor_email'].unique().tolist())
+                ]['vendor_email'].dropna().unique().tolist())
                 
-                sel_ven_comp = c3.selectbox("Pilih Vendor", vendor_list, key="comp_ven")
-                
-                origin_list = sorted(df_p_merged[
-                    (df_p_merged['vendor_email'] == sel_ven_comp) & 
-                    (df_p_merged['load_type'] == sel_lt_comp)
-                ]['origin'].unique().tolist())
-                
-                sel_org_comp = c4.selectbox("Pilih Origin", ["Semua"] + origin_list, key="comp_org")
-
-                # 2. Proses Data Perbandingan
-                # Filter data vendor spesifik
-                df_v = df_p_merged[(df_p_merged['vendor_email'] == sel_ven_comp) & (df_p_merged['validity'] == sel_val_comp)]
-                if sel_org_comp != "Semua":
-                    df_v = df_v[df_v['origin'] == sel_org_comp]
-
-                if not df_v.empty:
-                    comparison_data = []
-                    
-                    # Grouping berdasarkan Rute dan Unit
-                    unique_routes = df_v[['route_id', 'unit_type']].drop_duplicates()
-                    
-                    for _, r_info in unique_routes.iterrows():
-                        rid = r_info['route_id']
-                        ut = r_info['unit_type']
-                        
-                        # Ambil info rute (Asal - Tujuan)
-                        r_detail = df_r[df_r['route_id'] == rid]
-                        asal_tujuan = f"{r_detail.iloc[0]['kota_asal']} ➡️ {r_detail.iloc[0]['kota_tujuan']}" if not r_detail.empty else rid
-                        
-                        # Ambil Harga Round 1
-                        p1_row = df_v[(df_v['route_id'] == rid) & (df_v['unit_type'] == ut) & (df_v['round'].astype(str) == "1")]
-                        p1 = pd.to_numeric(p1_row['price'], errors='coerce').fillna(0).max()
-                        
-                        # Ambil Harga Round 2
-                        p2_row = df_v[(df_v['route_id'] == rid) & (df_v['unit_type'] == ut) & (df_v['round'].astype(str) == "2")]
-                        p2 = pd.to_numeric(p2_row['price'], errors='coerce').fillna(0).max()
-                        
-                        # Hitung Selisih & Prosentase
-                        diff = p1 - p2 if (p1 > 0 and p2 > 0) else 0
-                        pct = (diff / p1 * 100) if (p1 > 0 and diff != 0) else 0
-                        
-                        comparison_data.append({
-                            "Rute": asal_tujuan,
-                            "Unit": ut,
-                            "Harga Tahap 1": p1,
-                            "Harga Tahap 2": p2,
-                            "Penurunan (Rp)": diff,
-                            "Penurunan (%)": round(pct, 2)
-                        })
-
-                    df_comp_final = pd.DataFrame(comparison_data)
-
-                    # 3. Tampilkan Tabel
-                    if not df_comp_final.empty:
-                        # Styling: Warna merah kalau tidak turun, hijau kalau turun
-                        def style_diff(val):
-                            color = 'green' if val > 0 else ('red' if val < 0 else 'black')
-                            return f'color: {color}'
-
-                        st.dataframe(
-                            df_comp_final.style.format({
-                                "Harga Tahap 1": "Rp {:,.0f}",
-                                "Harga Tahap 2": "Rp {:,.0f}",
-                                "Penurunan (Rp)": "Rp {:,.0f}",
-                                "Penurunan (%)": "{:.2f}%"
-                            }).applymap(style_diff, subset=['Penurunan (Rp)', 'Penurunan (%)']),
-                            use_container_width=True,
-                            hide_index=True
-                        )
-                        
-                        # Info Ringkasan
-                        total_nego = df_comp_final[df_comp_final['Penurunan (Rp)'] > 0].shape[0]
-                        st.success(f"💡 Vendor ini menurunkan harga pada **{total_nego}** dari **{len(df_comp_final)}** penawaran.")
-                    else:
-                        st.info("Data tidak ditemukan.")
+                if not vendor_list:
+                    st.warning("Belum ada data penawaran untuk kriteria ini.")
                 else:
-                    st.warning("Vendor ini belum mengisi data pada filter yang dipilih.")
+                    sel_ven_comp = c3.selectbox("Pilih Vendor", vendor_list, key="comp_ven_final")
+                    
+                    origin_list = sorted(df_p_merged[
+                        (df_p_merged['vendor_email'] == sel_ven_comp) & 
+                        (df_p_merged['load_type'] == sel_lt_comp)
+                    ]['origin'].dropna().unique().tolist())
+                    
+                    sel_org_comp = c4.selectbox("Pilih Origin", ["Semua"] + origin_list, key="comp_org_final")
+
+                    # --- 3. PROCESSING COMPARISON ---
+                    df_v = df_p_merged[(df_p_merged['vendor_email'] == sel_ven_comp) & (df_p_merged['validity'] == sel_val_comp)]
+                    if sel_org_comp != "Semua":
+                        df_v = df_v[df_v['origin'] == sel_org_comp]
+
+                    if not df_v.empty:
+                        comparison_data = []
+                        # Cari rute & unit unik yang pernah diisi vendor ini
+                        unique_routes = df_v[['route_id', 'unit_type']].drop_duplicates()
+                        
+                        for _, r_info in unique_routes.iterrows():
+                            rid = r_info['route_id']
+                            ut = r_info['unit_type']
+                            
+                            # Info Lokasi
+                            r_row = df_v[df_v['route_id'] == rid].iloc[0]
+                            asal_tujuan = f"{r_row['kota_asal']} ➡️ {r_row['kota_tujuan']}"
+                            
+                            # Harga T1 & T2
+                            p1 = df_v[(df_v['route_id'] == rid) & (df_v['unit_type'] == ut) & (df_v['round'] == 1)]['price'].max()
+                            p2 = df_v[(df_v['route_id'] == rid) & (df_v['unit_type'] == ut) & (df_v['round'] == 2)]['price'].max()
+                            
+                            p1 = 0 if pd.isna(p1) else p1
+                            p2 = 0 if pd.isna(p2) else p2
+                            
+                            # Kalkulasi Selisih
+                            diff = p1 - p2 if (p1 > 0 and p2 > 0) else 0
+                            pct = (diff / p1 * 100) if (p1 > 0 and diff != 0) else 0
+                            
+                            comparison_data.append({
+                                "Origin Area": r_row['origin'],
+                                "Rute": asal_tujuan,
+                                "Unit": ut,
+                                "Harga Tahap 1": p1,
+                                "Harga Tahap 2": p2,
+                                "Selisih (Rp)": diff,
+                                "Turun (%)": round(pct, 2)
+                            })
+
+                        df_final_res = pd.DataFrame(comparison_data)
+
+                        if not df_final_res.empty:
+                            # Tampilkan Tabel dengan Warna
+                            def color_diff(val):
+                                if val > 0: return 'color: green; font-weight: bold'
+                                elif val < 0: return 'color: red'
+                                return 'color: black'
+
+                            st.dataframe(
+                                df_final_res.style.format({
+                                    "Harga Tahap 1": "Rp {:,.0f}",
+                                    "Harga Tahap 2": "Rp {:,.0f}",
+                                    "Selisih (Rp)": "Rp {:,.0f}",
+                                    "Turun (%)": "{:.2f}%"
+                                }).applymap(color_diff, subset=['Selisih (Rp)', 'Turun (%)']),
+                                use_container_width=True,
+                                hide_index=True
+                            )
+                            
+                            # Summary Statistik
+                            total_rute = len(df_final_res)
+                            turun_harga = len(df_final_res[df_final_res['Selisih (Rp)'] > 0])
+                            st.success(f"📈 Progres: Vendor ini menurunkan harga pada **{turun_harga}** dari **{total_rute}** rute yang ditawarkan.")
+                        else:
+                            st.info("Tidak ada data harga untuk dibandingkan.")
+                    else:
+                        st.warning("Data vendor tidak ditemukan.")
             else:
-                st.error("Database Price_Data kosong.")
+                st.error("Database tidak lengkap (Price/Route/Group missing).")
 
 # ================= VENDOR DASHBOARD (UPDATE: DYNAMIC TABS) =================
 def vendor_dashboard(email):
