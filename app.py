@@ -153,7 +153,16 @@ def init_style():
         div[data-testid="stExpander"]:hover {
             border-color: #FCA568 !important;
         }
-        
+        div[data-testid="stDataEditor"] table th:nth-child(1),
+        div[data-testid="stDataEditor"] table td:nth-child(1),
+        div[data-testid="stDataEditor"] table th:nth-child(2),
+        div[data-testid="stDataEditor"] table td:td-child(2) {
+            position: sticky !important;
+            left: 0;
+            background-color: #FFFFFF !important;
+            z-index: 2 !important;
+            box-shadow: 2px 0px 5px rgba(0,0,0,0.05);
+        }
         </style>
     """, unsafe_allow_html=True)
 
@@ -3317,8 +3326,7 @@ def vendor_dashboard(email):
                             use_container_width=True, 
                             column_config=cf_pr,
                             key=f"editor_{gid}_{cur_round}",
-                            disabled=is_lock,
-                            pin_columns=["Kota Asal", "Kota Tujuan"]
+                            disabled=is_lock
                         )
                     
                     # 3. MULTIDROP
