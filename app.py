@@ -3317,7 +3317,8 @@ def vendor_dashboard(email):
                             use_container_width=True, 
                             column_config=cf_pr,
                             key=f"editor_{gid}_{cur_round}",
-                            disabled=is_lock 
+                            disabled=is_lock,
+                            pin_columns=["Kota Asal", "Kota Tujuan"]
                         )
                     
                     # 3. MULTIDROP
