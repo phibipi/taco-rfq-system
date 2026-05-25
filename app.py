@@ -388,9 +388,11 @@ def generate_child_id(df, parent_id, id_col):
     return f"{prefix}{str(max_num + 1).zfill(3)}"
 
 def clean_numeric(val):
-    if pd.isna(val) or str(val).strip() == "": return None
-    try: return float(str(val).replace(",", ""))
-    except: return None
+    if pd.isna(val) or str(val).strip() == "": return 0
+    try:
+        s = str(val).replace("Rp", "").replace(".", "").replace(",", "").replace(" ", "").strip()
+        return float(s) if s else 0
+    except: return 0
 
 # --- TOMBOL SCROLL TO TOP (VERSI MANUAL ANCHOR) ---
 def add_scroll_to_top():
@@ -3372,18 +3374,20 @@ def vendor_dashboard(email):
                         for _, r in ed_pr.iterrows():
                             rid = str(r['Route ID'])
                             lt = int(clean_numeric(r['Lead Time (Hari)']) or 0)
-                            ket = str(r['Keterangan'])
+                            ket = str(r['Keterangan']).replace("nan", "-")
                             
                             for u in u_types:
                                 pr = int(clean_numeric(r[f"Harga {u} per trip"]) or 0)
-                                w = str(c_spec.get(u,{}).get('w','')); c = str(c_spec.get(u,{}).get('c',''))
-                                tid = f"{email}_{cur_val}_{rid}_{u}_{cur_round}".replace(" ","")
-                                f_data.append([tid, email, "Open", cur_val, rid, u, lt, pr, w, c, ket, ts, cur_round])
+                                w = str(c_spec.get(u,{}).get('w','')).replace("nan", "-"); c = str(c_spec.get(u,{}).get('c','')).replace("nan", "-")
+                                round_num = int(cur_round)
+                                tid = f"{email}_{cur_val}_{rid}_{u}_{round_num}".replace(" ","")
+                                if pr > 0:
+                                    f_data.append([tid, email, "Open", cur_val, rid, u, lt, pr, w, c, ket, ts, round_num])
                         
                         mi = int(clean_numeric(ed_md.iloc[0]["Multidrop Dalam Kota"]) or 0)
                         mo = int(clean_numeric(ed_md.iloc[0]["Multidrop Luar Kota"]) or 0)
                         ml = int(clean_numeric(ed_md.iloc[0]["Biaya Buruh"]) or 0)
-                        mid = f"M_{email}_{gid}_{cur_val}_{cur_round}"
+                        mid = f"M_{email}_{gid}_{cur_val}_{int(cur_round)}"
 
                         # ▼▼▼ PERBAIKAN: CEK STATUS KEBERHASILAN SAVE ▼▼▼
                         with st.spinner("Menyimpan ke server..."):
