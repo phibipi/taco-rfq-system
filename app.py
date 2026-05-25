@@ -248,8 +248,15 @@ def upload_to_drive(file_buffer, filename, mimetype, folder_id):
         st.error(f"Error API Drive: {e}")
         return None
 
-# --- FUNGSI SAVE (BATCH UPDATE: SUPER CEPAT & ANTI-LIMIT) ---
 def save_data(sheet_name, new_data_list):
+    """
+    Fungsi Reinkarnasi: Membaca seluruh data Sheets, menggabungkan data baru,
+    membuang duplikat ID lama, lalu menulis ulang secara bersih dari atas ke bawah.
+    100% ANTI NYASAR DAN TAMPILAN SAMA PERSIS DENGAN PORTAL EVALUASI.
+    """
+    if not new_data_list:
+        return True
+
     sh = connect_to_gsheet()
     if not sh:
         st.error("Tidak bisa konek ke Google Sheets.")
@@ -257,61 +264,42 @@ def save_data(sheet_name, new_data_list):
 
     try:
         ws = sh.worksheet(sheet_name)
-        existing_data = ws.get_all_values()
+        all_values = ws.get_all_values()
 
-        # Jika sheet kosong, langsung append semua
-        if not existing_data:
+        # 1. Jika Sheet kosong, langsung masukkan data baru beserta headernya
+        if not all_values:
             ws.append_rows(new_data_list)
             get_data.clear()
             return True
 
-        headers = existing_data[0]
-        if not headers:
-            st.error(f"Sheet '{sheet_name}' tidak punya header.")
-            return False
+        headers = all_values[0]
+        
+        # 2. Buat DataFrame dari data lama di Sheets
+        df_old = pd.DataFrame(all_values[1:], columns=headers) if len(all_values) > 1 else pd.DataFrame(columns=headers)
+        
+        # 3. Buat DataFrame dari data baru yang di-submit vendor
+        df_new = pd.DataFrame(new_data_list, columns=headers)
 
-        # Petakan ID ke Nomor Baris
-        id_to_row = {}
-        for row_idx, row in enumerate(existing_data[1:], start=2):
-            if row and str(row[0]).strip():
-                id_to_row[str(row[0]).strip()] = row_idx
+        # 4. Gabungkan data lama dan data baru (Sama persis kayak logika Portal Evaluasi lo!)
+        # Kolom pertama headers[0] adalah 'id_transaksi' atau 'id_multidrop'
+        key_column = headers[0]
+        df_final = pd.concat([df_old, df_new], ignore_index=True)
+        
+        # Kunci keep='last': Data lama di tengah dihancurkan, data baru masuk otomatis di posisi baris bawah
+        df_final = df_final.drop_duplicates(subset=[key_column], keep='last')
 
-        rows_to_append = []
-        updates_batch = []
-
-        for new_row in new_data_list:
-            new_id = str(new_row[0]).strip()
-
-            if new_id in id_to_row:
-                # Masukkan ke keranjang UPDATE
-                target_row_num = id_to_row[new_id]
-                str_row = [str(v) if v is not None else "" for v in new_row]
-                
-                num_cols = len(str_row)
-                end_col_letter = col_num_to_letter(num_cols)
-                cell_range = f"A{target_row_num}:{end_col_letter}{target_row_num}"
-                
-                updates_batch.append({
-                    'range': cell_range,
-                    'values': [str_row]
-                })
-            else:
-                # Masukkan ke keranjang baris BARU
-                rows_to_append.append(new_row)
-
-        # 1. Eksekusi semua Update sekaligus (Hanya 1x panggil API)
-        if updates_batch:
-            ws.batch_update(updates_batch, value_input_option='USER_ENTERED')
-
-        # 2. Eksekusi baris baru sekaligus (Hanya 1x panggil API)
-        if rows_to_append:
-            ws.append_rows(rows_to_append)
+        # 5. Bersihkan Sheets dan tulis ulang secara utuh dari baris pertama (A1)
+        ws.clear()
+        
+        # Masukkan kembali header + data final yang sudah bersih tanpa duplikat
+        final_matrix = [headers] + df_final.values.tolist()
+        ws.update(final_matrix, value_input_option='USER_ENTERED')
 
         get_data.clear()
         return True
 
     except Exception as e:
-        st.error(f"Gagal menyimpan data: {str(e)}")
+        st.error(f"Gagal memproses: {str(e)}")
         return False
 
 def col_num_to_letter(n):
