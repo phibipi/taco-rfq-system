@@ -3385,7 +3385,7 @@ def vendor_dashboard(email):
                             df_terupdate = df_pr
                             
                         for _, r in df_terupdate.iterrows():
-                            rid = str(r['Route ID'])
+                            rid = str(r['Route ID']).replace(" ", "").strip()
                             lt = int(clean_numeric(r['Lead Time (Hari)']) or 0)
                             ket = str(r['Keterangan']).replace("nan", "-")
                             
