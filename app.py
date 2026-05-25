@@ -3371,11 +3371,19 @@ def vendor_dashboard(email):
                         f_data = []
                         ts = (datetime.utcnow() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
                         editor_key = f"editor_state_{gid}_{cur_round}"
-                        if editor_key in st.session_state:
-                            # Paksa Python ambil data hasil ketikan terakhir lo di session state
-                            df_terupdate = st.session_state[editor_key]["dataframe"] if isinstance(st.session_state[editor_key], dict) and "dataframe" in st.session_state[editor_key] else st.session_state[editor_key]
+                        if editor_key in st.session_state and st.session_state[editor_key]:
+                            # Streamlit menyimpan perubahan di session state, kita timpa ke df_pr asli
+                            changes = st.session_state[editor_key]
+                            df_terupdate = df_pr.copy()
+                            
+                            # Aplikasikan perubahan sel yang diedit vendor secara real-time
+                            if "edited_rows" in changes:
+                                for row_idx, changed_cols in changes["edited_rows"].items():
+                                    for col_name, new_val in changed_cols.items():
+                                        df_terupdate.at[int(row_idx), col_name] = new_val
                         else:
-                            df_terupdate = df_pr # fallback kalau state kosong
+                            df_terupdate = df_pr
+                            
                         for _, r in df_terupdate.iterrows():
                             rid = str(r['Route ID'])
                             lt = int(clean_numeric(r['Lead Time (Hari)']) or 0)
