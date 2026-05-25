@@ -3318,7 +3318,7 @@ def vendor_dashboard(email):
                             hide_index=True, 
                             use_container_width=True, 
                             column_config=cf_pr,
-                            key=f"editor_{gid}_{cur_round}",
+                            key=f"editor_state_{gid}_{cur_round}",
                             disabled=is_lock
                         )
                     
@@ -3370,8 +3370,13 @@ def vendor_dashboard(email):
                         
                         f_data = []
                         ts = (datetime.utcnow() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
-                        
-                        for _, r in ed_pr.iterrows():
+                        editor_key = f"editor_state_{gid}_{cur_round}"
+                        if editor_key in st.session_state:
+                            # Paksa Python ambil data hasil ketikan terakhir lo di session state
+                            df_terupdate = st.session_state[editor_key]["dataframe"] if isinstance(st.session_state[editor_key], dict) and "dataframe" in st.session_state[editor_key] else st.session_state[editor_key]
+                        else:
+                            df_terupdate = df_pr # fallback kalau state kosong
+                        for _, r in df_terupdate.iterrows():
                             rid = str(r['Route ID'])
                             lt = int(clean_numeric(r['Lead Time (Hari)']) or 0)
                             ket = str(r['Keterangan']).replace("nan", "-")
@@ -3381,7 +3386,7 @@ def vendor_dashboard(email):
                                 w = str(c_spec.get(u,{}).get('w','')).replace("nan", "-"); c = str(c_spec.get(u,{}).get('c','')).replace("nan", "-")
                                 round_num = int(cur_round)
                                 tid = f"{email}_{cur_val}_{rid}_{u}_{round_num}".replace(" ","")
-                                if pr >= 0:
+                                if pr > 0:
                                     f_data.append([tid, email, "Open", cur_val, rid, u, lt, pr, w, c, ket, ts, round_num])
                         
                         mi = int(clean_numeric(ed_md.iloc[0]["Multidrop Dalam Kota"]) or 0)
