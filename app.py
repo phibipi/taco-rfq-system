@@ -3381,7 +3381,7 @@ def vendor_dashboard(email):
                                 w = str(c_spec.get(u,{}).get('w','')).replace("nan", "-"); c = str(c_spec.get(u,{}).get('c','')).replace("nan", "-")
                                 round_num = int(cur_round)
                                 tid = f"{email}_{cur_val}_{rid}_{u}_{round_num}".replace(" ","")
-                                if pr > 0:
+                                if pr >= 0:
                                     f_data.append([tid, email, "Open", cur_val, rid, u, lt, pr, w, c, ket, ts, round_num])
                         
                         mi = int(clean_numeric(ed_md.iloc[0]["Multidrop Dalam Kota"]) or 0)
