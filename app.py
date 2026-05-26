@@ -1410,18 +1410,20 @@ def user_dashboard():
                     df_result['Multidrop Luar']  = df_result['outer_city_price'].apply(fmt_rp)
                     df_result['Biaya Buruh']     = df_result['labor_cost'].apply(fmt_rp)
 
+                    # Hitung ulang setelah filter kota asal + dedup
                     df_result_display = df_result[df_result['kota_asal'] == s_org].copy()
                     df_result_display = df_result_display.sort_values(by='price', ascending=True)
                     df_result_display = df_result_display.drop_duplicates(
                         subset=['vendor_email', 'kota_tujuan', 'unit_type'],
                         keep='first'
                     )
+                    
                     unique_units = df_result_display['unit_type'].unique()
                     st.success(f"Ditemukan {len(df_result_display)} penawaran untuk tujuan '{search_dest}'.")
-                   
+                    
                     for unit in unique_units:
                         st.markdown(f"##### 🚛 Unit: {unit}")
-                        sub_res = sub_res[sub_res['kota_asal'] == s_org]
+                        sub_res = df_result_display[df_result_display['unit_type'] == unit].copy()
                         
                         # DEDUP FINAL DI DISPLAY
                         sub_res = sub_res.sort_values(by='price', ascending=True)
@@ -1433,7 +1435,7 @@ def user_dashboard():
                         sub_res['Rank'] = range(1, len(sub_res) + 1)
                         
                         display_cols = [
-                            'Rank', 'vendor_name', 'Harga Unit', 'top', 
+                            'Rank', 'vendor_name', 'Harga Unit', 'top',
                             'lead_time', 'Multidrop Dalam', 'Multidrop Luar', 'Biaya Buruh'
                         ]
                         
