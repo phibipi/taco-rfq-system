@@ -1347,8 +1347,20 @@ def user_dashboard():
                     df_result = df_result.sort_values(by=['unit_type', 'price'])
                     
                     # Format Rupiah
-                    def fmt_rp(x): return f"Rp {int(x):,}".replace(",", ".")
+                    def fmt_rp(x):
+                        if pd.isna(x) or x == "" or x is None:
+                            return "Rp 0"
+                        try:
+                            return f"Rp {int(float(x)):,}".replace(",", ".")
+                        except:
+                            return "Rp 0"
                     
+                    df_result['price'] = pd.to_numeric(df_result['price'], errors='coerce').fillna(0)
+                    df_result['inner_city_price'] = pd.to_numeric(df_result['inner_city_price'], errors='coerce').fillna(0)
+                    df_result['outer_city_price'] = pd.to_numeric(df_result['outer_city_price'], errors='coerce').fillna(0)
+                    df_result['labor_cost'] = pd.to_numeric(df_result['labor_cost'], errors='coerce').fillna(0)
+                    
+                    # Eksekusi Apply Format Rupiah
                     df_result['Harga Unit'] = df_result['price'].apply(fmt_rp)
                     df_result['Multidrop Dalam'] = df_result['inner_city_price'].apply(fmt_rp)
                     df_result['Multidrop Luar'] = df_result['outer_city_price'].apply(fmt_rp)
