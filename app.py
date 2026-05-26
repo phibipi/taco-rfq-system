@@ -1412,6 +1412,14 @@ def user_dashboard():
 
                     unique_units = df_result['unit_type'].unique()
                     st.success(f"Ditemukan {len(df_result)} penawaran untuk tujuan '{search_dest}'.")
+                    
+                    # === DEBUG SEMENTARA: LIHAT PENYEBAB DUPLIKAT ===
+                    st.write("**DEBUG - Cek Duplikat:**")
+                    dup_check = df_result[df_result.duplicated(subset=['vendor_email', 'unit_type', 'kota_tujuan'], keep=False)]
+                    if not dup_check.empty:
+                        st.dataframe(dup_check[['vendor_email', 'route_id', 'unit_type', 'kota_tujuan', 'price', 'validity']])
+                    else:
+                        st.write("Tidak ada duplikat vendor+unit+kota_tujuan")
                     for unit in unique_units:
                         st.markdown(f"##### 🚛 Unit: {unit}")
                         sub_res = df_result[df_result['unit_type'] == unit]
