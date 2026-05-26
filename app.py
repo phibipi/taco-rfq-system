@@ -1297,13 +1297,15 @@ def user_dashboard():
             
             # 2. Input Search Kota Tujuan
             st.write("")
-            search_dest = st.text_input("🔍 Cari Kota Tujuan (Ketik nama kota...)", placeholder="Contoh: Surabaya").strip()
+            # Dropdown kota tujuan (dinamis dari data)
+            df_for_dest = filtered_1[filtered_1['kota_asal'] == s_org].copy()
+            avail_dest = sorted(df_for_dest['kota_tujuan'].dropna().unique().tolist())
             
-            if search_dest:
-                # Filter Data
-                df_search = filtered_1[filtered_1['kota_asal'] == s_org].copy()
-                # Filter Fuzzy / Contains untuk Kota Tujuan
-                df_search = df_search[df_search['kota_tujuan'].str.contains(search_dest, case=False, na=False)]
+            if avail_dest:
+                search_dest = st.selectbox("🔍 Pilih Kota Tujuan", avail_dest, key="s_dest")
+                
+                if search_dest:
+                    df_search = df_for_dest[df_for_dest['kota_tujuan'] == search_dest].copy()
                 
                 if not df_search.empty:
                     # === 1. STRIP & NORMALISASI ===
@@ -1420,8 +1422,7 @@ def user_dashboard():
                     
                     unique_units = df_result_display['unit_type'].unique()
                     st.success(f"Ditemukan {len(df_result_display)} penawaran untuk tujuan '{search_dest}'.")
-                    st.write("**DEBUG RAW:**")
-                    st.dataframe(df_result_display[['vendor_email', 'vendor_name', 'route_id', 'kota_asal', 'kota_tujuan', 'unit_type', 'price']])
+
                     for unit in unique_units:
                         st.markdown(f"##### 🚛 Unit: {unit}")
                         sub_res = df_result_display[df_result_display['unit_type'] == unit].copy()
