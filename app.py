@@ -1319,16 +1319,11 @@ def user_dashboard():
                     # Pastikan kolom round dibaca sebagai angka integer murni
                     df_search['round'] = pd.to_numeric(df_search['round'], errors='coerce').fillna(1).astype(int)
                     
-                    # === 2. AMBIL RONDE 2 BERDIRI SENDIRI, RONDE 1 BERDIRI SENDIRI ===
-                    df_r2 = df_search[df_search['round'] == 2].copy()
-                    df_r1 = df_search[df_search['round'] == 1].copy()
+                    # === 2. SORTING BERDASARKAN RONDE TERBESAR (Ronde 2 di bawah, Ronde 1 di atas) ===
+                    df_search = df_search.sort_values(by=['vendor_email', 'route_id', 'unit_type', 'round'], ascending=True)
                     
-                    # FILTER SAKLEK: Buang data Ronde 1 kalau si vendor udah nginput Ronde 2 di rute/transaksi tersebut
-                    if not df_r2.empty:
-                        df_r1 = df_r1[~df_r1['id_transaksi'].isin(df_r2['id_transaksi'])]
-                    
-                    # Gabungkan kembali rute murni yang sudah tersaring tanpa duplikat ronde
-                    df_search_clean = pd.concat([df_r2, df_r1], ignore_index=True)
+                    # Saring rute murni di awal agar hanya menyisakan ronde terbaru
+                    df_search_clean = df_search.drop_duplicates(subset=['vendor_email', 'route_id', 'unit_type'], keep='last')
                     
                     # === 3. PROSES DATA MULTIDROP Sesuai Logika Lo ===
                     if not df_md.empty:
@@ -1345,12 +1340,9 @@ def user_dashboard():
                         # Ambil nomor ronde dari angka terakhir id_multidrop (RIGHT 1)
                         df_md['round_md'] = pd.to_numeric(df_md['id_multidrop'].astype(str).str.strip().str[-1], errors='coerce').fillna(1).astype(int)
                         
-                        # Bersihkan data internal multidrop berdasarkan 4 kunci utama biar gak bikin rute beranak pas merge
-                        df_md_r2 = df_md[df_md['round_md'] == 2].copy()
-                        df_md_r1 = df_md[df_md['round_md'] == 1].copy()
-                        if not df_md_r2.empty:
-                            df_md_r1 = df_md_r1[~df_md_r1['vendor_email'].isin(df_md_r2['vendor_email'])]
-                        df_md_clean = pd.concat([df_md_r2, df_md_r1], ignore_index=True)
+                        # Bersihkan data internal multidrop biar gak bikin rute beranak pas merge
+                        df_md = df_md.sort_values(by='round_md', ascending=True)
+                        df_md_clean = df_md.drop_duplicates(subset=['vendor_email', 'group_id_md_clean', 'validity', 'round_md'], keep='last')
                         
                         md_subset = df_md_clean[['vendor_email', 'group_id_md_clean', 'validity', 'round_md', 'inner_city_price', 'outer_city_price', 'labor_cost']].copy()
                         
@@ -1368,10 +1360,20 @@ def user_dashboard():
                         df_result['outer_city_price'] = 0
                         df_result['labor_cost'] = 0
 
-                    # === 5. JAGA-JAGA AKHIR: Pastikan Hasil Tampilan Gak Ketempel Sisa Baris Kosong ===
-                    df_result = df_result.drop_duplicates(subset=['id_transaksi'], keep='first')
+                    # ========================================================
+                    # 🔥 KUNCI NUKLIR FINAL: SIKAT TOTAL SISA DUPLIKAT DI DISPLAY
+                    # ========================================================
+                    # Kita paksa urutkan berdasarkan ronde terbesar lagi setelah merge selesai
+                    df_result = df_result.sort_values(by=['vendor_email', 'route_id', 'unit_type', 'round'], ascending=True)
+                    
+                    # Eksekusi bantai baris kembar murni di hasil akhir display!
+                    df_result = df_result.drop_duplicates(
+                        subset=['vendor_email', 'route_id', 'unit_type'], 
+                        keep='last'
+                    )
+                    # ========================================================
 
-                    # === 6. PAKSA NOMINAL MENJADI ANGKA MURNI ===
+                    # === 5. PAKSA NOMINAL MENJADI ANGKA MURNI ===
                     df_result['price'] = pd.to_numeric(df_result['price'], errors='coerce').fillna(0)
                     df_result['inner_city_price'] = pd.to_numeric(df_result['inner_city_price'], errors='coerce').fillna(0)
                     df_result['outer_city_price'] = pd.to_numeric(df_result['outer_city_price'], errors='coerce').fillna(0)
@@ -1381,10 +1383,10 @@ def user_dashboard():
                     else:
                         df_result['labor_cost'] = 0
 
-                    # === 7. RE-SORT DISPLAY UNTUK RANKING PORTAL USER ===
+                    # === 6. RE-SORT DISPLAY UNTUK RANKING PORTAL USER ===
                     df_result = df_result.sort_values(by=['unit_type', 'price'], ascending=True)
                     
-                    # === 8. FORMAT RUPIAH DISPLAY ===
+                    # === 7. FORMAT RUPIAH DISPLAY ===
                     def fmt_rp(x):
                         try: return f"Rp {int(float(x)):,}".replace(",", ".")
                         except: return "Rp 0"
