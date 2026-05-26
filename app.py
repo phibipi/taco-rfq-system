@@ -1410,22 +1410,26 @@ def user_dashboard():
                     df_result['Multidrop Luar']  = df_result['outer_city_price'].apply(fmt_rp)
                     df_result['Biaya Buruh']     = df_result['labor_cost'].apply(fmt_rp)
 
-                    unique_units = df_result['unit_type'].unique()
-                    st.success(f"Ditemukan {len(df_result)} penawaran untuk tujuan '{search_dest}'.")
-                    
-                    # === DEBUG SEMENTARA: LIHAT PENYEBAB DUPLIKAT ===
-                    st.write("**DEBUG - Cek Duplikat:**")
-                    dup_check = df_result[df_result.duplicated(subset=['vendor_email', 'unit_type', 'kota_tujuan'], keep=False)]
-                    if not dup_check.empty:
-                        st.dataframe(dup_check[['vendor_email', 'route_id', 'unit_type', 'kota_tujuan', 'price', 'validity']])
-                    else:
-                        st.write("Tidak ada duplikat vendor+unit+kota_tujuan")
+                    df_result_display = df_result[df_result['kota_asal'] == s_org].copy()
+                    df_result_display = df_result_display.sort_values(by='price', ascending=True)
+                    df_result_display = df_result_display.drop_duplicates(
+                        subset=['vendor_email', 'kota_tujuan', 'unit_type'],
+                        keep='first'
+                    )
+                    unique_units = df_result_display['unit_type'].unique()
+                    st.success(f"Ditemukan {len(df_result_display)} penawaran untuk tujuan '{search_dest}'.")
+                   
                     for unit in unique_units:
                         st.markdown(f"##### 🚛 Unit: {unit}")
-                        sub_res = df_result[df_result['unit_type'] == unit]
+                        sub_res = sub_res[sub_res['kota_asal'] == s_org]
                         
-                        # Kolom yang diminta: Urutan Vendor, Harga, TOP, Biaya Multidrop, Biaya Buruh, Leadtime
-                        # Kita buat tabel ranking
+                        # DEDUP FINAL DI DISPLAY
+                        sub_res = sub_res.sort_values(by='price', ascending=True)
+                        sub_res = sub_res.drop_duplicates(
+                            subset=['vendor_email', 'kota_tujuan'],
+                            keep='first'
+                        )
+                        
                         sub_res['Rank'] = range(1, len(sub_res) + 1)
                         
                         display_cols = [
