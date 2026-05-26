@@ -1311,10 +1311,10 @@ def user_dashboard():
                     df_search['id_transaksi'] = df_search['id_transaksi'].astype(str).str.strip()
                     df_search['route_id'] = df_search['route_id'].astype(str).str.strip()
                     
-                    # Ambil 5 huruf pertama dari route_id rute utama sebagai group_id pencocokan
+                    # Ambil 5 huruf pertama dari route_id rute utama sebagai group_id pencocokan (LEFT 5)
                     df_search['group_id_match'] = df_search['route_id'].str[:5]
                     
-                    # === 2. PRIORITAS RONDE: JIKA ADA ROUND 2 MUNCUL 2, JIKA GAADA MUNCUL 1 ===
+                    # === 2. PRIORITAS RONDE: JIKA ADA TAHAP 2 MUNCUL 2, JIKA GAADA MUNCUL 1 ===
                     df_search['round'] = pd.to_numeric(df_search['round'], errors='coerce').fillna(1).astype(int)
                     
                     # Urutkan berdasarkan ID Transaksi dan Ronde (1 di atas, 2 di bawah)
@@ -1356,11 +1356,13 @@ def user_dashboard():
                     # === 5. PAGAR PENGAMAN AKHIR (POTONG DUPLIKAT HASIL GABUNGAN) ===
                     df_result = df_result.drop_duplicates(subset=['id_transaksi'], keep='last')
 
-                    # === 6. PAKSA NOMINAL MENJADI ANGKA MURNI ===
+                    # === 6. PAKSA NOMINAL MENJADI ANGKA MURNI (FIX SYNTAX ERROR) ===
                     df_result['price'] = pd.to_numeric(df_result['price'], errors='coerce').fillna(0)
                     df_result['inner_city_price'] = pd.to_numeric(df_result['inner_city_price'], errors='coerce').fillna(0)
                     df_result['outer_city_price'] = pd.to_numeric(df_result['outer_city_price'], errors='coerce').fillna(0)
-                    df_result['labor_cost'] = pd.to_numeric(df_result['labor_cost'].errors='coerce' if 'labor_cost' in df_result.columns else 0).fillna(0)
+                    
+                    # Baris penangkal error labor_cost yang udah bener letak kurungnya
+                    df_result['labor_cost'] = pd.to_numeric(df_result['labor_cost'] if 'labor_cost' in df_result.columns else 0, errors='coerce').fillna(0)
 
                     # === 7. RE-SORT DISPLAY UNTUK RANKING PORTAL USER ===
                     df_result = df_result.sort_values(by=['unit_type', 'price'], ascending=True)
