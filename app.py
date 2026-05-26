@@ -1290,10 +1290,10 @@ def user_dashboard():
             avail_load_s = sorted(df_master['load_type'].unique().tolist())
             s_load = c2.selectbox("2. Pilih Muatan", avail_load_s, key="s_load")
             
-            # Filter Origin (Dinamis berdasarkan 2 filter sebelumnya)
+                    # Filter Kota Asal (Dinamis berdasarkan 2 filter sebelumnya)
             filtered_1 = df_master[(df_master['validity'] == s_val) & (df_master['load_type'] == s_load)]
-            avail_org_s = sorted(filtered_1['origin'].unique().tolist())
-            s_org = c3.selectbox("3. Pilih Origin", avail_org_s, key="s_org")
+            avail_asal_s = sorted(filtered_1['kota_asal'].dropna().unique().tolist())
+            s_org = c3.selectbox("3. Pilih Kota Asal", avail_asal_s, key="s_org")
             
             # 2. Input Search Kota Tujuan
             st.write("")
@@ -1301,7 +1301,7 @@ def user_dashboard():
             
             if search_dest:
                 # Filter Data
-                df_search = filtered_1[filtered_1['origin'] == s_org].copy()
+                df_search = filtered_1[filtered_1['kota_asal'] == s_org].copy()
                 # Filter Fuzzy / Contains untuk Kota Tujuan
                 df_search = df_search[df_search['kota_tujuan'].str.contains(search_dest, case=False, na=False)]
                 
