@@ -1314,10 +1314,8 @@ def user_dashboard():
                     df_search['round'] = pd.to_numeric(df_search['round'], errors='coerce').fillna(1)
         
       
-                    df_search = df_search.sort_values(by='round', ascending=True)
-            
-                    # === 4. SAKLEK DROP DUPLICATES DI SINI (SEBELUM GABUNG TABEL LAIN) ===
-                    # Ini mengunci 1 vendor hanya boleh punya 1 baris per rute & unit!
+                    df_search = df_search.sort_values(by=['vendor_email', 'route_id', 'unit_type', 'round'], ascending=True)
+                    
                     df_search = df_search.drop_duplicates(
                         subset=['vendor_email', 'route_id', 'unit_type'], 
                         keep='last'
@@ -1344,7 +1342,7 @@ def user_dashboard():
                         df_result['labor_cost'] = 0
 
                     # Sorting: Harga Termurah -> Termahal
-                    df_result = df_result.sort_values(by=['unit_type', 'price'])
+                    df_result = df_result.sort_values(by=['unit_type', 'price'], ascending=True)
                     
                     # Format Rupiah
                     def fmt_rp(x):
