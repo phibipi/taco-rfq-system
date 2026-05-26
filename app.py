@@ -1306,60 +1306,70 @@ def user_dashboard():
                 df_search = df_search[df_search['kota_tujuan'].str.contains(search_dest, case=False, na=False)]
                 
                 if not df_search.empty:
-                    # === 1. STRIP SPASI GAIB & NORMALISASI TEXT DATA RUTE ===
+                    # === 1. STRIP & NORMALISASI ===
                     df_search['vendor_email'] = df_search['vendor_email'].astype(str).str.strip().str.lower()
                     df_search['route_id'] = df_search['route_id'].astype(str).str.strip()
                     df_search['validity'] = df_search['validity'].astype(str).str.strip().str.lower()
                     df_search['unit_type'] = df_search['unit_type'].astype(str).str.strip().str.lower()
-                    
-                    # Pastikan harga rute utama adalah angka murni buat sorting
-                    df_search['price'] = pd.to_numeric(df_search['price'], errors='coerce').fillna(float('inf'))
-                    
-                    # 🔥 KOREKSI: Ambil 5 huruf pertama dari route_id DATA UTAMA untuk dicocokkan ke group_id multidrop
-                    df_search['group_id_match'] = df_search['route_id'].str[:5].str.lower()
-                    
-                    # === 2. FILTER RUTE UTAMA: AMBIL YANG HARGANYA PALING MURAH MURNI ===
-                    # Sort berdasarkan harga dari terkecil ke terbesar
-                    df_search = df_search.sort_values(by=['vendor_email', 'route_id', 'unit_type', 'validity', 'price'], ascending=True)
-                    
-                    # Saring pakai keep='first' -> Otomatis harga rute termurah yang lolos
+                    df_search['price'] = pd.to_numeric(df_search['price'], errors='coerce').fillna(0)
+
+                    # === 2. AMBIL HARGA TERMURAH PER vendor+route+unit+validity ===
+                    # Sort harga ascending → keep='first' = ambil yang paling murah
+                    df_search = df_search.sort_values(
+                        by=['vendor_email', 'route_id', 'unit_type', 'validity', 'price'],
+                        ascending=True
+                    )
                     df_search_clean = df_search.drop_duplicates(
-                        subset=['vendor_email', 'route_id', 'unit_type', 'validity'], 
+                        subset=['vendor_email', 'route_id', 'unit_type', 'validity'],
                         keep='first'
                     )
-                    
-                    # === 3. PROSES DATA MULTIDROP: AMBIL YANG PALING MURAH JUGA ===
+
+                    # === 3. GROUP_ID MATCH: 5 HURUF PERTAMA route_id ===
+                    df_search_clean = df_search_clean.copy()
+                    df_search_clean['group_id_match'] = df_search_clean['route_id'].str[:5].str.lower()
+
+                    # === 4. PROSES MULTIDROP ===
                     if not df_md.empty:
                         df_md['vendor_email'] = df_md['vendor_email'].astype(str).str.strip().str.lower()
                         df_md['validity'] = df_md['validity'].astype(str).str.strip().str.lower()
-                        
-                        # Ambil kolom group_id asli bawaan sheet multidrop lo
-                        col_group = 'group_id' if 'group_id' in df_md.columns else ('group id' if 'group id' in df_md.columns else None)
+
+                        # Deteksi kolom group_id multidrop
+                        col_group = None
+                        for candidate in ['group_id', 'group id']:
+                            if candidate in df_md.columns:
+                                col_group = candidate
+                                break
                         if col_group:
                             df_md['group_id_md_clean'] = df_md[col_group].astype(str).str.strip().str.lower()
                         else:
                             df_md['group_id_md_clean'] = ""
-                        
-                        # Paksa harga-harga multidrop jadi angka murni buat di-sort
-                        df_md['inner_city_price'] = pd.to_numeric(df_md['inner_city_price'], errors='coerce').fillna(float('inf'))
-                        df_md['outer_city_price'] = pd.to_numeric(df_md['outer_city_price'], errors='coerce').fillna(float('inf'))
-                        df_md['labor_cost'] = pd.to_numeric(df_md['labor_cost'] if 'labor_cost' in df_md.columns else 0, errors='coerce').fillna(0)
-                        
-                        # Sort data multidrop berdasarkan harga inner city dari termurah
-                        df_md = df_md.sort_values(by=['vendor_email', 'group_id_md_clean', 'validity', 'inner_city_price'], ascending=True)
-                        
-                        # Saring internal multidrop biar sisa 1 harga termurah per group_id bawaan multidrop
-                        df_md_clean = df_md.drop_duplicates(subset=['vendor_email', 'group_id_md_clean', 'validity'], keep='first')
-                        
-                        md_subset = df_md_clean[['vendor_email', 'group_id_md_clean', 'validity', 'inner_city_price', 'outer_city_price', 'labor_cost']].copy()
-                        
-                        # === 4. PROSES GABUNG (MERGE) TIGA PILAR UTAMA ===
-                        # 🤝 JEMBATAN FIX: Menghubungkan group_id_match (LEFT 5 route_id data utama) ke group_id_md_clean (kolom group_id multidrop)
+
+                        # Normalisasi harga multidrop
+                        for mc in ['inner_city_price', 'outer_city_price', 'labor_cost']:
+                            if mc in df_md.columns:
+                                df_md[mc] = pd.to_numeric(df_md[mc], errors='coerce').fillna(0)
+
+                        # DEDUP MULTIDROP: ambil harga inner_city termurah per vendor+group+validity
+                        df_md = df_md.sort_values(
+                            by=['vendor_email', 'group_id_md_clean', 'validity', 'inner_city_price'],
+                            ascending=True
+                        )
+                        df_md_clean = df_md.drop_duplicates(
+                            subset=['vendor_email', 'group_id_md_clean', 'validity'],
+                            keep='first'
+                        )
+
+                        md_subset = df_md_clean[[
+                            'vendor_email', 'group_id_md_clean', 'validity',
+                            'inner_city_price', 'outer_city_price', 'labor_cost'
+                        ]].copy()
+
+                        # === 5. LOOKUP: email + 5 huruf route_id + validity ===
                         df_result = pd.merge(
-                            df_search_clean, 
-                            md_subset, 
-                            left_on=['vendor_email', 'group_id_match', 'validity'], 
-                            right_on=['vendor_email', 'group_id_md_clean', 'validity'], 
+                            df_search_clean,
+                            md_subset,
+                            left_on=['vendor_email', 'group_id_match', 'validity'],
+                            right_on=['vendor_email', 'group_id_md_clean', 'validity'],
                             how='left'
                         )
                     else:
@@ -1368,31 +1378,40 @@ def user_dashboard():
                         df_result['outer_city_price'] = 0
                         df_result['labor_cost'] = 0
 
-                    # === 5. PAGAR PENGAMAN AKHIR ===
-                    df_result = df_result.drop_duplicates(subset=['vendor_email', 'route_id', 'unit_type', 'validity'], keep='first')
+                    # === 6. SAFETY NET: PASTIKAN TIDAK ADA DUPLIKAT DI HASIL AKHIR ===
+                    df_result = df_result.sort_values(
+                        by=['vendor_email', 'route_id', 'unit_type', 'price'],
+                        ascending=True
+                    )
+                    df_result = df_result.drop_duplicates(
+                        subset=['vendor_email', 'route_id', 'unit_type'],
+                        keep='first'
+                    )
 
-                    # Kembalikan nilai inf ke 0 biar gak merusak format rupiah
-                    df_result['price'] = df_result['price'].replace(float('inf'), 0)
-                    df_result['inner_city_price'] = df_result['inner_city_price'].replace(float('inf'), 0)
-                    df_result['outer_city_price'] = df_result['outer_city_price'].replace(float('inf'), 0)
+                    # === 7. PAKSA NOMINAL JADI ANGKA ===
+                    for col in ['price', 'inner_city_price', 'outer_city_price', 'labor_cost']:
+                        if col in df_result.columns:
+                            df_result[col] = pd.to_numeric(df_result[col], errors='coerce').fillna(0)
+                        else:
+                            df_result[col] = 0
 
-                    # === 6. RE-SORT DISPLAY UNTUK PORTAL RANKING USER ===
+                    # === 8. SORT DISPLAY ===
                     df_result = df_result.sort_values(by=['unit_type', 'price'], ascending=True)
-                    
-                    # === 7. FORMAT RUPIAH DISPLAY ===
+
+                    # === 9. FORMAT RUPIAH ===
                     def fmt_rp(x):
-                        try: return f"Rp {int(float(x)):,}".replace(",", ".")
-                        except: return "Rp 0"
-                    
-                    df_result['Harga Unit'] = df_result['price'].apply(fmt_rp)
+                        try:
+                            return f"Rp {int(float(x)):,}".replace(",", ".")
+                        except:
+                            return "Rp 0"
+
+                    df_result['Harga Unit']      = df_result['price'].apply(fmt_rp)
                     df_result['Multidrop Dalam'] = df_result['inner_city_price'].apply(fmt_rp)
-                    df_result['Multidrop Luar'] = df_result['outer_city_price'].apply(fmt_rp)
-                    df_result['Biaya Buruh'] = df_result['labor_cost'].apply(fmt_rp)
-                    
-                    # Tampilkan Hasil ke dashboard Streamlit lo
+                    df_result['Multidrop Luar']  = df_result['outer_city_price'].apply(fmt_rp)
+                    df_result['Biaya Buruh']     = df_result['labor_cost'].apply(fmt_rp)
+
                     unique_units = df_result['unit_type'].unique()
-                    st.success(f"Ditemukan {len(df_result)} penawaran harga terbaik untuk tujuan '{search_dest}'.")
-                    
+                    st.success(f"Ditemukan {len(df_result)} penawaran untuk tujuan '{search_dest}'.")
                     for unit in unique_units:
                         st.markdown(f"##### 🚛 Unit: {unit}")
                         sub_res = df_result[df_result['unit_type'] == unit]
