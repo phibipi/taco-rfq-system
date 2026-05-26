@@ -1306,51 +1306,54 @@ def user_dashboard():
                 df_search = df_search[df_search['kota_tujuan'].str.contains(search_dest, case=False, na=False)]
                 
                 if not df_search.empty:
-                    # === 1. STRIP SPASI GAIB & PAKSA HURUF KECIL DATA RUTE ===
+                    # === 1. STRIP SPASI GAIB & NORMALISASI TEXT DATA RUTE ===
                     df_search['vendor_email'] = df_search['vendor_email'].astype(str).str.strip().str.lower()
                     df_search['id_transaksi'] = df_search['id_transaksi'].astype(str).str.strip()
                     df_search['route_id'] = df_search['route_id'].astype(str).str.strip()
+                    df_search['validity'] = df_search['validity'].astype(str).str.strip().str.lower()
+                    df_search['unit_type'] = df_search['unit_type'].astype(str).str.strip().str.lower()
                     
-                    # SAKLEK: Ambil 5 huruf pertama (LEFT 5) dari route_id rute utama sebagai group_id pencocokan
+                    # Trik Lo: Ambil 5 huruf pertama (LEFT 5) dari route_id utama sebagai group_id pencocokan
                     df_search['group_id_match'] = df_search['route_id'].str[:5].str.lower()
                     
-                    # === 2. PRIORITAS RONDE: JIKA ADA TAHAP 2 MUNCUL 2, JIKA GAADA MUNCUL 1 ===
+                    # === 2. FILTER DATA RUTE: PRIORITAS TAHAP 2, KALAU GAADA TAHAP 1 ===
                     df_search['round'] = pd.to_numeric(df_search['round'], errors='coerce').fillna(1).astype(int)
                     
-                    # Urutkan berdasarkan ID Transaksi dan Ronde (1 di atas, 2 di bawah)
+                    # Sort berdasarkan ID Transaksi dan nomor Round (Kecil ke Besar: 1 dulu baru 2)
                     df_search = df_search.sort_values(by=['id_transaksi', 'round'], ascending=True)
                     
-                    # Kunci murni pakai id_transaksi, keep='last' otomatis ambil Ronde 2 jika ada
+                    # Saring duplikat pakai id_transaksi, keep='last' otomatis ambil Ronde 2. Kalau cuma ada Ronde 1, Ronde 1 aman.
                     df_search = df_search.drop_duplicates(subset=['id_transaksi'], keep='last')
                     
-                    # === 3. PROSES DATA MULTIDROP (MENGGUNAKAN GROUP ID BAWAAN SHEETS) ===
+                    # === 3. PROSES DATA MULTIDROP Sesuai Logika Lo ===
                     if not df_md.empty:
+                        # Normalisasi data multidrop
                         df_md['vendor_email'] = df_md['vendor_email'].astype(str).str.strip().str.lower()
+                        df_md['validity'] = df_md['validity'].astype(str).str.strip().str.lower()
                         
-                        # Cek nama kolom group_id di multidrop lo (jaga-jaga kalau huruf besar/kecil)
-                        # Kita cari apakah namanya 'group_id' atau 'group id'
+                        # Deteksi kolom group_id di multidrop (antisipasi 'group_id' atau 'group id')
                         col_group = 'group_id' if 'group_id' in df_md.columns else ('group id' if 'group id' in df_md.columns else None)
-                        
                         if col_group:
                             df_md['group_id_md_clean'] = df_md[col_group].astype(str).str.strip().str.lower()
                         else:
-                            # Kalau bener-bener gak ketemu kolom group_id, kita default kosongin biar gak crash
                             df_md['group_id_md_clean'] = ""
                         
-                        # Ambil nomor ronde dari angka terakhir id_multidrop (Right 1)
+                        # Trik Lo: Ambil angka paling kanan (RIGHT 1) dari id_multidrop sebagai round_md
                         df_md['round_md'] = pd.to_numeric(df_md['id_multidrop'].astype(str).str.strip().str[-1], errors='coerce').fillna(1).astype(int)
                         
-                        # Bersihkan data internal multidrop berdasarkan kombinasi kunci biar gak duplikat
-                        df_md_clean = df_md.drop_duplicates(subset=['vendor_email', 'group_id_md_clean', 'round_md'], keep='last')
-                        md_subset = df_md_clean[['vendor_email', 'group_id_md_clean', 'round_md', 'inner_city_price', 'outer_city_price', 'labor_cost']].copy()
+                        # Bersihkan internal data multidrop biar gak beranak pinak sebelum merge
+                        df_md_clean = df_md.drop_duplicates(subset=['vendor_email', 'group_id_md_clean', 'validity', 'round_md'], keep='last')
                         
-                        # === 4. PROSES GABUNG (MERGE) BERDASARKAN EMAIL, ROUND, DAN GROUP ID ===
-                        # Mengawinkan group_id_match (LEFT 5 dari rute) dengan group_id_md_clean (bawaan asli multidrop)
+                        # Subset kolom yang mau diambil murni buat lookup
+                        md_subset = df_md_clean[['vendor_email', 'group_id_md_clean', 'validity', 'round_md', 'inner_city_price', 'outer_city_price', 'labor_cost']].copy()
+                        
+                        # === 4. PROSES GABUNG (MERGE) 4 KUNCI MATI ===
+                        # Menghubungkan Rute Utama ke Multidrop lewat email, round, group_id, dan validity!
                         df_result = pd.merge(
                             df_search, 
                             md_subset, 
-                            left_on=['vendor_email', 'round', 'group_id_match'], 
-                            right_on=['vendor_email', 'round_md', 'group_id_md_clean'], 
+                            left_on=['vendor_email', 'round', 'group_id_match', 'validity'], 
+                            right_on=['vendor_email', 'round_md', 'group_id_md_clean', 'validity'], 
                             how='left'
                         )
                     else:
@@ -1359,7 +1362,7 @@ def user_dashboard():
                         df_result['outer_city_price'] = 0
                         df_result['labor_cost'] = 0
 
-                    # === 5. PAGAR PENGAMAN AKHIR (POTONG DUPLIKAT HASIL GABUNGAN) ===
+                    # === 5. PAGAR PENGAMAN AKHIR (POTONG DUPLIKAT HASIL GABUNGAN BERDASARKAN ID) ===
                     df_result = df_result.drop_duplicates(subset=['id_transaksi'], keep='last')
 
                     # === 6. PAKSA NOMINAL MENJADI ANGKA MURNI ===
@@ -1367,7 +1370,10 @@ def user_dashboard():
                     df_result['inner_city_price'] = pd.to_numeric(df_result['inner_city_price'], errors='coerce').fillna(0)
                     df_result['outer_city_price'] = pd.to_numeric(df_result['outer_city_price'], errors='coerce').fillna(0)
                     
-                    df_result['labor_cost'] = pd.to_numeric(df_result['labor_cost'] if 'labor_cost' in df_result.columns else 0, errors='coerce').fillna(0)
+                    if 'labor_cost' in df_result.columns:
+                        df_result['labor_cost'] = pd.to_numeric(df_result['labor_cost'], errors='coerce').fillna(0)
+                    else:
+                        df_result['labor_cost'] = 0
 
                     # === 7. RE-SORT DISPLAY UNTUK RANKING PORTAL USER ===
                     df_result = df_result.sort_values(by=['unit_type', 'price'], ascending=True)
