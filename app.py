@@ -1330,7 +1330,7 @@ def user_dashboard():
                         
                         # Ambil karakter paling kanan dari ID Transaksi multidrop (Sama kayak RIGHT(id, 1) di Excel)
                         # Kita ubah jadi angka integer biar bisa dicocokkan sama kolom round data rute
-                        df_md['round_md'] = pd.to_numeric(df_md['id_transaksi'].astype(str).str.strip().str[-1], errors='coerce').fillna(1).astype(int)
+                        df_md['round_md'] = pd.to_numeric(df_md['id_multidrop'].astype(str).str.strip().str[-1], errors='coerce').fillna(1).astype(int)
                         
                         # Bersihkan duplikat di internal multidrop murni berdasarkan Email dan Ronde MD-nya
                         df_md_clean = df_md.drop_duplicates(subset=['vendor_email', 'round_md'], keep='last')
