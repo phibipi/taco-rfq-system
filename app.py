@@ -1420,7 +1420,8 @@ def user_dashboard():
                     
                     unique_units = df_result_display['unit_type'].unique()
                     st.success(f"Ditemukan {len(df_result_display)} penawaran untuk tujuan '{search_dest}'.")
-                    
+                    st.write("**DEBUG RAW:**")
+                    st.dataframe(df_result_display[['vendor_email', 'vendor_name', 'route_id', 'kota_asal', 'kota_tujuan', 'unit_type', 'price']])
                     for unit in unique_units:
                         st.markdown(f"##### 🚛 Unit: {unit}")
                         sub_res = df_result_display[df_result_display['unit_type'] == unit].copy()
