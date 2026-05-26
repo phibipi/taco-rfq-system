@@ -1306,29 +1306,37 @@ def user_dashboard():
                 df_search = df_search[df_search['kota_tujuan'].str.contains(search_dest, case=False, na=False)]
                 
                 if not df_search.empty:
-                    # GABUNGKAN DATA MULTIDROP & BURUH
-                    # Kita perlu merge df_search dengan df_md berdasarkan (vendor_email, validity, group_id)
+                    df_search['vendor_email'] = df_search['vendor_email'].astype(str).str.strip().str.lower()
+                    df_search['route_id'] = df_search['route_id'].astype(str).str.strip().str.lower()
+                    df_search['unit_type'] = df_search['unit_type'].astype(str).str.strip().str.lower()
+        
+      
                     df_search['round'] = pd.to_numeric(df_search['round'], errors='coerce').fillna(1)
+        
+      
                     df_search = df_search.sort_values(by='round', ascending=True)
+            
+                    # === 4. SAKLEK DROP DUPLICATES DI SINI (SEBELUM GABUNG TABEL LAIN) ===
+                    # Ini mengunci 1 vendor hanya boleh punya 1 baris per rute & unit!
                     df_search = df_search.drop_duplicates(
                         subset=['vendor_email', 'route_id', 'unit_type'], 
                         keep='last'
                     )
                     if not df_md.empty:
-                        # Rename kolom agar tidak bentrok saat merge atau lebih jelas
-                        md_subset = df_md[['vendor_email', 'validity', 'group_id', 'inner_city_price', 'outer_city_price', 'labor_cost']].copy()
-                        
-                        # Merge
+                        df_md['vendor_email'] = df_md['vendor_email'].astype(str).str.strip().str.lower()
+                        df_md['validity'] = df_md['validity'].astype(str).str.strip().str.lower()
+                        df_md['group_id'] = df_md['group_id'].astype(str).str.strip().str.lower()
+            
+            
+                        df_md_clean = df_md.drop_duplicates(subset=['vendor_email', 'validity', 'group_id'], keep='last')
+                        md_subset = df_md_clean[['vendor_email', 'validity', 'group_id', 'inner_city_price', 'outer_city_price', 'labor_cost']].copy()
+            
                         df_result = pd.merge(
                             df_search, 
                             md_subset, 
                             on=['vendor_email', 'validity', 'group_id'], 
                             how='left'
                         )
-                        
-                        # Fill NaN (Jika vendor belum isi multidrop)
-                        for c in ['inner_city_price', 'outer_city_price', 'labor_cost']:
-                            df_result[c] = pd.to_numeric(df_result[c], errors='coerce').fillna(0)
                     else:
                         df_result = df_search.copy()
                         df_result['inner_city_price'] = 0
