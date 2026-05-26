@@ -1307,41 +1307,22 @@ def user_dashboard():
                 
                 if not df_search.empty:
                     # === 1. STRIP SPASI GAIB & PAKSA HURUF KECIL ===
-                    df_search['id_transaksi'] = df_search['id_transaksi'].astype(str).str.strip().str.lower()
                     df_search['vendor_email'] = df_search['vendor_email'].astype(str).str.strip().str.lower()
+                    df_search['route_id'] = df_search['route_id'].astype(str).str.strip().str.lower()
                     df_search['unit_type'] = df_search['unit_type'].astype(str).str.strip().str.lower()
                     
-                    # === 2. TRIK SAKTI: Potong ekor "_1" atau "_2" di kolom id_transaksi ===
-                    # Jadi ID Ronde 1 & Ronde 2 bakalan BERUBAH SAMA PERSIS murni tanpa embel-embel ronde
-                    df_search['id_pencocokan'] = df_search['id_transaksi'].str.rsplit('_', n=1).str[0]
-                    
-                    # === 3. AMANKAN COLUMN ROUND SEBAGAI ANGKA ===
-                    df_search['round'] = pd.to_numeric(df_search['round'], errors='coerce').fillna(1)
-                    
-                    # === 4. SORT BERDASARKAN ROUND (Ronde 1 di atas, Ronde 2 di bawah) ===
-                    df_search = df_search.sort_values(by=['id_pencocokan', 'round'], ascending=True)
-                    
-                    # === 5. SAKLEK DROP DUPLICATES PAKAI ID PENCOCOKAN ===
-                    # Karena kuncinya murni 'id_pencocokan' yang udah kita samakan, 
-                    # Pandas GAK AKAN PEDULI harganya beda/sama, Ronde 1 PASTI KE-BANTAI keluar dari tabel!
-                    df_search = df_search.drop_duplicates(
-                        subset=['id_pencocokan'], 
-                        keep='last'
-                    )
-                    
-                    # === 6. GABUNGKAN KE TABEL MULTIDROP ===
+                    # === 2. GABUNGKAN KE TABEL MULTIDROP (PAKAI EMAIL SAJA BIAR SINKRON) ===
                     if not df_md.empty:
                         df_md['vendor_email'] = df_md['vendor_email'].astype(str).str.strip().str.lower()
-                        df_md['validity'] = df_md['validity'].astype(str).str.strip().str.lower()
-                        df_md['group_id'] = df_md['group_id'].astype(str).str.strip().str.lower()
                         
-                        df_md_clean = df_md.drop_duplicates(subset=['vendor_email', 'validity', 'group_id'], keep='last')
-                        md_subset = df_md_clean[['vendor_email', 'validity', 'group_id', 'inner_city_price', 'outer_city_price', 'labor_cost']].copy()
+                        # KUNCI 1: Pastikan data multidrop di-drop duplicates dulu biar gak bikin rute beranak!
+                        df_md_clean = df_md.drop_duplicates(subset=['vendor_email'], keep='last')
+                        md_subset = df_md_clean[['vendor_email', 'inner_city_price', 'outer_city_price', 'labor_cost']].copy()
                         
                         df_result = pd.merge(
                             df_search, 
                             md_subset, 
-                            on=['vendor_email', 'validity', 'group_id'], 
+                            on='vendor_email', 
                             how='left'
                         )
                     else:
@@ -1350,33 +1331,34 @@ def user_dashboard():
                         df_result['outer_city_price'] = 0
                         df_result['labor_cost'] = 0
 
-                    # === 7. SORTING AKHIR TAMPILAN USER ===
-                    df_result = df_result.sort_values(by=['unit_type', 'price'], ascending=True)
-                    
-                    # Format Rupiah
-                    def fmt_rp(x):
-                        if pd.isna(x) or x == "" or x is None:
-                            return "Rp 0"
-                        try:
-                            return f"Rp {int(float(x)):,}".replace(",", ".")
-                        except:
-                            return "Rp 0"
-                    
+                    # === 3. KUNCI PENGAMAN AKHIR (ANTI DOUBLE DI DISPLAY) ===
+                    # Jaga-jaga kalau ada pembengkakan baris setelah merge, kita saring ulang di sini
+                    df_result = df_result.drop_duplicates(
+                        subset=['vendor_email', 'route_id', 'unit_type'], 
+                        keep='last'
+                    )
+
+                    # === 4. PAKSA JADI ANGKA SEBELUM DI-FORMAT ===
                     df_result['price'] = pd.to_numeric(df_result['price'], errors='coerce').fillna(0)
                     df_result['inner_city_price'] = pd.to_numeric(df_result['inner_city_price'], errors='coerce').fillna(0)
                     df_result['outer_city_price'] = pd.to_numeric(df_result['outer_city_price'], errors='coerce').fillna(0)
                     df_result['labor_cost'] = pd.to_numeric(df_result['labor_cost'], errors='coerce').fillna(0)
+
+                    # === 5. SORTING AKHIR UNTUK RANKING TERMURAH ===
+                    df_result = df_result.sort_values(by=['unit_type', 'price'], ascending=True)
                     
-                    # Eksekusi Apply Format Rupiah
+                    # === 6. FORMAT RUPIAH ===
+                    def fmt_rp(x):
+                        try: return f"Rp {int(float(x)):,}".replace(",", ".")
+                        except: return "Rp 0"
+                    
                     df_result['Harga Unit'] = df_result['price'].apply(fmt_rp)
                     df_result['Multidrop Dalam'] = df_result['inner_city_price'].apply(fmt_rp)
                     df_result['Multidrop Luar'] = df_result['outer_city_price'].apply(fmt_rp)
                     df_result['Biaya Buruh'] = df_result['labor_cost'].apply(fmt_rp)
                     
                     # Tampilkan Hasil
-                    # Grouping per Unit Type agar rapi
                     unique_units = df_result['unit_type'].unique()
-                    
                     st.success(f"Ditemukan {len(df_result)} penawaran untuk tujuan '{search_dest}'.")
                     
                     for unit in unique_units:
