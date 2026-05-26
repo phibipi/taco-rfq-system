@@ -1306,29 +1306,38 @@ def user_dashboard():
                 df_search = df_search[df_search['kota_tujuan'].str.contains(search_dest, case=False, na=False)]
                 
                 if not df_search.empty:
+                    # === 1. STRIP SPASI GAIB & PAKSA HURUF KECIL ===
+                    df_search['id_transaksi'] = df_search['id_transaksi'].astype(str).str.strip().str.lower()
                     df_search['vendor_email'] = df_search['vendor_email'].astype(str).str.strip().str.lower()
-                    df_search['route_id'] = df_search['route_id'].astype(str).str.strip().str.lower()
                     df_search['unit_type'] = df_search['unit_type'].astype(str).str.strip().str.lower()
-        
-      
-                    df_search['round'] = pd.to_numeric(df_search['round'], errors='coerce').fillna(1)
-        
-      
-                    df_search = df_search.sort_values(by=['vendor_email', 'route_id', 'unit_type', 'round'], ascending=True)
                     
+                    # === 2. TRIK SAKTI: Potong ekor "_1" atau "_2" di kolom id_transaksi ===
+                    # Jadi ID Ronde 1 & Ronde 2 bakalan BERUBAH SAMA PERSIS murni tanpa embel-embel ronde
+                    df_search['id_pencocokan'] = df_search['id_transaksi'].str.rsplit('_', n=1).str[0]
+                    
+                    # === 3. AMANKAN COLUMN ROUND SEBAGAI ANGKA ===
+                    df_search['round'] = pd.to_numeric(df_search['round'], errors='coerce').fillna(1)
+                    
+                    # === 4. SORT BERDASARKAN ROUND (Ronde 1 di atas, Ronde 2 di bawah) ===
+                    df_search = df_search.sort_values(by=['id_pencocokan', 'round'], ascending=True)
+                    
+                    # === 5. SAKLEK DROP DUPLICATES PAKAI ID PENCOCOKAN ===
+                    # Karena kuncinya murni 'id_pencocokan' yang udah kita samakan, 
+                    # Pandas GAK AKAN PEDULI harganya beda/sama, Ronde 1 PASTI KE-BANTAI keluar dari tabel!
                     df_search = df_search.drop_duplicates(
-                        subset=['vendor_email', 'route_id', 'unit_type'], 
+                        subset=['id_pencocokan'], 
                         keep='last'
                     )
+                    
+                    # === 6. GABUNGKAN KE TABEL MULTIDROP ===
                     if not df_md.empty:
                         df_md['vendor_email'] = df_md['vendor_email'].astype(str).str.strip().str.lower()
                         df_md['validity'] = df_md['validity'].astype(str).str.strip().str.lower()
                         df_md['group_id'] = df_md['group_id'].astype(str).str.strip().str.lower()
-            
-            
+                        
                         df_md_clean = df_md.drop_duplicates(subset=['vendor_email', 'validity', 'group_id'], keep='last')
                         md_subset = df_md_clean[['vendor_email', 'validity', 'group_id', 'inner_city_price', 'outer_city_price', 'labor_cost']].copy()
-            
+                        
                         df_result = pd.merge(
                             df_search, 
                             md_subset, 
@@ -1341,7 +1350,7 @@ def user_dashboard():
                         df_result['outer_city_price'] = 0
                         df_result['labor_cost'] = 0
 
-                    # Sorting: Harga Termurah -> Termahal
+                    # === 7. SORTING AKHIR TAMPILAN USER ===
                     df_result = df_result.sort_values(by=['unit_type', 'price'], ascending=True)
                     
                     # Format Rupiah
