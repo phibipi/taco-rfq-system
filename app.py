@@ -1308,7 +1308,12 @@ def user_dashboard():
                 if not df_search.empty:
                     # GABUNGKAN DATA MULTIDROP & BURUH
                     # Kita perlu merge df_search dengan df_md berdasarkan (vendor_email, validity, group_id)
-                    
+                    df_search['round'] = pd.to_numeric(df_search['round'], errors='coerce').fillna(1)
+                    df_search = df_search.sort_values(by='round', ascending=True)
+                    df_search = df_search.drop_duplicates(
+                        subset=['vendor_email', 'route_id', 'unit_type'], 
+                        keep='last'
+                    )
                     if not df_md.empty:
                         # Rename kolom agar tidak bentrok saat merge atau lebih jelas
                         md_subset = df_md[['vendor_email', 'validity', 'group_id', 'inner_city_price', 'outer_city_price', 'labor_cost']].copy()
