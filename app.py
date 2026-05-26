@@ -1306,23 +1306,44 @@ def user_dashboard():
                 df_search = df_search[df_search['kota_tujuan'].str.contains(search_dest, case=False, na=False)]
                 
                 if not df_search.empty:
-                    # === 1. STRIP SPASI GAIB & PAKSA HURUF KECIL ===
+                    # === 1. STRIP SPASI GAIB & PAKSA HURUF KECIL DATA RUTE ===
                     df_search['vendor_email'] = df_search['vendor_email'].astype(str).str.strip().str.lower()
                     df_search['route_id'] = df_search['route_id'].astype(str).str.strip().str.lower()
                     df_search['unit_type'] = df_search['unit_type'].astype(str).str.strip().str.lower()
                     
-                    # === 2. GABUNGKAN KE TABEL MULTIDROP (PAKAI EMAIL SAJA BIAR SINKRON) ===
+                    # === 2. FILTER DATA RUTE: PRIORITAS TAHAP 2, KALAU GAADA TAHAP 1 ===
+                    # Pastikan kolom round dibaca sebagai angka murni
+                    df_search['round'] = pd.to_numeric(df_search['round'], errors='coerce').fillna(1).astype(int)
+                    
+                    # Urutkan berdasarkan ronde (kecil ke besar), Ronde 1 di atas, Ronde 2 di bawah
+                    df_search = df_search.sort_values(by=['vendor_email', 'route_id', 'unit_type', 'round'], ascending=True)
+                    
+                    # SAKLEK: keep='last' otomatis ambil Ronde 2 (terbawah). Kalau Ronde 2 gaada, Ronde 1 aman ketarik!
+                    df_search = df_search.drop_duplicates(
+                        subset=['vendor_email', 'route_id', 'unit_type'], 
+                        keep='last'
+                    )
+                    
+                    # === 3. PROSES DATA MULTIDROP (AMBIL RONDE DARI RIGHT 1 ID) ===
                     if not df_md.empty:
                         df_md['vendor_email'] = df_md['vendor_email'].astype(str).str.strip().str.lower()
                         
-                        # KUNCI 1: Pastikan data multidrop di-drop duplicates dulu biar gak bikin rute beranak!
-                        df_md_clean = df_md.drop_duplicates(subset=['vendor_email'], keep='last')
-                        md_subset = df_md_clean[['vendor_email', 'inner_city_price', 'outer_city_price', 'labor_cost']].copy()
+                        # Ambil karakter paling kanan dari ID Transaksi multidrop (Sama kayak RIGHT(id, 1) di Excel)
+                        # Kita ubah jadi angka integer biar bisa dicocokkan sama kolom round data rute
+                        df_md['round_md'] = pd.to_numeric(df_md['id_transaksi'].astype(str).str.strip().str[-1], errors='coerce').fillna(1).astype(int)
                         
+                        # Bersihkan duplikat di internal multidrop murni berdasarkan Email dan Ronde MD-nya
+                        df_md_clean = df_md.drop_duplicates(subset=['vendor_email', 'round_md'], keep='last')
+                        md_subset = df_md_clean[['vendor_email', 'round_md', 'inner_city_price', 'outer_city_price', 'labor_cost']].copy()
+                        
+                        # === 4. PROSES GABUNG (MERGE) SAKLEK BERDASARKAN EMAIL & RONDE ===
+                        # Kunci penawaran rute (round) harus cocok dengan ronde multidrop (round_md) 
+                        # Biar kalau rute nampilin Tahap 2, biaya multidropnya ikut ditarik yang Tahap 2 murni!
                         df_result = pd.merge(
                             df_search, 
                             md_subset, 
-                            on='vendor_email', 
+                            left_on=['vendor_email', 'round'], 
+                            right_on=['vendor_email', 'round_md'], 
                             how='left'
                         )
                     else:
@@ -1331,23 +1352,16 @@ def user_dashboard():
                         df_result['outer_city_price'] = 0
                         df_result['labor_cost'] = 0
 
-                    # === 3. KUNCI PENGAMAN AKHIR (ANTI DOUBLE DI DISPLAY) ===
-                    # Jaga-jaga kalau ada pembengkakan baris setelah merge, kita saring ulang di sini
-                    df_result = df_result.drop_duplicates(
-                        subset=['vendor_email', 'route_id', 'unit_type'], 
-                        keep='last'
-                    )
-
-                    # === 4. PAKSA JADI ANGKA SEBELUM DI-FORMAT ===
+                    # === 5. PAKSA NOMINAL MENJADI ANGKA MURNI ===
                     df_result['price'] = pd.to_numeric(df_result['price'], errors='coerce').fillna(0)
                     df_result['inner_city_price'] = pd.to_numeric(df_result['inner_city_price'], errors='coerce').fillna(0)
                     df_result['outer_city_price'] = pd.to_numeric(df_result['outer_city_price'], errors='coerce').fillna(0)
                     df_result['labor_cost'] = pd.to_numeric(df_result['labor_cost'], errors='coerce').fillna(0)
 
-                    # === 5. SORTING AKHIR UNTUK RANKING TERMURAH ===
+                    # === 6. RE-SORT DISPLAY UNTUK RANKING PORTAL USER ===
                     df_result = df_result.sort_values(by=['unit_type', 'price'], ascending=True)
                     
-                    # === 6. FORMAT RUPIAH ===
+                    # === 7. FORMAT RUPIAH DISPLAY ===
                     def fmt_rp(x):
                         try: return f"Rp {int(float(x)):,}".replace(",", ".")
                         except: return "Rp 0"
