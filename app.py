@@ -273,7 +273,15 @@ def save_data(sheet_name, new_data_list):
             return True
 
         headers = all_values[0]
-        
+        if sheet_name in ["Price_Data", "Multidrop_Data"] and headers:
+            try:
+                val_idx = headers.index("validity")
+                for row in new_data_list:
+                    if len(row) > val_idx:
+                        row[val_idx] = str(row[val_idx]).replace(" ", "").strip()
+            except ValueError:
+                pass
+                
         # 2. Buat DataFrame dari data lama di Sheets
         df_old = pd.DataFrame(all_values[1:], columns=headers) if len(all_values) > 1 else pd.DataFrame(columns=headers)
         
@@ -3469,7 +3477,9 @@ def vendor_dashboard(email):
                         mi = int(clean_numeric(ed_md.iloc[0]["Multidrop Dalam Kota"]) or 0)
                         mo = int(clean_numeric(ed_md.iloc[0]["Multidrop Luar Kota"]) or 0)
                         ml = int(clean_numeric(ed_md.iloc[0]["Biaya Buruh"]) or 0)
-                        mid = f"M_{email}_{gid}_{cur_val}_{int(cur_round)}"
+                        # ID Multidrop dibikin ikut format rapat tanpa spasi
+                        val_no_space = str(cur_val).replace(" ", "").strip()
+                        mid = f"M_{email}_{gid}_{val_no_space}_{int(cur_round)}"
 
                         # ▼▼▼ PERBAIKAN: CEK STATUS KEBERHASILAN SAVE ▼▼▼
                         with st.spinner("Menyimpan ke server..."):
