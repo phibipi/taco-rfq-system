@@ -3474,6 +3474,7 @@ def vendor_dashboard(email):
                                 if pr > 0:
                                     f_data.append([tid, email, "Open", cur_val, rid, u, lt, pr, w, c, ket, ts, round_num])
                         
+                        # ▼ POTONGAN 3: TIMPA 4 BARIS LAMA PAKAI INI BIAR INPUTAN KEBACA ▼
                         df_md_terupdate = df_md_ui.copy()
                         if "ed_md" in st.session_state and st.session_state["ed_md"]:
                             changes_md = st.session_state["ed_md"]
