@@ -3335,10 +3335,17 @@ def vendor_dashboard(email):
                             }
                             
                             # Ambil Lead Time histori
+                            # ▼ TIMPA TIGA BARIS TADI PAKAI BLOK INI SAKLEK ▼
                             if not source_p_data.empty:
-                                temp_lt = source_p_data[source_p_data['route_id'].astype(str).str.strip() == str(rid).strip()]['lead_time']
-                                if not temp_lt.empty: 
-                                    rd["Lead Time (Hari)"] = int(clean_numeric(temp_lt.iloc[0]) or 0)
+                                match_rows = source_p_data[source_p_data['route_id'].astype(str).str.strip() == str(rid).strip()]
+                                if not match_rows.empty:
+                                    val_lt_raw = match_rows.iloc[0].get('lead_time', 0)
+                                    cleaned_lt = clean_numeric(val_lt_raw)
+                                    if cleaned_lt > 0:
+                                        rd["Lead Time (Hari)"] = int(cleaned_lt)
+                                    else:
+                                        try: rd["Lead Time (Hari)"] = int(float(str(val_lt_raw).strip()))
+                                        except: rd["Lead Time (Hari)"] = 0
 
                             # Input Harga & Target per Unit
                             for u in u_types:
