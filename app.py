@@ -3253,7 +3253,7 @@ def vendor_dashboard(email):
                     # Bikin dataframe bayangan sementara yang sudah bersih spasi
                     df_p_norm = df_p.copy()
                     df_p_norm['vendor_email_clean'] = df_p_norm['vendor_email'].astype(str).str.strip().str.lower()
-                    df_p_norm['validity_clean'] = df_p_norm['validity'].astype(str).str.replace(" ", "").str.lower().strip()
+                    df_p_norm['validity_clean'] = df_p_norm['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
                     df_p_norm['route_id_clean'] = df_p_norm['route_id'].astype(str).str.strip()
                     df_p_norm['round_clean'] = pd.to_numeric(df_p_norm['round'], errors='coerce').fillna(1).astype(int)
                     
@@ -3267,9 +3267,9 @@ def vendor_dashboard(email):
 
                 
                 # --- 3. DETERMINE REFERENCE DATA ---
+                # ▼ POTONGAN FIX SAKLEK: SINKRONISASI STRUKTUR REFERENSI BIAR GA CRASH & UNIT MUNCUL ▼
                 if current_p_data.empty and str(cur_round) != "1":
                     if not df_p.empty:
-                        # Ngambil data rujukan ronde lalu dari df_p_norm biar kebal spasi
                         source_p_data = df_p_norm[
                             (df_p_norm['vendor_email_clean'] == clean_email) & 
                             (df_p_norm['validity_clean'] == clean_cur_val) & 
@@ -3278,25 +3278,31 @@ def vendor_dashboard(email):
                         ].copy()
                         is_using_prev_data = True 
                 else:
+                    # Pastikan jika mengambil dari data ronde sekarang, struktur kolom clean-nya tetep dibawa
                     source_p_data = current_p_data.copy()
+
+                # Pastikan kolom penampung harga dibaca sebagai angka numeric murni biar gak katarak
+                if not source_p_data.empty:
+                    source_p_data['price_numeric'] = pd.to_numeric(source_p_data['price'], errors='coerce').fillna(0)
 
                 u_types = []
                 if cur_round == "1":
-                    # Kalau Tahap 1, munculkan semua unit yang terdaftar di master
+                    # Kalau Tahap 1, munculkan semua unit bawaan master groups tanpa saringan
                     u_types = all_u_types
                 else:
-                    # Kalau Tahap 2 ke atas, cek unit mana yang ada harganya di Tahap 1
+                    # Kalau Tahap 2 ke atas, ambil unit rujukan ronde lalu yang harganya valid diisi vendor
                     if not source_p_data.empty:
-                        # Ambil unit_type yang punya price > 0 di data referensi (Tahap sebelumnya)
-                        submitted_units = source_p_data[pd.to_numeric(source_p_data['price'], errors='coerce').fillna(0) > 0]['unit_type'].unique().tolist()
-                        # Hanya masukkan unit yang memang pernah diisi harganya
+                        submitted_units = source_p_data[source_p_data['price_numeric'] > 0]['unit_type'].unique().tolist()
                         u_types = [u for u in all_u_types if u in submitted_units]
                     
-                    # Jika ternyata vendor tidak isi apa-apa di tahap 1 (u_types kosong)
+                    # PENGAMAN NUKLIR: Jika vendor belum isi / submitted_units kosong, backup balik ke semua unit master
                     if not u_types:
-                        st.warning("⚠️ Anda tidak memberikan penawaran pada unit manapun di Tahap 1 untuk grup rute ini.")
-                        # Opsional: stop proses di sini agar tidak muncul tabel kosong
-                        continue
+                        u_types = all_u_types
+
+                # Jika benar-benar tidak ada unit yang terdaftar di master groups, baru kita skip form ini
+                if not u_types:
+                    st.warning(f"⚠️ Tidak ada jenis unit armada yang terdaftar untuk grup rute {g_name}.")
+                    continue
 
                 # --- STEP 5: POPULATE ex_price & ex_spec ---
                 if not source_p_data.empty:
