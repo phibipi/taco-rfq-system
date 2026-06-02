@@ -2953,7 +2953,7 @@ def vendor_dashboard(email):
                                         # Buat dataframe normalisasi sementara khusus buat ngecek status doang
                                         df_p_status = df_price.copy()
                                         df_p_status['vendor_email_clean'] = df_p_status['vendor_email'].astype(str).str.strip().str.lower()
-                                        df_p_status['validity_clean'] = df_p_status['validity'].astype(str).str.replace(" ", "").str.lower().strip()
+                                        df_p_status['validity_clean'] = df_p_status['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
                                         df_p_status['route_id_clean'] = df_p_status['route_id'].astype(str).str.strip()
                                         df_p_status['round_clean'] = pd.to_numeric(df_p_status['round'], errors='coerce').fillna(1).astype(int)
                                         
