@@ -3246,40 +3246,39 @@ def vendor_dashboard(email):
                 
                 # --- 2. GET CURRENT ROUND DATA ---
                 if not df_p.empty:
-                    current_p_data = df_p[
-                        (df_p['vendor_email']==email) & (df_p['validity']==cur_val) & 
-                        (df_p['route_id'].isin(my_r['route_id'])) & (df_p['round'] == cur_round)
+                    # Bikin teks rujukan dashboard murni rapat & kecil tanpa spasi
+                    clean_cur_val = str(cur_val).replace(" ", "").lower().strip()
+                    clean_email = str(email).lower().strip()
+                    
+                    # Bikin dataframe bayangan sementara yang sudah bersih spasi
+                    df_p_norm = df_p.copy()
+                    df_p_norm['vendor_email_clean'] = df_p_norm['vendor_email'].astype(str).str.strip().str.lower()
+                    df_p_norm['validity_clean'] = df_p_norm['validity'].astype(str).str.replace(" ", "").str.lower().strip()
+                    df_p_norm['route_id_clean'] = df_p_norm['route_id'].astype(str).str.strip()
+                    df_p_norm['round_clean'] = pd.to_numeric(df_p_norm['round'], errors='coerce').fillna(1).astype(int)
+                    
+                    # Saring data murni berdasarkan format rapat tanpa spasi!
+                    current_p_data = df_p_norm[
+                        (df_p_norm['vendor_email_clean'] == clean_email) & 
+                        (df_p_norm['validity_clean'] == clean_cur_val) & 
+                        (df_p_norm['route_id_clean'].isin(my_r['route_id'].astype(str).str.strip())) & 
+                        (df_p_norm['round_clean'] == int(cur_round))
                     ]
 
+                
                 # --- 3. DETERMINE REFERENCE DATA ---
                 if current_p_data.empty and str(cur_round) != "1":
                     if not df_p.empty:
-                        # Copy data price ke memori sementara
-                        df_p_ref = df_p.copy()
-                        # Bersihkan spasi email & validity biar gak meleset
-                        df_p_ref['vendor_email_clean'] = df_p_ref['vendor_email'].astype(str).str.strip().str.lower()
-                        df_p_ref['validity_clean'] = df_p_ref['validity'].astype(str).str.replace(" ", "").str.lower().strip()
-                        df_p_ref['route_id_clean'] = df_p_ref['route_id'].astype(str).str.strip()
-                        
-                        # 🔥 KUNCI SUCI: Paksa kolom round di Sheets dikonversi jadi Angka Murni 🔥
-                        df_p_ref['round_numeric'] = pd.to_numeric(df_p_ref['round'], errors='coerce').fillna(1).astype(int)
-                        
-                        clean_email = str(email).lower().strip()
-                        clean_cur_val = str(cur_val).replace(" ", "").lower().strip()
-                        
-                        # Cari histori ronde lalu (prev_round dikonversi murni jadi integer)
-                        source_p_data = df_p_ref[
-                            (df_p_ref['vendor_email_clean'] == clean_email) & 
-                            (df_p_ref['validity_clean'] == clean_cur_val) & 
-                            (df_p_ref['route_id_clean'].isin(my_r['route_id'].astype(str).str.strip())) & 
-                            (df_p_ref['round_numeric'] == int(prev_round))
+                        # Ngambil data rujukan ronde lalu dari df_p_norm biar kebal spasi
+                        source_p_data = df_p_norm[
+                            (df_p_norm['vendor_email_clean'] == clean_email) & 
+                            (df_p_norm['validity_clean'] == clean_cur_val) & 
+                            (df_p_norm['route_id_clean'].isin(my_r['route_id'].astype(str).str.strip())) & 
+                            (df_p_norm['round_clean'] == int(prev_round))
                         ].copy()
                         is_using_prev_data = True 
                 else:
-                    # Jika data ronde berjalan sudah ada, copy isinya langsung
                     source_p_data = current_p_data.copy()
-                    if not source_p_data.empty:
-                        source_p_data['route_id_clean'] = source_p_data['route_id'].astype(str).str.strip()
 
                 u_types = []
                 if cur_round == "1":
