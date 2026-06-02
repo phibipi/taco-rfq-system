@@ -3426,7 +3426,7 @@ def vendor_dashboard(email):
                             "Multidrop Luar Kota": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %,d"),
                             "Biaya Buruh": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %,d")
                         }
-                        ed_md = st.data_editor(df_md_ui, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_md)
+                        ed_md = st.data_editor(df_md_ui, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_md, key="ed_md")
                         st.markdown("<br><b>📝 Catatan Tambahan (Opsional)</b>", unsafe_allow_html=True)
                         
                         prev_note = ""
@@ -3474,10 +3474,18 @@ def vendor_dashboard(email):
                                 if pr > 0:
                                     f_data.append([tid, email, "Open", cur_val, rid, u, lt, pr, w, c, ket, ts, round_num])
                         
-                        mi = int(clean_numeric(ed_md.iloc[0]["Multidrop Dalam Kota"]) or 0)
-                        mo = int(clean_numeric(ed_md.iloc[0]["Multidrop Luar Kota"]) or 0)
-                        ml = int(clean_numeric(ed_md.iloc[0]["Biaya Buruh"]) or 0)
-                        # ID Multidrop dibikin ikut format rapat tanpa spasi
+                        df_md_terupdate = df_md_ui.copy()
+                        if "ed_md" in st.session_state and st.session_state["ed_md"]:
+                            changes_md = st.session_state["ed_md"]
+                            if "edited_rows" in changes_md:
+                                for row_idx, changed_cols in changes_md["edited_rows"].items():
+                                    for col_name, new_val in changed_cols.items():
+                                        df_md_terupdate.at[int(row_idx), col_name] = new_val
+                        
+                        mi = int(clean_numeric(df_md_terupdate.iloc[0]["Multidrop Dalam Kota"]) or 0)
+                        mo = int(clean_numeric(df_md_terupdate.iloc[0]["Multidrop Luar Kota"]) or 0)
+                        ml = int(clean_numeric(df_md_terupdate.iloc[0]["Biaya Buruh"]) or 0)
+                        
                         val_no_space = str(cur_val).replace(" ", "").strip()
                         mid = f"M_{email}_{gid}_{val_no_space}_{int(cur_round)}"
 
