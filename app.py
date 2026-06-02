@@ -2948,22 +2948,35 @@ def vendor_dashboard(email):
                                     status_ui = '<span class="status-pending">❌ Belum Ada Data</span>'
                                     is_locked_btn = False
                                     
-                                    # PENGAMAN: Pastikan kolom vendor_email benar-benar ada
-                                    if not df_price.empty and not r_data.empty and 'vendor_email' in df_price.columns:
-                                        if 'round' not in df_price.columns: df_price['round'] = '1'
-                                        sub_p = df_price[
-                                            (df_price['vendor_email'] == email) & 
-                                            (df_price['validity'] == sel_val) & 
-                                            (df_price['route_id'].isin(r_data['route_id'])) &
-                                            (df_price['round'] == sel_round)
+                                    # ▼ POTONGAN FIX SAKLEK: SINKRONISASI STATUS DASHBOARD VENDOR (ANTI-BLANK / ANTI-ZONK STATUS) ▼
+                                    if not df_price.empty and not r_data.empty:
+                                        # Buat dataframe normalisasi sementara khusus buat ngecek status doang
+                                        df_p_status = df_price.copy()
+                                        df_p_status['vendor_email_clean'] = df_p_status['vendor_email'].astype(str).str.strip().str.lower()
+                                        df_p_status['validity_clean'] = df_p_status['validity'].astype(str).str.replace(" ", "").str.lower().strip()
+                                        df_p_status['route_id_clean'] = df_p_status['route_id'].astype(str).str.strip()
+                                        df_p_status['round_clean'] = pd.to_numeric(df_p_status['round'], errors='coerce').fillna(1).astype(int)
+                                        
+                                        # Bersihkan parameter pembanding dari dashboard
+                                        clean_sel_val = str(sel_val).replace(" ", "").lower().strip()
+                                        clean_email = str(email).lower().strip()
+                                        
+                                        # Jalankan query penyaringan status yang kebal spasi & kebal tipe data!
+                                        sub_p = df_p_status[
+                                            (df_p_status['vendor_email_clean'] == clean_email) & 
+                                            (df_p_status['validity_clean'] == clean_sel_val) & 
+                                            (df_p_status['route_id_clean'].isin(r_data['route_id'].astype(str).str.strip())) & 
+                                            (df_p_status['round_clean'] == int(sel_round))
                                         ]
+                                        
                                         if not sub_p.empty:
                                             if "Need Revision" in sub_p['status'].values:
                                                 status_ui = '<span class="status-pending" style="color: #9A3412 !important; background-color: #FFEDD5 !important; border-color: #FDBA74 !important;">⚠️ Revisi</span>'
                                             else:
                                                 status_ui = '<span class="status-done">✅ Sudah Terisi</span>'
                                                 
-                                            if "Locked" in sub_p['status'].values: is_locked_btn = True
+                                            if "Locked" in sub_p['status'].values: 
+                                                is_locked_btn = True
                                     
                                     c1, c2, c3, c4 = st.columns([3, 4, 2, 2])
                                     c1.write(f"**{grp_name}**")
