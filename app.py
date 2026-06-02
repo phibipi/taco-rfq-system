@@ -386,9 +386,15 @@ def generate_child_id(df, parent_id, id_col):
 def clean_numeric(val):
     if pd.isna(val) or str(val).strip() == "": return 0
     try:
-        s = str(val).replace("Rp", "").replace(".", "").replace(",", "").replace(" ", "").strip()
+        s = str(val).strip()
+        # Kalau teksnya berakhiran .0 atau ,0 (desimal gaib Streamlit), potong dulu buntutnya
+        if s.endswith(".0") or s.endswith(",0"):
+            s = s[:-2]
+            
+        s = s.replace("Rp", "").replace(".", "").replace(",", "").replace(" ", "").strip()
         return float(s) if s else 0
-    except: return 0
+    except: 
+        return 0
 
 # --- TOMBOL SCROLL TO TOP (VERSI MANUAL ANCHOR) ---
 def add_scroll_to_top():
@@ -3513,9 +3519,14 @@ def vendor_dashboard(email):
                                     for col_name, new_val in changed_cols.items():
                                         df_md_terupdate.at[int(row_idx), col_name] = new_val
                         
-                        mi = int(clean_numeric(df_md_terupdate.iloc[0]["Multidrop Dalam Kota"]) or 0)
-                        mo = int(clean_numeric(df_md_terupdate.iloc[0]["Multidrop Luar Kota"]) or 0)
-                        ml = int(clean_numeric(df_md_terupdate.iloc[0]["Biaya Buruh"]) or 0)
+                        try: mi = int(float(str(df_md_terupdate.iloc[0]["Multidrop Dalam Kota"]).replace("Rp","").replace(" ","").strip()))
+                        except: mi = 0
+                        
+                        try: mo = int(float(str(df_md_terupdate.iloc[0]["Multidrop Luar Kota"]).replace("Rp","").replace(" ","").strip()))
+                        except: mo = 0
+                        
+                        try: ml = int(float(str(df_md_terupdate.iloc[0]["Biaya Buruh"]).replace("Rp","").replace(" ","").strip()))
+                        except: ml = 0
                         
                         val_no_space = str(cur_val).replace(" ", "").strip()
                         mid = f"M_{email}_{gid}_{val_no_space}_{int(cur_round)}"
