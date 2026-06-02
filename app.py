@@ -3336,8 +3336,9 @@ def vendor_dashboard(email):
                             
                             # Ambil Lead Time histori
                             if not source_p_data.empty:
-                                temp_lt = source_p_data[source_p_data['route_id_clean'] == rid]['lead_time']
-                                if not temp_lt.empty: rd["Lead Time (Hari)"] = int(clean_numeric(temp_lt.iloc[0]) or 0)
+                                temp_lt = source_p_data[source_p_data['route_id'].astype(str).str.strip() == str(rid).strip()]['lead_time']
+                                if not temp_lt.empty: 
+                                    rd["Lead Time (Hari)"] = int(clean_numeric(temp_lt.iloc[0]) or 0)
 
                             # Input Harga & Target per Unit
                             for u in u_types:
