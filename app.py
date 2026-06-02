@@ -3454,15 +3454,34 @@ def vendor_dashboard(email):
                         ic, oc, lc = 0, 0, 0
                         md_source = pd.DataFrame()
                         
+                        # ▼ POTONGAN FIX SAKLEK: BIAR HARGA MULTIDROP LAMA KELOAD SEMPURNA DI FORM VENDOR ▼
                         if not df_m.empty:
-                            base_m = df_m[(df_m['vendor_email']==email) & (df_m['validity']==cur_val) & (df_m['group_id']==gid)]
+                            # Bikin dataframe bayangan khusus multidrop yang bersih spasi
+                            df_m_norm = df_m.copy()
+                            df_m_norm['vendor_email_clean'] = df_m_norm['vendor_email'].astype(str).str.strip().str.lower()
+                            df_m_norm['validity_clean'] = df_m_norm['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
+                            df_m_norm['group_id_clean'] = df_m_norm['group_id'].astype(str).str.strip()
+                            
+                            # Bersihkan pembanding dari dashboard
+                            clean_cur_val = str(cur_val).replace(" ", "").lower().strip()
+                            clean_email = str(email).lower().strip()
+                            
+                            # Saring data murni tanpa sensitif spasi
+                            base_m = df_m_norm[
+                                (df_m_norm['vendor_email_clean'] == clean_email) & 
+                                (df_m_norm['validity_clean'] == clean_cur_val) & 
+                                (df_m_norm['group_id_clean'] == str(gid).strip())
+                            ]
+                            
                             if not base_m.empty:
+                                # Cari data ronde berjalan atau ronde sebelumnya lewat id_multidrop
                                 md_curr = base_m[base_m['id_multidrop'].astype(str).str.endswith(f"_{cur_round}")]
-                                if not md_curr.empty: md_source = md_curr
-                                elif cur_round != "1":
+                                if not md_curr.empty: 
+                                    md_source = md_curr
+                                elif str(cur_round) != "1":
                                     md_prev = base_m[base_m['id_multidrop'].astype(str).str.endswith(f"_{prev_round}")]
                                     if not md_prev.empty: md_source = md_prev
-
+                                    
                         if not md_source.empty:
                             ic = clean_numeric(md_source.iloc[0].get('inner_city_price')) or 0
                             oc = clean_numeric(md_source.iloc[0].get('outer_city_price')) or 0
