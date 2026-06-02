@@ -3462,7 +3462,7 @@ def vendor_dashboard(email):
                             "Multidrop Luar Kota": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %,d"),
                             "Biaya Buruh": st.column_config.NumberColumn(min_value=0, step=1000, format="Rp %,d")
                         }
-                        ed_md = st.data_editor(df_md_ui, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_md, key="ed_md")
+                        ed_md = st.data_editor(df_md_ui, hide_index=True, use_container_width=True, disabled=is_lock, column_config=cf_md, key=f"ed_md_{gid}_{cur_round}")
                         st.markdown("<br><b>📝 Catatan Tambahan (Opsional)</b>", unsafe_allow_html=True)
                         
                         prev_note = ""
@@ -3512,8 +3512,10 @@ def vendor_dashboard(email):
                         
                         # ▼ POTONGAN 3: TIMPA 4 BARIS LAMA PAKAI INI BIAR INPUTAN KEBACA ▼
                         df_md_terupdate = df_md_ui.copy()
-                        if "ed_md" in st.session_state and st.session_state["ed_md"]:
-                            changes_md = st.session_state["ed_md"]
+                        editor_md_dyn_key = f"ed_md_{gid}_{cur_round}"
+                        
+                        if editor_md_dyn_key in st.session_state and st.session_state[editor_md_dyn_key]:
+                            changes_md = st.session_state[editor_md_dyn_key]
                             if "edited_rows" in changes_md:
                                 for row_idx, changed_cols in changes_md["edited_rows"].items():
                                     for col_name, new_val in changed_cols.items():
