@@ -2784,18 +2784,21 @@ def admin_dashboard():
                             p2 = 0 if pd.isna(p2) else p2
                             
                             # Kalkulasi Selisih
+                            # Kalkulasi Selisih
                             diff = p1 - p2 if (p1 > 0 and p2 > 0) else 0
                             pct = (diff / p1 * 100) if (p1 > 0 and diff != 0) else 0
                             
-                            comparison_data.append({
-                                "Origin Area": r_row['origin'],
-                                "Rute": asal_tujuan,
-                                "Unit": ut,
-                                "Harga Tahap 1": p1,
-                                "Harga Tahap 2": p2,
-                                "Selisih (Rp)": diff,
-                                "Turun (%)": round(pct, 2)
-                            })
+                            # ▼ POINTER FIX COMPARISON: HANYA MASUKKAN DATA JIKA TAHAP 1 ATAU TAHAP 2 ADA HARGANYA (BUANG DATA 0 VS 0) ▼
+                            if p1 > 0 or p2 > 0:
+                                comparison_data.append({
+                                    "Origin Area": r_row['origin'],
+                                    "Rute": asal_tujuan,
+                                    "Unit": ut,
+                                    "Harga Tahap 1": p1,
+                                    "Harga Tahap 2": p2,
+                                    "Selisih (Rp)": diff,
+                                    "Turun (%)": round(pct, 2)
+                                })
 
                         df_final_res = pd.DataFrame(comparison_data)
 
