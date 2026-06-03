@@ -1045,7 +1045,7 @@ def get_target_price(df_all, route_id, unit_type, cur_validity):
     df_curr = df_safe[
         (df_safe['validity_clean'] == clean_cur_val) & 
         (df_safe['route_id_clean'] == clean_rid) & 
-        (df_safe['unit_type'].astype(str).str.strip().str.lower() == str(unit_type).strip().str.lower()) &
+        (df_safe['unit_type'].astype(str).str.strip().str.lower() == str(unit_type).strip().lower()) &
         (df_safe['round_clean'] == 1)
     ]
     
