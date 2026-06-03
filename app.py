@@ -1828,7 +1828,7 @@ def admin_dashboard():
                 sub_master = pd.DataFrame()
                 if not df_master.empty:
                     df_m_mon = df_master.copy()
-                    df_m_mon['validity_clean'] = df_m_mon['validity'].astype(str).str.replace(" ", "").str.lower().strip()
+                    df_m_mon['validity_clean'] = df_m_mon['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
                     df_m_mon['round_clean'] = pd.to_numeric(df_m_mon['round'], errors='coerce').fillna(1).astype(int)
                     
                     clean_sm_val = str(sel_sm_val).replace(" ", "").lower().strip()
