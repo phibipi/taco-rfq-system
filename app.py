@@ -1824,11 +1824,20 @@ def admin_dashboard():
                 ].drop_duplicates(subset=['vendor_email', 'route_group'])
                 
                 # Ambil Data yg sudah disubmit (dari df_master)
-                sub_master = df_master[
-                    (df_master['load_type'] == sel_sm_lt) & 
-                    (df_master['validity'] == sel_sm_val) & 
-                    (df_master['round'] == sel_sm_rnd)
-                ] if not df_master.empty else pd.DataFrame()
+                # ▼ POINTER FIX 1: PAKSA SINKRON RONDE JADI INT & STRIP VALIDITY MONITOR ▼
+                sub_master = pd.DataFrame()
+                if not df_master.empty:
+                    df_m_mon = df_master.copy()
+                    df_m_mon['validity_clean'] = df_m_mon['validity'].astype(str).str.replace(" ", "").str.lower().strip()
+                    df_m_mon['round_clean'] = pd.to_numeric(df_m_mon['round'], errors='coerce').fillna(1).astype(int)
+                    
+                    clean_sm_val = str(sel_sm_val).replace(" ", "").lower().strip()
+                    
+                    sub_master = df_m_mon[
+                        (df_m_mon['load_type'] == sel_sm_lt) & 
+                        (df_m_mon['validity_clean'] == clean_sm_val) & 
+                        (df_m_mon['round_clean'] == int(sel_sm_rnd))
+                    ]
                 
                 if not acc_target.empty:
                     # --- 1. TAHAP PRE-CALCULATION & PENGUMPULAN DATA ---
@@ -2199,7 +2208,21 @@ def admin_dashboard():
                 sel_round = c3.selectbox("Filter Tahap", avail_round, key="es_round")
             
                 # 1. Filter Awal (Periode & Muatan)
-                df_view = df_master[(df_master['validity'] == sel_val) & (df_master['load_type'] == sel_load) & (df_master['round'] == sel_round)].copy()
+                # ▼ POINTER FIX 2: SINKRONISASI VALIDITY & RONDE DI TAB SUMMARY ADMIN ▼
+                if not df_master.empty:
+                    df_master_norm = df_master.copy()
+                    df_master_norm['validity_clean'] = df_master_norm['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
+                    df_master_norm['round_clean'] = pd.to_numeric(df_master_norm['round'], errors='coerce').fillna(1).astype(int)
+                    
+                    clean_sel_val = str(sel_val).replace(" ", "").lower().strip()
+                    
+                    df_view = df_master_norm[
+                        (df_master_norm['validity_clean'] == clean_sel_val) & 
+                        (df_master_norm['load_type'] == sel_load) & 
+                        (df_master_norm['round_clean'] == int(sel_round))
+                    ].copy()
+                else:
+                    df_view = pd.DataFrame()
                 df_view = df_view[df_view['price'] > 0]
                 
                 # 2. Tambahan Filter Kota Asal & Search Bar
