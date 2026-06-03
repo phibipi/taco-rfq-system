@@ -2747,22 +2747,21 @@ def admin_dashboard():
                 ]['vendor_email'].dropna().unique().tolist())
                 
                 if not vendor_list:
-                        st.warning("Belum ada data penawaran untuk kriteria ini.")
-                    else:
-                        # ▼ POINTER FIX: UBAH TAMPILAN DROPDOWN JADI NAMA PERUSAHAAN (PT) TAPI SISTEM TETEP BACA EMAIL VENDOR ▼
-                        def fmt_ven_comparison(eml):
-                            if not df_u.empty:
-                                match_name = df_u[df_u['email'] == eml]['vendor_name']
-                                if not match_name.empty:
-                                    return match_name.iloc[0]
-                            return eml
+                    st.warning("Belum ada data penawaran untuk kriteria ini.")
+                else:
+                    def fmt_ven_comparison(eml):
+                        if not df_u.empty:
+                            match_name = df_u[df_u['email'] == eml]['vendor_name']
+                            if not match_name.empty:
+                                return match_name.iloc[0]
+                        return eml
 
-                        sel_ven_comp = c3.selectbox(
-                            "Pilih Vendor", 
-                            vendor_list, 
-                            format_func=fmt_ven_comparison, 
-                            key="comp_ven_final"
-                        )
+                    sel_ven_comp = c3.selectbox(
+                        "Pilih Vendor", 
+                        vendor_list, 
+                        format_func=fmt_ven_comparison, 
+                        key="comp_ven_final"
+                    )
                     
                     origin_list = sorted(df_p_merged[
                         (df_p_merged['vendor_email'] == sel_ven_comp) & 
