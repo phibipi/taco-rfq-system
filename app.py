@@ -2802,12 +2802,14 @@ def admin_dashboard():
                             
                             # ▼ POINTER FIX COMPARISON: HANYA MASUKKAN DATA JIKA TAHAP 1 ATAU TAHAP 2 ADA HARGANYA (BUANG DATA 0 VS 0) ▼
                             if p1 > 0 or p2 > 0:
+                                tgt_val = get_target_price(df_p_merged, rid, ut, sel_val_comp)
                                 comparison_data.append({
                                     "Origin Area": r_row['origin'],
                                     "Rute": asal_tujuan,
                                     "Unit": ut,
                                     "Harga Tahap 1": p1,
                                     "Harga Tahap 2": p2,
+                                    "Target Price": tgt_val,
                                     "Selisih (Rp)": diff,
                                     "Turun (%)": round(pct, 2)
                                 })
