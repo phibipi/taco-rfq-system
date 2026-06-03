@@ -2747,9 +2747,22 @@ def admin_dashboard():
                 ]['vendor_email'].dropna().unique().tolist())
                 
                 if not vendor_list:
-                    st.warning("Belum ada data penawaran untuk kriteria ini.")
-                else:
-                    sel_ven_comp = c3.selectbox("Pilih Vendor", vendor_list, key="comp_ven_final")
+                        st.warning("Belum ada data penawaran untuk kriteria ini.")
+                    else:
+                        # ▼ POINTER FIX: UBAH TAMPILAN DROPDOWN JADI NAMA PERUSAHAAN (PT) TAPI SISTEM TETEP BACA EMAIL VENDOR ▼
+                        def fmt_ven_comparison(eml):
+                            if not df_u.empty:
+                                match_name = df_u[df_u['email'] == eml]['vendor_name']
+                                if not match_name.empty:
+                                    return match_name.iloc[0]
+                            return eml
+
+                        sel_ven_comp = c3.selectbox(
+                            "Pilih Vendor", 
+                            vendor_list, 
+                            format_func=fmt_ven_comparison, 
+                            key="comp_ven_final"
+                        )
                     
                     origin_list = sorted(df_p_merged[
                         (df_p_merged['vendor_email'] == sel_ven_comp) & 
@@ -2809,10 +2822,12 @@ def admin_dashboard():
                                 elif val < 0: return 'color: red'
                                 return 'color: black'
 
+                            # ▼ POINTER FIX B: DAFTARKAN FORMAT RUPIAH UNTUK KOLOM TARGET PRICE DI TAMPILAN ▼
                             st.dataframe(
                                 df_final_res.style.format({
                                     "Harga Tahap 1": "Rp {:,.0f}",
                                     "Harga Tahap 2": "Rp {:,.0f}",
+                                    "Target Price": "Rp {:,.0f}",
                                     "Selisih (Rp)": "Rp {:,.0f}",
                                     "Turun (%)": "{:.2f}%"
                                 }).map(color_diff, subset=['Selisih (Rp)', 'Turun (%)']),
