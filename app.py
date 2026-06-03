@@ -1024,86 +1024,74 @@ def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic
     doc.save(fn)
     return fn
 
-# --- HELPER: HITUNG TARGET PRICE (FIX: FILTER HARGA 0) ---
+# ▼ POINTER FIX SAKLEK: TIMPA SELURUH ISI FUNGSI get_target_price DENGAN BLOK INI ▼
 def get_target_price(df_all, route_id, unit_type, cur_validity):
-    # SAFETY: Pastikan kolom price dibaca sebagai angka
     df_safe = df_all.copy()
     if 'price' in df_safe.columns:
         df_safe['price'] = pd.to_numeric(df_safe['price'], errors='coerce').fillna(0)
-        # ▼▼▼ LOGIKA BARU: BUANG HARGA 0 AGAR TIDAK JADI NILAI MINIMUM ▼▼▼
         df_safe = df_safe[df_safe['price'] > 0]
     else:
         return 0
     
-    if 'round' not in df_safe.columns:
-        df_safe['round'] = '1'
-   
-    # 1. Ambil Harga Terendah Periode SAAT INI (Tahap 1)
+    # 📝 KUNCI SUCI: Normalisasi spasi dan tipe data di memori hitung target price
+    df_safe['validity_clean'] = df_safe['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
+    df_safe['route_id_clean'] = df_safe['route_id'].astype(str).str.strip()
+    df_safe['round_clean'] = pd.to_numeric(df_safe['round'], errors='coerce').fillna(1).astype(int)
+    
+    clean_cur_val = str(cur_validity).replace(" ", "").lower().strip()
+    clean_rid = str(route_id).strip()
+    
+    # 1. Ambil Harga Terendah Periode SAAT INI (Tahap 1) -> Paksa round == 1 murni angka
     df_curr = df_safe[
-        (df_safe['validity'] == cur_validity) & 
-        (df_safe['route_id'] == str(route_id)) & 
-        (df_safe['unit_type'] == unit_type) &
-        (df_safe['round'] == '1')
+        (df_safe['validity_clean'] == clean_cur_val) & 
+        (df_safe['route_id_clean'] == clean_rid) & 
+        (df_safe['unit_type'].astype(str).str.strip().str.lower() == str(unit_type).strip().str.lower()) &
+        (df_safe['round_clean'] == 1)
     ]
     
-    # Jika belum ada yang isi sama sekali, kita set 0 dulu untuk cari di histori masa lalu
     if df_curr.empty: 
         min_curr = 0 
     else:
         min_curr = df_curr['price'].min()
 
-    # 2. Tentukan Periode "SEBELUMNYA"
+    # 2. Tentukan Periode "SEBELUMNYA" (Histori Masa Lalu)
     target_price = 0
     df_prev = pd.DataFrame()
     
     try:
-        parts = cur_validity.split(" ") 
+        parts = str(cur_validity).strip().split(" ") 
         cur_year_str = parts[-1]
         cur_year_int = int(cur_year_str)
         
-        is_semester_2 = "juli" in cur_validity.lower() or "july" in cur_validity.lower()
+        is_semester_2 = "juli" in str(cur_validity).lower() or "july" in str(cur_validity).lower()
         
         if is_semester_2:
-            # SKENARIO A: Periode Juli-Desember -> Cari Jan-Jun tahun sama
             df_prev = df_safe[
                 (df_safe['validity'].str.contains(cur_year_str, na=False)) & 
                 (df_safe['validity'].str.contains("Jan", case=False, na=False)) & 
-                (df_safe['route_id'] == str(route_id)) & 
-                (df_safe['unit_type'] == unit_type)
+                (df_safe['route_id_clean'] == clean_rid) & 
+                (df_safe['unit_type'].astype(str).str.strip().str.lower() == str(unit_type).strip().str.lower())
             ]
         else:
-            # SKENARIO B: Periode Januari-Juni -> Cari Tahun Sebelumnya
             prev_year_str = str(cur_year_int - 1)
             df_prev = df_safe[
                 (df_safe['validity'].str.contains(prev_year_str, na=False)) & 
-                (df_safe['route_id'] == str(route_id)) & 
-                (df_safe['unit_type'] == unit_type)
+                (df_safe['route_id_clean'] == clean_rid) & 
+                (df_safe['unit_type'].astype(str).str.strip().str.lower() == str(unit_type).strip().str.lower())
             ]
 
         # 3. Bandingkan Harga
         if not df_prev.empty:
             min_prev = df_prev['price'].min()
-            
-            # Jika harga prev dan curr sama-sama ada isinya
             if min_prev > 0 and min_curr > 0:
-                if min_prev < min_curr:
-                    target_price = min_prev * 0.95 
-                else:
-                    target_price = min_curr * 0.85 
-            # Jika hanya harga histori yang ada (Vendor belum isi di Tahap 1 sekarang)
-            elif min_prev > 0 and min_curr == 0:
-                target_price = min_prev * 0.95
-            # Jika hanya harga Tahap 1 sekarang yang ada
-            elif min_prev == 0 and min_curr > 0:
-                target_price = min_curr * 0.85
-            else:
-                target_price = 0
+                if min_prev < min_curr: target_price = min_prev * 0.95 
+                else: target_price = min_curr * 0.85 
+            elif min_prev > 0 and min_curr == 0: target_price = min_prev * 0.95
+            elif min_prev == 0 and min_curr > 0: target_price = min_curr * 0.85
+            else: target_price = 0
         else:
-            # Jika tidak ada data histori, murni pakai harga terendah Tahap 1
-            if min_curr > 0:
-                target_price = min_curr * 0.85
-            else:
-                target_price = 0
+            if min_curr > 0: target_price = min_curr * 0.85
+            else: target_price = 0
             
     except:
         if min_curr > 0: target_price = min_curr * 0.85
