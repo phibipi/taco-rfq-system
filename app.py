@@ -1264,7 +1264,23 @@ def user_dashboard():
             sel_val = c1.selectbox("Filter Periode", avail_val, key="sum_val")
             sel_load = c2.selectbox("Filter Tipe Muatan", avail_load, key="sum_load")
             
-            df_view = df_master[(df_master['validity'] == sel_val) & (df_master['load_type'] == sel_load)].copy()
+            if not df_master.empty:
+                    # Buat dataframe normalisasi sementara khusus untuk tampilan summary admin
+                    df_master_norm = df_master.copy()
+                    df_master_norm['validity_clean'] = df_master_norm['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
+                    df_master_norm['round_clean'] = pd.to_numeric(df_master_norm['round'], errors='coerce').fillna(1).astype(int)
+                    
+                    # Bersihkan parameter pemilih selectbox admin dari spasi gaib
+                    clean_sel_val = str(sel_val).replace(" ", "").lower().strip()
+                    
+                    # Saring data secara akurat tanpa katarak spasi & tipe data ronde
+                    df_view = df_master_norm[
+                        (df_master_norm['validity_clean'] == clean_sel_val) & 
+                        (df_master_norm['load_type'] == sel_load) & 
+                        (df_master_norm['round_clean'] == int(sel_round))
+                    ].copy()
+                else:
+                    df_view = pd.DataFrame()
             
             if not df_view.empty:
                 unique_origins = sorted(df_view['origin'].unique())
