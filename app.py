@@ -2812,7 +2812,7 @@ def admin_dashboard():
                 
                 if not vendor_list:
                     st.warning("Belum ada data penawaran untuk kriteria ini.")
-                    continue
+                    st.stop()
                 else:
                     def fmt_ven_comparison(eml):
                         if not df_u.empty:
