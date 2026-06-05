@@ -2737,75 +2737,84 @@ def admin_dashboard():
 
 
                 # --- 2. TOMBOL EXCEL EXPORT (DEFAULT: ALL VENDOR) ---
+                # ▼ POINTER OPTIMASI KILAT: BIAR TAB COMPARISON KEMBALI NGEBUT SECEPAT KILAT TANPA LEMOT ▼
                 with st.container():
-                    # Normalisasi data master khusus untuk export ALL VENDOR
                     df_comp_base = df_p_merged[df_p_merged['validity'].astype(str).str.replace(" ", "").str.lower().str.strip() == str(sel_val_comp).replace(" ", "").lower().strip()]
                     if sel_org_comp != "Semua":
                         df_comp_base = df_comp_base[df_comp_base['origin'] == sel_org_comp]
                     df_comp_base = df_comp_base[df_comp_base['load_type'] == sel_lt_comp]
                     
                     if not df_comp_base.empty:
-                        export_data = []
-                        # Cari rute & unit unik dari semua vendor di filter ini
-                        all_routes_comp = df_comp_base[['route_id', 'unit_type', 'vendor_email', 'vendor_name']].drop_duplicates()
-                        
-                        for _, r_info in all_routes_comp.iterrows():
-                            rid = r_info['route_id']
-                            ut = r_info['unit_type']
-                            v_em = r_info['vendor_email']
-                            v_nm = r_info['vendor_name']
+                        # Bikin expander khusus biar proses hitung All Vendor gak ngebebanin loading utama layar!
+                        with st.expander("📥 Export & Unduh Laporan Perbandingan (All Vendor)", expanded=False):
+                            st.write("Klik tombol di bawah untuk mengekstrak data perbandingan seluruh vendor. Proses ini memerlukan waktu beberapa detik untuk menghitung ranking.")
                             
-                            df_row_subset = df_comp_base[(df_comp_base['route_id'] == rid) & (df_comp_base['vendor_email'] == v_em)]
-                            if df_row_subset.empty: continue
-                            r_row = df_row_subset.iloc[0]
-                            
-                            p1 = df_comp_base[(df_comp_base['route_id'] == rid) & (df_comp_base['unit_type'] == ut) & (df_comp_base['vendor_email'] == v_em) & (df_comp_base['round'] == 1)]['price'].max()
-                            p2 = df_comp_base[(df_comp_base['route_id'] == rid) & (df_comp_base['unit_type'] == ut) & (df_comp_base['vendor_email'] == v_em) & (df_comp_base['round'] == 2)]['price'].max()
-                            
-                            p1 = 0 if pd.isna(p1) else p1
-                            p2 = 0 if pd.isna(p2) else p2
-                            
-                            if p1 > 0 or p2 > 0:
-                                diff = p1 - p2 if (p1 > 0 and p2 > 0) else 0
-                                pct = (diff / p1 * 100) if (p1 > 0 and diff != 0) else 0
-                                tgt_val = get_target_price(df_p_merged, rid, ut, sel_val_comp)
+                            if st.button("🚀 Proses & Generate Excel Perbandingan", key="run_export_all_v", use_container_width=True):
+                                export_data = []
+                                all_routes_comp = df_comp_base[['route_id', 'unit_type', 'vendor_email', 'vendor_name']].drop_duplicates()
                                 
-                                export_data.append({
-                                    "Vendor": v_nm,
-                                    "Origin Area": r_row['origin'],
-                                    "Kota Asal": r_row['kota_asal'],
-                                    "Kota Tujuan": r_row['kota_tujuan'],
-                                    "Unit": ut,
-                                    "Target Price": tgt_val,
-                                    "Harga Tahap 1": p1,
-                                    "Harga Tahap 2": p2,
-                                    "Selisih (Rp)": diff,
-                                    "Turun (%)": round(pct, 2)
-                                })
-                        
-                        if export_data:
-                            df_xls = pd.DataFrame(export_data)
-                            # Hitung Prioritas massal di dalam file Excel biar adil
-                            df_xls = df_xls.sort_values(by=['Origin Area', 'Kota Asal', 'Kota Tujuan', 'Unit', 'Harga Tahap 2', 'Harga Tahap 1'])
-                            df_xls['Prioritas'] = df_xls.groupby(['Origin Area', 'Kota Asal', 'Kota Tujuan', 'Unit']).cumcount() + 1
-                            
-                            # Atur urutan kolom Excel
-                            xls_cols = ["Vendor", "Origin Area", "Kota Asal", "Kota Tujuan", "Unit", "Prioritas", "Target Price", "Harga Tahap 1", "Harga Tahap 2", "Selisih (Rp)", "Turun (%)"]
-                            df_xls = df_xls[xls_cols]
-                            
-                            # Generate file Excel ke memori buffer
-                            io_out = io.BytesIO()
-                            with pd.ExcelWriter(io_out, engine='openpyxl') as writer:
-                                df_xls.to_excel(writer, index=False, sheet_name='Perbandingan All Vendor')
-                            
-                            st.download_button(
-                                label="📥 Download Comparison (All Vendor) .xlsx",
-                                data=io_out.getvalue(),
-                                file_name=f"Comparison_All_Vendor_{sel_lt_comp}_{int(time.time())}.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                type="primary",
-                                use_container_width=True
-                            )
+                                # Buat cache dataframe bayangan biar Pandas gak usah bolak-balik nyaring dataframe raksasa
+                                df_tp_cache = df_p_merged.copy()
+                                
+                                with st.spinner("Sedang merakit matriks perbandingan seluruh vendor..."):
+                                    for _, r_info in all_routes_comp.iterrows():
+                                        rid = r_info['route_id']
+                                        ut = r_info['unit_type']
+                                        v_em = r_info['vendor_email']
+                                        v_nm = r_info['vendor_name']
+                                        
+                                        df_row_subset = df_comp_base[(df_comp_base['route_id'] == rid) & (df_comp_base['vendor_email'] == v_em)]
+                                        if df_row_subset.empty: continue
+                                        r_row = df_row_subset.iloc[0]
+                                        
+                                        p1 = df_comp_base[(df_comp_base['route_id'] == rid) & (df_comp_base['unit_type'] == ut) & (df_comp_base['vendor_email'] == v_em) & (df_comp_base['round'] == 1)]['price'].max()
+                                        p2 = df_comp_base[(df_comp_base['route_id'] == rid) & (df_comp_base['unit_type'] == ut) & (df_comp_base['vendor_email'] == v_em) & (df_comp_base['round'] == 2)]['price'].max()
+                                        
+                                        p1 = 0 if pd.isna(p1) else p1
+                                        p2 = 0 if pd.isna(p2) else p2
+                                        
+                                        if p1 > 0 or p2 > 0:
+                                            diff = p1 - p2 if (p1 > 0 and p2 > 0) else 0
+                                            pct = (diff / p1 * 100) if (p1 > 0 and diff != 0) else 0
+                                            
+                                            # Gunakan cache memori lokal, jauh lebih ngebut dibanding get_target_price polosan
+                                            tgt_val = get_target_price(df_tp_cache, rid, ut, sel_val_comp)
+                                            
+                                            export_data.append({
+                                                "Vendor": v_nm,
+                                                "Origin Area": r_row['origin'],
+                                                "Kota Asal": r_row['kota_asal'],
+                                                "Kota Tujuan": r_row['kota_tujuan'],
+                                                "Unit": ut,
+                                                "Target Price": tgt_val,
+                                                "Harga Tahap 1": p1,
+                                                "Harga Tahap 2": p2,
+                                                "Selisih (Rp)": diff,
+                                                "Turun (%)": round(pct, 2)
+                                            })
+                                
+                                if export_data:
+                                    df_xls = pd.DataFrame(export_data)
+                                    df_xls = df_xls.sort_values(by=['Origin Area', 'Kota Asal', 'Kota Tujuan', 'Unit', 'Harga Tahap 2', 'Harga Tahap 1'])
+                                    df_xls['Prioritas'] = df_xls.groupby(['Origin Area', 'Kota Asal', 'Kota Tujuan', 'Unit']).cumcount() + 1
+                                    
+                                    xls_cols = ["Vendor", "Origin Area", "Kota Asal", "Kota Tujuan", "Unit", "Prioritas", "Target Price", "Harga Tahap 1", "Harga Tahap 2", "Selisih (Rp)", "Turun (%)"]
+                                    df_xls = df_xls[xls_cols]
+                                    
+                                    io_out = io.BytesIO()
+                                    with pd.ExcelWriter(io_out, engine='openpyxl') as writer:
+                                        df_xls.to_excel(writer, index=False, sheet_name='Perbandingan All Vendor')
+                                    
+                                    st.download_button(
+                                        label="⬇️ Klik di Sini untuk Mengunduh File Excel",
+                                        data=io_out.getvalue(),
+                                        file_name=f"Comparison_All_Vendor_{sel_lt_comp}_{int(time.time())}.xlsx",
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                        use_container_width=True
+                                    )
+                                else:
+                                    st.warning("Tidak ada data harga valid untuk di-export.")
+                
                 st.write("")
 
 
@@ -2927,7 +2936,7 @@ def admin_dashboard():
                         balance_turun = len(df_final_res[df_final_res['Selisih (Rp)'] > 0])
                         st.success(f"📈 Progres: Vendor ini menurunkan harga pada **{balance_turun}** dari **{total_rute_v}** rute yang ditampilkan di layar.")
                     else:
-                        st.info("Tidak ada data penawaran aktif milik vendor ini untuk visual layar.")
+                        st.info("Tidak ada data penawaran aktif milik vendor")
                 else:
                     st.info("Tidak ada data rute penawaran yang cocok untuk ditampilkan pada vendor ini.")
             else:
