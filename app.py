@@ -2709,11 +2709,12 @@ def admin_dashboard():
                 st.error("Database Master (Groups/Routes/Units) masih kosong")        
 
         
+# ==================== TIMPA KHUSUS ISI TAB COMPARISON (TABS[6]) DENGAN BLOK INI ====================
         with tabs[6]:
             st.subheader("⚖️ Perbandingan Harga Tahap 1 vs Tahap 2")
             st.caption("Lihat penurunan harga per rute dan per vendor untuk negosiasi.")
 
-            # ▼ FIX KUNCI: DEKLARASIKAN DF_P_MERGED DARI DATA DF_MASTER BIAR ENGGAK NAME-ERROR LAGI HONEY ▼
+            # Deklarasikan df_p_merged sebagai jembatan dari df_master biar ga NameError
             df_p_merged = pd.DataFrame()
             if not df_master.empty:
                 df_p_merged = df_master.copy()
@@ -2721,39 +2722,28 @@ def admin_dashboard():
             if not df_p_merged.empty:
                 # --- 1. BARIS FILTER UTAMA (PERIODE, MUATAN, ORIGIN) ---
                 c1, c2, c3 = st.columns(3)
-                
                 avail_val = sorted(df_p_merged['validity'].dropna().unique().tolist())
                 sel_val_comp = c1.selectbox("Pilih Periode", avail_val, key="comp_val_final")
                 
                 avail_lt = sorted(df_p_merged['load_type'].dropna().unique().tolist())
                 sel_lt_comp = c2.selectbox("Pilih Tipe Muatan", avail_lt, key="comp_lt_final")
                 
-                # Saring list origin yang tersedia berdasarkan periode & muatan terpilih
-                origin_list = sorted(df_p_merged[
-                    (df_p_merged['validity'] == sel_val_comp) & 
-                    (df_p_merged['load_type'] == sel_lt_comp)
-                ]['origin'].dropna().unique().tolist())
+                origin_list = sorted(df_p_merged[(df_p_merged['validity'] == sel_val_comp) & (df_p_merged['load_type'] == sel_lt_comp)]['origin'].dropna().unique().tolist())
                 sel_org_comp = c3.selectbox("Pilih Origin", ["Semua"] + origin_list, key="comp_org_final")
 
-
-                # --- 2. TOMBOL EXCEL EXPORT (DEFAULT: ALL VENDOR) ---
-                # ▼ POINTER OPTIMASI KILAT: BIAR TAB COMPARISON KEMBALI NGEBUT SECEPAT KILAT TANPA LEMOT ▼
+                # --- 2. TOMBOL EXCEL EXPORT (DEFAULT: ALL VENDOR - DIBUNGKUS EXPANDER BIAR RINGAN) ---
                 with st.container():
                     df_comp_base = df_p_merged[df_p_merged['validity'].astype(str).str.replace(" ", "").str.lower().str.strip() == str(sel_val_comp).replace(" ", "").lower().strip()]
-                    if sel_org_comp != "Semua":
+                    if sel_org_comp != "Semua": 
                         df_comp_base = df_comp_base[df_comp_base['origin'] == sel_org_comp]
                     df_comp_base = df_comp_base[df_comp_base['load_type'] == sel_lt_comp]
                     
                     if not df_comp_base.empty:
-                        # Bikin expander khusus biar proses hitung All Vendor gak ngebebanin loading utama layar!
                         with st.expander("📥 Export & Unduh Laporan Perbandingan (All Vendor)", expanded=False):
-                            st.write("Klik tombol di bawah untuk mengekstrak data perbandingan seluruh vendor. Proses ini memerlukan waktu beberapa detik untuk menghitung ranking.")
-                            
+                            st.write("Klik tombol di bawah untuk mengekstrak data perbandingan seluruh vendor secara massal.")
                             if st.button("🚀 Proses & Generate Excel Perbandingan", key="run_export_all_v", use_container_width=True):
                                 export_data = []
                                 all_routes_comp = df_comp_base[['route_id', 'unit_type', 'vendor_email', 'vendor_name']].drop_duplicates()
-                                
-                                # Buat cache dataframe bayangan biar Pandas gak usah bolak-balik nyaring dataframe raksasa
                                 df_tp_cache = df_p_merged.copy()
                                 
                                 with st.spinner("Sedang merakit matriks perbandingan seluruh vendor..."):
@@ -2769,70 +2759,35 @@ def admin_dashboard():
                                         
                                         p1 = df_comp_base[(df_comp_base['route_id'] == rid) & (df_comp_base['unit_type'] == ut) & (df_comp_base['vendor_email'] == v_em) & (df_comp_base['round'] == 1)]['price'].max()
                                         p2 = df_comp_base[(df_comp_base['route_id'] == rid) & (df_comp_base['unit_type'] == ut) & (df_comp_base['vendor_email'] == v_em) & (df_comp_base['round'] == 2)]['price'].max()
-                                        
                                         p1 = 0 if pd.isna(p1) else p1
                                         p2 = 0 if pd.isna(p2) else p2
                                         
                                         if p1 > 0 or p2 > 0:
                                             diff = p1 - p2 if (p1 > 0 and p2 > 0) else 0
                                             pct = (diff / p1 * 100) if (p1 > 0 and diff != 0) else 0
-                                            
-                                            # Gunakan cache memori lokal, jauh lebih ngebut dibanding get_target_price polosan
                                             tgt_val = get_target_price(df_tp_cache, rid, ut, sel_val_comp)
-                                            
-                                            export_data.append({
-                                                "Vendor": v_nm,
-                                                "Origin Area": r_row['origin'],
-                                                "Kota Asal": r_row['kota_asal'],
-                                                "Kota Tujuan": r_row['kota_tujuan'],
-                                                "Unit": ut,
-                                                "Target Price": tgt_val,
-                                                "Harga Tahap 1": p1,
-                                                "Harga Tahap 2": p2,
-                                                "Selisih (Rp)": diff,
-                                                "Turun (%)": round(pct, 2)
-                                            })
+                                            export_data.append({"Vendor": v_nm, "Origin Area": r_row['origin'], "Kota Asal": r_row['kota_asal'], "Kota Tujuan": r_row['kota_tujuan'], "Unit": ut, "Target Price": tgt_val, "Harga Tahap 1": p1, "Harga Tahap 2": p2, "Selisih (Rp)": diff, "Turun (%)": round(pct, 2)})
                                 
                                 if export_data:
-                                    df_xls = pd.DataFrame(export_data)
-                                    df_xls = df_xls.sort_values(by=['Origin Area', 'Kota Asal', 'Kota Tujuan', 'Unit', 'Harga Tahap 2', 'Harga Tahap 1'])
+                                    df_xls = pd.DataFrame(export_data).sort_values(by=['Origin Area', 'Kota Asal', 'Kota Tujuan', 'Unit', 'Harga Tahap 2', 'Harga Tahap 1'])
                                     df_xls['Prioritas'] = df_xls.groupby(['Origin Area', 'Kota Asal', 'Kota Tujuan', 'Unit']).cumcount() + 1
-                                    
-                                    xls_cols = ["Vendor", "Origin Area", "Kota Asal", "Kota Tujuan", "Unit", "Prioritas", "Target Price", "Harga Tahap 1", "Harga Tahap 2", "Selisih (Rp)", "Turun (%)"]
-                                    df_xls = df_xls[xls_cols]
-                                    
+                                    df_xls = df_xls[["Vendor", "Origin Area", "Kota Asal", "Kota Tujuan", "Unit", "Prioritas", "Target Price", "Harga Tahap 1", "Harga Tahap 2", "Selisih (Rp)", "Turun (%)"]]
                                     io_out = io.BytesIO()
-                                    with pd.ExcelWriter(io_out, engine='openpyxl') as writer:
+                                    with pd.ExcelWriter(io_out, engine='openpyxl') as writer: 
                                         df_xls.to_excel(writer, index=False, sheet_name='Perbandingan All Vendor')
-                                    
-                                    st.download_button(
-                                        label="⬇️ Klik di Sini untuk Mengunduh File Excel",
-                                        data=io_out.getvalue(),
-                                        file_name=f"Comparison_All_Vendor_{sel_lt_comp}_{int(time.time())}.xlsx",
-                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                        use_container_width=True
-                                    )
-                                else:
+                                    st.download_button(label="⬇️ Klik di Sini untuk Mengunduh File Excel", data=io_out.getvalue(), file_name=f"Comparison_All_Vendor_{sel_lt_comp}_{int(time.time())}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                                else: 
                                     st.warning("Tidak ada data harga valid untuk di-export.")
-                
                 st.write("")
 
-
-# --- 3. FILTER SELECTBOX VENDOR (DI BAWAH DOWNLOAD, DI ATAS TABEL) ---
-                # ▼ POTONGAN FIX UTUH: NORMALISASI FILTER DROPDOWN & VISUAL LAYAR BIAR DATA VENDOR MUNCUL LAGI ▼
+                # --- 3. FILTER SELECTBOX VENDOR ---
                 vendor_list = []
                 if not df_p_merged.empty:
-                    # Bikin dataframe bayangan khusus saringan dropdown biar gak buta spasi
                     df_p_merged['validity_clean'] = df_p_merged['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
                     clean_comp_val = str(sel_val_comp).replace(" ", "").lower().strip()
-                    
-                    df_v_list = df_p_merged[
-                        (df_p_merged['validity_clean'] == clean_comp_val) & 
-                        (df_p_merged['load_type'] == sel_lt_comp)
-                    ]
-                    if sel_org_comp != "Semua":
+                    df_v_list = df_p_merged[(df_p_merged['validity_clean'] == clean_comp_val) & (df_p_merged['load_type'] == sel_lt_comp)]
+                    if sel_org_comp != "Semua": 
                         df_v_list = df_v_list[df_v_list['origin'] == sel_org_comp]
-                        
                     vendor_list = sorted(df_v_list['vendor_email'].dropna().unique().tolist())
                 
                 if not vendor_list:
@@ -2844,110 +2799,53 @@ def admin_dashboard():
                             if not match_name.empty: return match_name.iloc[0]
                         return eml
 
-                    sel_ven_comp = st.selectbox(
-                        "🔍 Filter Tampilan Per Vendor di Layar:", 
-                        vendor_list, 
-                        format_func=fmt_ven_comparison, 
-                        key="comp_ven_final"
-                    )
+                    sel_ven_comp = st.selectbox("🔍 Filter Tampilan Per Vendor di Layar:", vendor_list, format_func=fmt_ven_comparison, key="comp_ven_final")
                     st.divider()
                     
-                    # --- 4. PROCESSING VISUAL SCREEN COMPARISON (VIEW ON SCREEN) ---
-                    clean_comp_val = str(sel_val_comp).replace(" ", "").lower().strip()
-                    df_v = df_p_merged[
-                        (df_p_merged['vendor_email'] == sel_ven_comp) & 
-                        (df_p_merged['validity_clean'] == clean_comp_val)
-                    ].copy()
-                    
-                    if sel_org_comp != "Semua":
+                    # --- 4. PROCESSING VISUAL SCREEN COMPARISON ---
+                    df_v = df_p_merged[(df_p_merged['vendor_email'] == sel_ven_comp) & (df_p_merged['validity_clean'] == clean_comp_val)].copy()
+                    if sel_org_comp != "Semua": 
                         df_v = df_v[df_v['origin'] == sel_org_comp]
 
                     if not df_v.empty:
                         comparison_data = []
-                        # Cari rute & unit unik yang pernah diisi vendor ini
                         unique_routes = df_v[['route_id', 'unit_type']].drop_duplicates()
                         
-                        # ▼ SIKAT INDENTATION ERROR: SEJAJARIN LOOP FOR UTUH BIAR LURUS DAN GAK ERROR SYSTAX HONEY ▼
                         for _, r_info in unique_routes.iterrows():
                             rid = r_info['route_id']
                             ut = r_info['unit_type']
-                            
-                            # Info Lokasi Asal dan Tujuan
                             r_row = df_v[df_v['route_id'] == rid].iloc[0]
                             asal_tujuan = f"{r_row['kota_asal']} ➡️ {r_row['kota_tujuan']}"
-                            
-                            # Ambil harga maksimum di ronde 1 dan ronde 2 khusus untuk vendor ini
                             p1 = df_v[(df_v['route_id'] == rid) & (df_v['unit_type'] == ut) & (df_v['round'] == 1)]['price'].max()
                             p2 = df_v[(df_v['route_id'] == rid) & (df_v['unit_type'] == ut) & (df_v['round'] == 2)]['price'].max()
-                            
                             p1 = 0 if pd.isna(p1) else p1
                             p2 = 0 if pd.isna(p2) else p2
                             
-                            # Hanya masukkan jika ada harganya di tahap 1 atau tahap 2 (Buang rute 0 vs 0)
                             if p1 > 0 or p2 > 0:
                                 diff = p1 - p2 if (p1 > 0 and p2 > 0) else 0
                                 pct = (diff / p1 * 100) if (p1 > 0 and diff != 0) else 0
-                                
-                                # Ambil Target Price rute ini via fungsi saklek lo
                                 tgt_val = get_target_price(df_p_merged, rid, ut, sel_val_comp)
-                                
-                                comparison_data.append({
-                                    "Origin Area": r_row['origin'],
-                                    "Rute": asal_tujuan,
-                                    "Unit": ut,
-                                    "Prioritas": "-", 
-                                    "Target Price": tgt_val,
-                                    "Harga Tahap 1": p1,
-                                    "Harga Tahap 2": p2,
-                                    "Selisih (Rp)": diff,
-                                    "Turun (%)": round(pct, 2)
-                                })
-                    # --- SAMBUNGAN UTUH HITUNG PRIORITAS & RENDER DATAFRAME COMPARISON KE LAYAR ---
-                    df_final_res = pd.DataFrame(comparison_data)
+                                comparison_data.append({"Origin Area": r_row['origin'], "Rute": asal_tujuan, "Unit": ut, "Prioritas": "-", "Target Price": tgt_val, "Harga Tahap 1": p1, "Harga Tahap 2": p2, "Selisih (Rp)": diff, "Turun (%)": round(pct, 2)})
 
-                    if not df_final_res.empty:
-                        # 1. Hitung Prioritas massal otomatis berdasarkan Harga Tahap 2 termurah
-                        df_final_res = df_final_res.sort_values(by=['Origin Area', 'Rute', 'Unit', 'Harga Tahap 2', 'Harga Tahap 1'])
-                        df_final_res['Prioritas'] = df_final_res.groupby(['Origin Area', 'Rute', 'Unit']).cumcount() + 1
-                        
-                        # 2. Susun baris kolom dari kiri ke kanan biar manis
-                        cols_jejer = ["Origin Area", "Rute", "Unit", "Prioritas", "Target Price", "Harga Tahap 1", "Harga Tahap 2", "Selisih (Rp)", "Turun (%)"]
-                        df_final_res = df_final_res[cols_jejer]
-                        
-                        def color_diff(val):
-                            if val > 0: return 'color: green; font-weight: bold'
-                            elif val < 0: return 'color: red'
-                            return 'color: black'
+                        df_final_res = pd.DataFrame(comparison_data)
+                        if not df_final_res.empty:
+                            df_final_res = df_final_res.sort_values(by=['Origin Area', 'Rute', 'Unit', 'Harga Tahap 2', 'Harga Tahap 1'])
+                            df_final_res['Prioritas'] = df_final_res.groupby(['Origin Area', 'Rute', 'Unit']).cumcount() + 1
+                            df_final_res = df_final_res[["Origin Area", "Rute", "Unit", "Prioritas", "Target Price", "Harga Tahap 1", "Harga Tahap 2", "Selisih (Rp)", "Turun (%)"]]
+                            
+                            def color_diff(val):
+                                if val > 0: return 'color: green; font-weight: bold'
+                                elif val < 0: return 'color: red'
+                                return 'color: black'
 
-                        # 3. Lempar Tabel Final ke Layar Admin
-                        st.dataframe(
-                            df_final_res.style.format({
-                                "Target Price": "Rp {:,.0f}",
-                                "Harga Tahap 1": "Rp {:,.0f}",
-                                "Harga Tahap 2": "Rp {:,.0f}",
-                                "Selisih (Rp)": "Rp {:,.0f}",
-                                "Turun (%)": "{:.2f}%"
-                            }).map(color_diff, subset=['Selisih (Rp)', 'Turun (%)']),
-                            use_container_width=True,
-                            hide_index=True,
-                            column_config={
-                                "Prioritas": st.column_config.NumberColumn(label="📌 Prioritas", format="%d"),
-                                "Target Price": "🎯 Target Price",
-                                "Harga Tahap 1": "Harga Tahap 1",
-                                "Harga Tahap 2": "Harga Tahap 2"
-                            }
-                        )
-                        
-                        # Summary Statistik Progres khusus per vendor terpilih di layar
-                        total_rute_v = len(df_final_res)
-                        balance_turun = len(df_final_res[df_final_res['Selisih (Rp)'] > 0])
-                        st.success(f"📈 Progres: Vendor ini menurunkan harga pada **{balance_turun}** dari **{total_rute_v}** rute yang ditampilkan di layar.")
-                        else:
+                            st.dataframe(df_final_res.style.format({"Target Price": "Rp {:,.0f}", "Harga Tahap 1": "Rp {:,.0f}", "Harga Tahap 2": "Rp {:,.0f}", "Selisih (Rp)": "Rp {:,.0f}", "Turun (%)": "{:.2f}%"}).map(color_diff, subset=['Selisih (Rp)', 'Turun (%)']), use_container_width=True, hide_index=True, column_config={"Prioritas": st.column_config.NumberColumn(label="📌 Prioritas", format="%d"), "Target Price": "🎯 Target Price"})
+                            st.success(f"📈 Progres: Vendor ini menurunkan harga pada **{len(df_final_res[df_final_res['Selisih (Rp)'] > 0])}** dari **{len(df_final_res)}** rute.")
+                        else: 
                             st.info("Tidak ada data penawaran aktif milik vendor ini untuk visual layar.")
-                    else:
+                    else: 
                         st.info("Tidak ada data rute penawaran yang cocok untuk ditampilkan pada vendor ini.")
-                else:
-                    st.error("Database tidak lengkap (Price/Route/Group missing).")
+            else: 
+                st.error("Database tidak lengkap (Price/Route/Group missing).")
 
 # ================= VENDOR DASHBOARD (UPDATE: DYNAMIC TABS) =================
 def vendor_dashboard(email):
