@@ -2818,15 +2818,25 @@ def admin_dashboard():
                 st.write("")
 
 
-                # --- 3. FILTER SELECTBOX VENDOR (DI BAWAH DOWNLOAD, DI ATAS TABEL) ---
-                vendor_list = sorted(df_p_merged[
-                    (df_p_merged['validity'] == sel_val_comp) & 
-                    (df_p_merged['load_type'] == sel_lt_comp)
-                ]['vendor_email'].dropna().unique().tolist())
+# --- 3. FILTER SELECTBOX VENDOR (DI BAWAH DOWNLOAD, DI ATAS TABEL) ---
+                # ▼ POTONGAN FIX UTUH: NORMALISASI FILTER DROPDOWN & VISUAL LAYAR BIAR DATA VENDOR MUNCUL LAGI ▼
+                vendor_list = []
+                if not df_p_merged.empty:
+                    # Bikin dataframe bayangan khusus saringan dropdown biar gak buta spasi
+                    df_p_merged['validity_clean'] = df_p_merged['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
+                    clean_comp_val = str(sel_val_comp).replace(" ", "").lower().strip()
+                    
+                    df_v_list = df_p_merged[
+                        (df_p_merged['validity_clean'] == clean_comp_val) & 
+                        (df_p_merged['load_type'] == sel_lt_comp)
+                    ]
+                    if sel_org_comp != "Semua":
+                        df_v_list = df_v_list[df_v_list['origin'] == sel_org_comp]
+                        
+                    vendor_list = sorted(df_v_list['vendor_email'].dropna().unique().tolist())
                 
                 if not vendor_list:
                     st.warning("Belum ada data penawaran untuk kriteria ini.")
-                    st.stop()
                 else:
                     def fmt_ven_comparison(eml):
                         if not df_u.empty:
@@ -2840,27 +2850,24 @@ def admin_dashboard():
                         format_func=fmt_ven_comparison, 
                         key="comp_ven_final"
                     )
-                st.divider()
-
-                # ==================== TIMPA TOTAL POTONGAN SETELAH ST.DIVIDER() DENGAN BLOK SUCI INI ====================
-                # --- 4. PROCESSING VISUAL SCREEN COMPARISON (KEBAL SPASI & INDENTASI LURUS) ---
-                if not df_p_merged.empty:
-                    df_p_merged['validity_clean'] = df_p_merged['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
-                    clean_comp_val = str(sel_val_comp).replace(" ", "").lower().strip()
+                    st.divider()
                     
-                    df_v = df_p_merged[(df_p_merged['vendor_email'] == sel_ven_comp) & (df_p_merged['validity_clean'] == clean_comp_val)]
+                    # --- 4. PROCESSING VISUAL SCREEN COMPARISON (VIEW ON SCREEN) ---
+                    clean_comp_val = str(sel_val_comp).replace(" ", "").lower().strip()
+                    df_v = df_p_merged[
+                        (df_p_merged['vendor_email'] == sel_ven_comp) & 
+                        (df_p_merged['validity_clean'] == clean_comp_val)
+                    ].copy()
+                    
                     if sel_org_comp != "Semua":
                         df_v = df_v[df_v['origin'] == sel_org_comp]
-                else:
-                    df_v = pd.DataFrame()
 
-                # TEPAT DI SINI: Posisinya sejajar dengan 'if not df_p_merged.empty:' (DI LUAR BLOK ELSE!)
-                if not df_v.empty:
-                    comparison_data = []
-                    # Cari rute & unit unik yang pernah diisi vendor ini
-                    unique_routes = df_v[['route_id', 'unit_type']].drop_duplicates()
-                    
-                    for _, r_info in unique_routes.iterrows():
+                    if not df_v.empty:
+                        comparison_data = []
+                        # Cari rute & unit unik yang pernah diisi vendor ini
+                        unique_routes = df_v[['route_id', 'unit_type']].drop_duplicates()
+                        
+                        for _, r_info in unique_routes.iterrows():
                         rid = r_info['route_id']
                         ut = r_info['unit_type']
                         
