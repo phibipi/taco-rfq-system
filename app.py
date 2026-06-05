@@ -2942,12 +2942,12 @@ def admin_dashboard():
                         total_rute_v = len(df_final_res)
                         balance_turun = len(df_final_res[df_final_res['Selisih (Rp)'] > 0])
                         st.success(f"📈 Progres: Vendor ini menurunkan harga pada **{balance_turun}** dari **{total_rute_v}** rute yang ditampilkan di layar.")
+                        else:
+                            st.info("Tidak ada data penawaran aktif milik vendor ini untuk visual layar.")
                     else:
-                        st.info("Tidak ada data penawaran aktif milik vendor")
+                        st.info("Tidak ada data rute penawaran yang cocok untuk ditampilkan pada vendor ini.")
                 else:
-                    st.info("Tidak ada data rute penawaran yang cocok untuk ditampilkan pada vendor ini.")
-            else:
-                st.error("Database tidak lengkap (Price/Route/Group missing).")
+                    st.error("Database tidak lengkap (Price/Route/Group missing).")
 
 # ================= VENDOR DASHBOARD (UPDATE: DYNAMIC TABS) =================
 def vendor_dashboard(email):
