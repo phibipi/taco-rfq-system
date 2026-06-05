@@ -2867,41 +2867,41 @@ def admin_dashboard():
                         # Cari rute & unit unik yang pernah diisi vendor ini
                         unique_routes = df_v[['route_id', 'unit_type']].drop_duplicates()
                         
+                        # ▼ SIKAT INDENTATION ERROR: SEJAJARIN LOOP FOR UTUH BIAR LURUS DAN GAK ERROR SYSTAX HONEY ▼
                         for _, r_info in unique_routes.iterrows():
-                        rid = r_info['route_id']
-                        ut = r_info['unit_type']
-                        
-                        # Info Lokasi
-                        r_row = df_v[df_v['route_id'] == rid].iloc[0]
-                        asal_tujuan = f"{r_row['kota_asal']} ➡️ {r_row['kota_tujuan']}"
-                        
-                        # Ambil harga maksimum di ronde 1 dan ronde 2 khusus untuk vendor ini
-                        p1 = df_v[(df_v['route_id'] == rid) & (df_v['unit_type'] == ut) & (df_v['round'] == 1)]['price'].max()
-                        p2 = df_v[(df_v['route_id'] == rid) & (df_v['unit_type'] == ut) & (df_v['round'] == 2)]['price'].max()
-                        
-                        p1 = 0 if pd.isna(p1) else p1
-                        p2 = 0 if pd.isna(p2) else p2
-                        
-                        # Filter rute: Buang data 0 vs 0 (Hanya masukkan jika ada harganya)
-                        if p1 > 0 or p2 > 0:
-                            diff = p1 - p2 if (p1 > 0 and p2 > 0) else 0
-                            pct = (diff / p1 * 100) if (p1 > 0 and diff != 0) else 0
+                            rid = r_info['route_id']
+                            ut = r_info['unit_type']
                             
-                            # Ambil nilai target price lewat fungsi ajaib lo
-                            tgt_val = get_target_price(df_p_merged, rid, ut, sel_val_comp)
+                            # Info Lokasi Asal dan Tujuan
+                            r_row = df_v[df_v['route_id'] == rid].iloc[0]
+                            asal_tujuan = f"{r_row['kota_asal']} ➡️ {r_row['kota_tujuan']}"
                             
-                            comparison_data.append({
-                                "Origin Area": r_row['origin'],
-                                "Rute": asal_tujuan,
-                                "Unit": ut,
-                                "Prioritas": "-", # Placeholder prioritas, dihitung massal di bawah loop
-                                "Target Price": tgt_val,
-                                "Harga Tahap 1": p1,
-                                "Harga Tahap 2": p2,
-                                "Selisih (Rp)": diff,
-                                "Turun (%)": round(pct, 2)
-                            })
-
+                            # Ambil harga maksimum di ronde 1 dan ronde 2 khusus untuk vendor ini
+                            p1 = df_v[(df_v['route_id'] == rid) & (df_v['unit_type'] == ut) & (df_v['round'] == 1)]['price'].max()
+                            p2 = df_v[(df_v['route_id'] == rid) & (df_v['unit_type'] == ut) & (df_v['round'] == 2)]['price'].max()
+                            
+                            p1 = 0 if pd.isna(p1) else p1
+                            p2 = 0 if pd.isna(p2) else p2
+                            
+                            # Hanya masukkan jika ada harganya di tahap 1 atau tahap 2 (Buang rute 0 vs 0)
+                            if p1 > 0 or p2 > 0:
+                                diff = p1 - p2 if (p1 > 0 and p2 > 0) else 0
+                                pct = (diff / p1 * 100) if (p1 > 0 and diff != 0) else 0
+                                
+                                # Ambil Target Price rute ini via fungsi saklek lo
+                                tgt_val = get_target_price(df_p_merged, rid, ut, sel_val_comp)
+                                
+                                comparison_data.append({
+                                    "Origin Area": r_row['origin'],
+                                    "Rute": asal_tujuan,
+                                    "Unit": ut,
+                                    "Prioritas": "-", 
+                                    "Target Price": tgt_val,
+                                    "Harga Tahap 1": p1,
+                                    "Harga Tahap 2": p2,
+                                    "Selisih (Rp)": diff,
+                                    "Turun (%)": round(pct, 2)
+                                })
                     # --- SAMBUNGAN UTUH HITUNG PRIORITAS & RENDER DATAFRAME COMPARISON KE LAYAR ---
                     df_final_res = pd.DataFrame(comparison_data)
 
