@@ -2795,45 +2795,73 @@ def admin_dashboard():
                             p1 = 0 if pd.isna(p1) else p1
                             p2 = 0 if pd.isna(p2) else p2
                             
-                            # Kalkulasi Selisih
-                            # Kalkulasi Selisih
+                         
                             diff = p1 - p2 if (p1 > 0 and p2 > 0) else 0
                             pct = (diff / p1 * 100) if (p1 > 0 and diff != 0) else 0
                             
-                            # ▼ POINTER FIX COMPARISON: HANYA MASUKKAN DATA JIKA TAHAP 1 ATAU TAHAP 2 ADA HARGANYA (BUANG DATA 0 VS 0) ▼
+                            # ▼ POINTER FIX A: AMBIL JUGA DATA RANKING/PRIORITAS VENDOR UTK DI-APPEND ▼
+                            tgt_val = 0
                             if p1 > 0 or p2 > 0:
                                 tgt_val = get_target_price(df_p_merged, rid, ut, sel_val_comp)
+                                
+                                # Cari prioritas/ranking vendor tersebut untuk rute & unit spesifik ini di Tahap 2 (atau backup Tahap 1)
+                                match_rank = df_p_merged[
+                                    (df_p_merged['route_id'] == rid) & 
+                                    (df_p_merged['unit_type'] == ut) & 
+                                    (df_p_merged['vendor_email'] == sel_ven_comp)
+                                ]
+                                
+                                # Ambil ranking dari ronde tertinggi yang tersedia, default-nya kasih '-'
+                                priority_val = match_rank['round'].max() if not match_rank.empty and 'round' in match_rank.columns else '-'
+                                # Catatan: Karena di dashboard summary admin lo udah ada perhitungan `.groupby().cumcount() + 1` untuk ranking, kita set rujukan awalnya dari sana
+                                
                                 comparison_data.append({
                                     "Origin Area": r_row['origin'],
                                     "Rute": asal_tujuan,
                                     "Unit": ut,
+                                    "Prioritas": "-", # Kita bikin placeholder dulu, nanti dihitung massal di Titik B bawah biar adil dan gak crash!
+                                    "Target Price": tgt_val,
                                     "Harga Tahap 1": p1,
                                     "Harga Tahap 2": p2,
-                                    "Target Price": tgt_val,
                                     "Selisih (Rp)": diff,
                                     "Turun (%)": round(pct, 2)
                                 })
 
+                        # ▼ POINTER SAKLEK: SINKRONISASI KOLOM, HITUNG PRIORITAS, DAN TAMPILKAN DATAFRAME COMPARISON VINDAL ▼
                         df_final_res = pd.DataFrame(comparison_data)
 
                         if not df_final_res.empty:
-                            # Tampilkan Tabel dengan Warna
+                            # 1. Hitung Prioritas Otomatis massal berdasarkan Harga Tahap 2 termurah
+                            df_final_res = df_final_res.sort_values(by=['Origin Area', 'Rute', 'Unit', 'Harga Tahap 2', 'Harga Tahap 1'])
+                            df_final_res['Prioritas'] = df_final_res.groupby(['Origin Area', 'Rute', 'Unit']).cumcount() + 1
+                            
+                            # 2. Paksa urutan kolom biar estetik berjejer dari kiri ke kanan
+                            cols_jejer = ["Origin Area", "Rute", "Unit", "Prioritas", "Target Price", "Harga Tahap 1", "Harga Tahap 2", "Selisih (Rp)", "Turun (%)"]
+                            df_final_res = df_final_res[cols_jejer]
+                            
+                            # 3. Definisikan fungsi pemberi warna teks selisih & persen
                             def color_diff(val):
                                 if val > 0: return 'color: green; font-weight: bold'
                                 elif val < 0: return 'color: red'
                                 return 'color: black'
 
-                            # ▼ POINTER FIX B: DAFTARKAN FORMAT RUPIAH UNTUK KOLOM TARGET PRICE DI TAMPILAN ▼
+                            # 4. Render Tabel Final ke Layar Admin
                             st.dataframe(
                                 df_final_res.style.format({
+                                    "Target Price": "Rp {:,.0f}",
                                     "Harga Tahap 1": "Rp {:,.0f}",
                                     "Harga Tahap 2": "Rp {:,.0f}",
-                                    "Target Price": "Rp {:,.0f}",
                                     "Selisih (Rp)": "Rp {:,.0f}",
                                     "Turun (%)": "{:.2f}%"
                                 }).map(color_diff, subset=['Selisih (Rp)', 'Turun (%)']),
                                 use_container_width=True,
-                                hide_index=True
+                                hide_index=True,
+                                column_config={
+                                    "Prioritas": st.column_config.NumberColumn(label="📌 Prioritas", format="%d"),
+                                    "Target Price": "🎯 Target Price",
+                                    "Harga Tahap 1": "Harga Tahap 1",
+                                    "Harga Tahap 2": "Harga Tahap 2"
+                                }
                             )
                             
                             # Summary Statistik
