@@ -2713,7 +2713,12 @@ def admin_dashboard():
             st.subheader("⚖️ Perbandingan Harga Tahap 1 vs Tahap 2")
             st.caption("Lihat penurunan harga per rute dan per vendor untuk negosiasi.")
 
-            if not df_p.empty and not df_r.empty and not df_g.empty:
+            # ▼ FIX KUNCI: DEKLARASIKAN DF_P_MERGED DARI DATA DF_MASTER BIAR ENGGAK NAME-ERROR LAGI HONEY ▼
+            df_p_merged = pd.DataFrame()
+            if not df_master.empty:
+                df_p_merged = df_master.copy()
+
+            if not df_p_merged.empty:
                 # --- 1. BARIS FILTER UTAMA (PERIODE, MUATAN, ORIGIN) ---
                 c1, c2, c3 = st.columns(3)
                 
