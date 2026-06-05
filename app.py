@@ -1788,6 +1788,7 @@ def admin_dashboard():
                 for c in ['top', 'address', 'contact_person', 'phone']: m4[c] = "-"
             m4['price'] = pd.to_numeric(m4['price'], errors='coerce').fillna(0)
             df_master = m4
+            df_master['validity'] = df_master['validity'].astype(str).str.replace(" ", "")
 
         tabs = st.tabs(["⏳ Submit Monitor", "✅ Lock Data", "📊 Summary", "🖨️ Print Dokumen", "📥 SPH Uploads", "Template", "comparison"])
         
@@ -2707,32 +2708,14 @@ def admin_dashboard():
             else:
                 st.error("Database Master (Groups/Routes/Units) masih kosong")        
 
-        with tabs[6]: # Tab Perbandingan
+        
+        with tabs[6]:
             st.subheader("⚖️ Perbandingan Harga Tahap 1 vs Tahap 2")
             st.caption("Lihat penurunan harga per rute dan per vendor untuk negosiasi.")
 
             if not df_p.empty and not df_r.empty and not df_g.empty:
-                # --- 1. DATA PREPARATION (Fixing the Merge issue) ---
-                # Pastikan semua ID bersih
-                df_p_c = df_p.copy()
-                df_r_c = df_r.copy()
-                df_g_c = df_g.copy()
-                
-                df_p_c['route_id'] = df_p_c['route_id'].astype(str).str.strip()
-                df_r_c['route_id'] = df_r_c['route_id'].astype(str).str.strip()
-                df_r_c['group_id'] = df_r_c['group_id'].astype(str).str.strip()
-                df_g_c['group_id'] = df_g_c['group_id'].astype(str).str.strip()
-
-                # Merge Price -> Route -> Group
-                df_step1 = pd.merge(df_p_c, df_r_c[['route_id', 'group_id', 'kota_asal', 'kota_tujuan']], on='route_id', how='left')
-                df_p_merged = pd.merge(df_step1, df_g_c[['group_id', 'load_type', 'origin']], on='group_id', how='left')
-                
-                # Paksa kolom kritis jadi numeric
-                df_p_merged['price'] = pd.to_numeric(df_p_merged['price'], errors='coerce').fillna(0)
-                df_p_merged['round'] = pd.to_numeric(df_p_merged['round'], errors='coerce').fillna(1).astype(int)
-
-                # --- 2. FILTER CONTROLS ---
-                c1, c2, c3, c4 = st.columns(4)
+                # --- 1. BARIS FILTER UTAMA (PERIODE, MUATAN, ORIGIN) ---
+                c1, c2, c3 = st.columns(3)
                 
                 avail_val = sorted(df_p_merged['validity'].dropna().unique().tolist())
                 sel_val_comp = c1.selectbox("Pilih Periode", avail_val, key="comp_val_final")
@@ -2740,7 +2723,88 @@ def admin_dashboard():
                 avail_lt = sorted(df_p_merged['load_type'].dropna().unique().tolist())
                 sel_lt_comp = c2.selectbox("Pilih Tipe Muatan", avail_lt, key="comp_lt_final")
                 
-                # List Vendor berdasarkan muatan & periode
+                # Saring list origin yang tersedia berdasarkan periode & muatan terpilih
+                origin_list = sorted(df_p_merged[
+                    (df_p_merged['validity'] == sel_val_comp) & 
+                    (df_p_merged['load_type'] == sel_lt_comp)
+                ]['origin'].dropna().unique().tolist())
+                sel_org_comp = c3.selectbox("Pilih Origin", ["Semua"] + origin_list, key="comp_org_final")
+
+
+                # --- 2. TOMBOL EXCEL EXPORT (DEFAULT: ALL VENDOR) ---
+                with st.container():
+                    # Normalisasi data master khusus untuk export ALL VENDOR
+                    df_comp_base = df_p_merged[df_p_merged['validity'].astype(str).str.replace(" ", "").str.lower().str.strip() == str(sel_val_comp).replace(" ", "").lower().strip()]
+                    if sel_org_comp != "Semua":
+                        df_comp_base = df_comp_base[df_comp_base['origin'] == sel_org_comp]
+                    df_comp_base = df_comp_base[df_comp_base['load_type'] == sel_lt_comp]
+                    
+                    if not df_comp_base.empty:
+                        export_data = []
+                        # Cari rute & unit unik dari semua vendor di filter ini
+                        all_routes_comp = df_comp_base[['route_id', 'unit_type', 'vendor_email', 'vendor_name']].drop_duplicates()
+                        
+                        for _, r_info in all_routes_comp.iterrows():
+                            rid = r_info['route_id']
+                            ut = r_info['unit_type']
+                            v_em = r_info['vendor_email']
+                            v_nm = r_info['vendor_name']
+                            
+                            df_row_subset = df_comp_base[(df_comp_base['route_id'] == rid) & (df_comp_base['vendor_email'] == v_em)]
+                            if df_row_subset.empty: continue
+                            r_row = df_row_subset.iloc[0]
+                            
+                            p1 = df_comp_base[(df_comp_base['route_id'] == rid) & (df_comp_base['unit_type'] == ut) & (df_comp_base['vendor_email'] == v_em) & (df_comp_base['round'] == 1)]['price'].max()
+                            p2 = df_comp_base[(df_comp_base['route_id'] == rid) & (df_comp_base['unit_type'] == ut) & (df_comp_base['vendor_email'] == v_em) & (df_comp_base['round'] == 2)]['price'].max()
+                            
+                            p1 = 0 if pd.isna(p1) else p1
+                            p2 = 0 if pd.isna(p2) else p2
+                            
+                            if p1 > 0 or p2 > 0:
+                                diff = p1 - p2 if (p1 > 0 and p2 > 0) else 0
+                                pct = (diff / p1 * 100) if (p1 > 0 and diff != 0) else 0
+                                tgt_val = get_target_price(df_p_merged, rid, ut, sel_val_comp)
+                                
+                                export_data.append({
+                                    "Vendor": v_nm,
+                                    "Origin Area": r_row['origin'],
+                                    "Kota Asal": r_row['kota_asal'],
+                                    "Kota Tujuan": r_row['kota_tujuan'],
+                                    "Unit": ut,
+                                    "Target Price": tgt_val,
+                                    "Harga Tahap 1": p1,
+                                    "Harga Tahap 2": p2,
+                                    "Selisih (Rp)": diff,
+                                    "Turun (%)": round(pct, 2)
+                                })
+                        
+                        if export_data:
+                            df_xls = pd.DataFrame(export_data)
+                            # Hitung Prioritas massal di dalam file Excel biar adil
+                            df_xls = df_xls.sort_values(by=['Origin Area', 'Kota Asal', 'Kota Tujuan', 'Unit', 'Harga Tahap 2', 'Harga Tahap 1'])
+                            df_xls['Prioritas'] = df_xls.groupby(['Origin Area', 'Kota Asal', 'Kota Tujuan', 'Unit']).cumcount() + 1
+                            
+                            # Atur urutan kolom Excel
+                            xls_cols = ["Vendor", "Origin Area", "Kota Asal", "Kota Tujuan", "Unit", "Prioritas", "Target Price", "Harga Tahap 1", "Harga Tahap 2", "Selisih (Rp)", "Turun (%)"]
+                            df_xls = df_xls[xls_cols]
+                            
+                            # Generate file Excel ke memori buffer
+                            io_out = io.BytesIO()
+                            with pd.ExcelWriter(io_out, engine='openpyxl') as writer:
+                                df_xls.to_excel(writer, index=False, sheet_name='Perbandingan All Vendor')
+                            
+                            st.download_button(
+                                label="📥 Download Comparison (All Vendor) .xlsx",
+                                data=io_out.getvalue(),
+                                file_name=f"Comparison_All_Vendor_{sel_lt_comp}_{int(time.time())}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                type="primary",
+                                use_container_width=True
+                            )
+                st.write("")
+
+
+                # --- 3. FILTER SELECTBOX VENDOR (DI BAWAH DOWNLOAD, DI ATAS TABEL) ---
                 vendor_list = sorted(df_p_merged[
                     (df_p_merged['validity'] == sel_val_comp) & 
                     (df_p_merged['load_type'] == sel_lt_comp)
@@ -2748,28 +2812,22 @@ def admin_dashboard():
                 
                 if not vendor_list:
                     st.warning("Belum ada data penawaran untuk kriteria ini.")
+                    continue
                 else:
                     def fmt_ven_comparison(eml):
                         if not df_u.empty:
                             match_name = df_u[df_u['email'] == eml]['vendor_name']
-                            if not match_name.empty:
-                                return match_name.iloc[0]
+                            if not match_name.empty: return match_name.iloc[0]
                         return eml
 
-                    sel_ven_comp = c3.selectbox(
-                        "Pilih Vendor", 
+                    sel_ven_comp = st.selectbox(
+                        "🔍 Filter Tampilan Per Vendor di Layar:", 
                         vendor_list, 
                         format_func=fmt_ven_comparison, 
                         key="comp_ven_final"
                     )
-                    
-                    origin_list = sorted(df_p_merged[
-                        (df_p_merged['vendor_email'] == sel_ven_comp) & 
-                        (df_p_merged['load_type'] == sel_lt_comp)
-                    ]['origin'].dropna().unique().tolist())
-                    
-                    sel_org_comp = c4.selectbox("Pilih Origin", ["Semua"] + origin_list, key="comp_org_final")
-
+                st.divider()
+                
                     # --- 3. PROCESSING COMPARISON ---
                     df_v = df_p_merged[(df_p_merged['vendor_email'] == sel_ven_comp) & (df_p_merged['validity'] == sel_val_comp)]
                     if sel_org_comp != "Semua":
