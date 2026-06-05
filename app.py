@@ -2827,7 +2827,10 @@ def admin_dashboard():
                         key="comp_ven_final"
                     )
                 st.divider()
-                
+
+                if not df_p_merged.empty:
+                    df_p_merged['validity_clean'] = df_p_merged['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
+                    clean_comp_val = str(sel_val_comp).replace(" ", "").lower().strip()
                     # --- 3. PROCESSING COMPARISON ---
                     df_v = df_p_merged[(df_p_merged['vendor_email'] == sel_ven_comp) & (df_p_merged['validity'] == sel_val_comp)]
                     if sel_org_comp != "Semua":
