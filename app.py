@@ -2710,7 +2710,7 @@ def admin_dashboard():
 # ==================== TIMPA TOTAL ISI TAB COMPARISON (TABS[6]) DENGAN BLOK DI BAWAH INI ====================
         with tabs[6]:
             st.subheader("⚖️ Perbandingan Harga Tahap 1 vs Tahap 2")
-            st.caption("Lihat penurunan harga per rute dan per vendor dengan Prioritas yang dihitung secara Global.")
+            st.caption("Lihat penurunan harga per rute dan per vendor dengan Prioritas yang ditarik dari Summary Ranking.")
 
             # Deklarasikan df_p_merged sebagai jembatan dari df_master biar ga NameError
             df_p_merged = pd.DataFrame()
@@ -2730,7 +2730,7 @@ def admin_dashboard():
                 origin_list = sorted(df_p_merged[(df_p_merged['validity'] == sel_val_comp) & (df_p_merged['load_type'] == sel_lt_comp)]['origin'].dropna().unique().tolist())
                 sel_org_comp = c3.selectbox("Pilih Origin", ["Semua"] + origin_list, key="comp_org_final")
 
-                # --- 2. PERHITUNGAN MATRIKS & PRIORITAS GLOBAL (SEMUA VENDOR) ---
+                # --- 2. PERHITUNGAN MATRIKS & PRIORITAS GLOBAL (SINKRON DENGAN LOGIKA TAB SUMMARY) ---
                 df_p_merged['validity_clean'] = df_p_merged['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
                 clean_comp_val = str(sel_val_comp).replace(" ", "").lower().strip()
                 df_p_merged['round_clean_int'] = pd.to_numeric(df_p_merged['round'], errors='coerce').fillna(1).astype(int)
@@ -2775,6 +2775,8 @@ def admin_dashboard():
                                 "vendor_email": v_em,
                                 "Vendor": v_nm,
                                 "Origin Area": r_row['origin'],
+                                "kota_asal": r_row['kota_asal'],
+                                "kota_tujuan": r_row['kota_tujuan'],
                                 "Rute": f"{r_row['kota_asal']} ➡️ {r_row['kota_tujuan']}",
                                 "Unit": ut,
                                 "Target Price": tgt_val,
@@ -2784,19 +2786,19 @@ def admin_dashboard():
                                 "Turun (%)": round(pct, 2)
                             })
 
-                    # Ubah ke Dataframe untuk dihitung ranking kumulatif global-nya
+                    # Ubah ke Dataframe untuk kalkulasi ranking global
                     df_global_calculated = pd.DataFrame(global_comparison_data)
 
                     if not df_global_calculated.empty:
-                        # Buat kolom bayangan untuk sorting prioritas (Tahap 2 diutamakan, kalau 0 pakai Tahap 1)
-                        df_global_calculated['sort_price'] = df_global_calculated['Harga Tahap 2'].apply(lambda x: x if x > 0 else float('inf'))
-                        df_global_calculated.loc[df_global_calculated['Harga Tahap 2'] == 0, 'sort_price'] = df_global_calculated['Harga Tahap 1'] + 9999999
+                        # 📝 KUNCI UTAMA SINKRONISASI: Urutkan rute PERSIS mengikuti format Tab Summary lo (by kota_asal, kota_tujuan, unit, price)
+                        # Kita gunakan 'Harga Tahap 2' sebagai acuan sort utama, jika kosong/0 fallback ke harga Tahap 1
+                        df_global_calculated['price_sort_temp'] = df_global_calculated['Harga Tahap 2'].apply(lambda x: x if x > 0 else float('inf'))
+                        df_global_calculated.loc[df_global_calculated['Harga Tahap 2'] == 0, 'price_sort_temp'] = df_global_calculated['Harga Tahap 1'] + 99999999
                         
-                        # Urutkan secara global rute-rute tersebut dari yang paling murah
-                        df_global_calculated = df_global_calculated.sort_values(by=['Origin Area', 'Rute', 'Unit', 'sort_price'])
+                        df_global_calculated = df_global_calculated.sort_values(by=['kota_asal', 'kota_tujuan', 'Unit', 'price_sort_temp'])
                         
-                        # 🔥 KUNCI SEHAT: Prioritas dihitung kumulatif melingkupi SEMUA vendor kompetitor rute tersebut!
-                        df_global_calculated['Prioritas'] = df_global_calculated.groupby(['Origin Area', 'Rute', 'Unit']).cumcount() + 1
+                        # 🔥 HITUNG PRIORITAS LIVE: Mencerminkan urutan ranking asli kumulatif dari semua vendor
+                        df_global_calculated['Prioritas'] = df_global_calculated.groupby(['kota_asal', 'kota_tujuan', 'Unit']).cumcount() + 1
 
                         # --- 3. FILTER SELECTBOX VENDOR DI LAYAR ---
                         vendor_list = sorted(df_global_calculated['vendor_email'].unique().tolist())
@@ -2814,7 +2816,6 @@ def admin_dashboard():
                         df_display = df_global_calculated[df_global_calculated['vendor_email'] == sel_ven_comp].copy()
 
                         if not df_display.empty:
-                            # Susun baris kolomvisual layar (Fokus ke data rute miliknya, prioritas mencerminkan global)
                             cols_jejer = ["Origin Area", "Rute", "Unit", "Prioritas", "Target Price", "Harga Tahap 1", "Harga Tahap 2", "Selisih (Rp)", "Turun (%)"]
                             df_display = df_display[cols_jejer]
                             
@@ -2835,7 +2836,7 @@ def admin_dashboard():
                                 use_container_width=True,
                                 hide_index=True,
                                 column_config={
-                                    "Prioritas": st.column_config.NumberColumn(label="📌 Prioritas (Global)", format="%d"),
+                                    "Prioritas": st.column_config.NumberColumn(label="📌 Prioritas", format="%d"),
                                     "Target Price": "🎯 Target Price"
                                 }
                             )
