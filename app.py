@@ -2680,14 +2680,16 @@ def admin_dashboard():
                             target_groups = df_g[(df_g['load_type'] == sel_load_tmpl) & (df_g['origin'].isin(sel_org_tmpl))]
                             
                             # Normalisasi data penawaran harga global sebagai rujukan lookup histori
+                            # ▼ FIX KEYERROR: RE-DEKLARASI DF_PRICES_REF DENGAN BENAR TANPA TYPO VARIABLE LAIN HONEY ▼
                             df_prices_ref = pd.DataFrame()
                             if not df_p.empty:
                                 df_prices_ref = df_p.copy()
-                                df_prices_ref['route_id'] = df_prices_ref['route_id'].astype(str).str.strip()
                                 df_prices_ref['price'] = pd.to_numeric(df_prices_ref['price'], errors='coerce').fillna(0)
                                 df_prices_ref['round_clean_int'] = pd.to_numeric(df_prices_ref['round'], errors='coerce').fillna(1).astype(int)
                                 df_prices_ref['vendor_email_clean'] = df_prices_ref['vendor_email'].astype(str).str.strip().str.lower()
                                 df_prices_ref['validity_clean'] = df_prices_ref['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
+                                # Kunci saklek: Bikin kolom route_id_clean murni di dalam df_prices_ref!
+                                df_prices_ref['route_id_clean'] = df_prices_ref['route_id'].astype(str).str.strip()
 
                             # Start writing Excel format via xlsxwriter
                             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
