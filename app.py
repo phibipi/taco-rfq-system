@@ -2725,20 +2725,25 @@ def admin_dashboard():
                                                 }
                                                 
                                                 # --- LOGIKA LOGIS REQUEST LU: LOOKUP HISTORI JIKA TAHAP 2 ---
+                                                # --- LOGIKA LOGIS REQUEST LU: LOOKUP HISTORI JIKA TAHAP 2 ---
                                                 if sel_round_tmpl == "Tahap 2":
                                                     # 1. Panggil nilai Target Price global rute ini
                                                     row_entry["Target Price"] = get_target_price(df_p_merged, rid, unit, sel_val_tmpl)
                                                     
-                                                    # 2. Lookup Harga Tahap 1 milik vendor ini
+                                                    # KUNCI SUCI: Keluarkan logika if-else dari saringan Pandas ke variabel mandiri biar ga TypeError!
+                                                    target_email = str(sel_ven_comp).lower().strip() if 'sel_ven_comp' in locals() else str(sel_ven_tmpl).lower().strip()
+                                                    
+                                                    # 2. Lookup Harga Tahap 1 milik vendor terkait
                                                     p1_val = 0
                                                     if not df_prices_ref.empty:
                                                         p1_sub = df_prices_ref[
                                                             (df_prices_ref['route_id_clean'] == rid) & 
                                                             (df_prices_ref['unit_type'] == unit) & 
-                                                            (df_prices_ref['vendor_email_clean'] == str(sel_ven_comp).lower().strip() if 'sel_ven_comp' in locals() else str(sel_ven_tmpl).lower().strip()) & 
+                                                            (df_prices_ref['vendor_email_clean'] == target_email) & 
                                                             (df_prices_ref['round_clean_int'] == 1)
                                                         ]
-                                                        if not p1_sub.empty: p1_val = p1_sub['price'].max()
+                                                        if not p1_sub.empty: 
+                                                            p1_val = p1_sub['price'].max()
                                                     row_entry["Harga Tahap 1"] = p1_val
                                                     
                                                     # 3. Lookup Harga Tahap 2 (jika dia sudah mencicil submit di system)
@@ -2747,10 +2752,11 @@ def admin_dashboard():
                                                         p2_sub = df_prices_ref[
                                                             (df_prices_ref['route_id_clean'] == rid) & 
                                                             (df_prices_ref['unit_type'] == unit) & 
-                                                            (df_prices_ref['vendor_email_clean'] == str(sel_ven_comp).lower().strip() if 'sel_ven_comp' in locals() else str(sel_ven_tmpl).lower().strip()) & 
+                                                            (df_prices_ref['vendor_email_clean'] == target_email) & 
                                                             (df_prices_ref['round_clean_int'] == 2)
                                                         ]
-                                                        if not p2_sub.empty: p2_val = p2_sub['price'].max()
+                                                        if not p2_sub.empty: 
+                                                            p2_val = p2_sub['price'].max()
                                                     
                                                     # Masukkan nominal harga Tahap 2 ke kolom inputan utama Excel
                                                     row_entry["Input Harga Tahap 2"] = p2_val if p2_val > 0 else ""
