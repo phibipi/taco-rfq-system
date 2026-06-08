@@ -2776,7 +2776,7 @@ def admin_dashboard():
                                         
                                         # --- STYLING COLUMN & APPLY CURRENCY RUPIAH SECARA SAKLEK ---
                                         # Atur 4 kolom pembuka wajib dari kiri
-                                        worksheet.set_column('A:A', 12, fmt_locked) # Route ID
+                                        worksheet.set_column('A:A', 22, fmt_locked) # Route ID
                                         worksheet.set_column('B:C', 22, fmt_locked) # Asal & Tujuan
                                         
                                         current_col_idx = 3 # Mulai dari kolom index ke-3 (kolom D)
