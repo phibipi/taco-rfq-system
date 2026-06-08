@@ -2687,7 +2687,14 @@ def admin_dashboard():
                                 workbook = writer.book
                                 
                                 # Pembuatan token format cell Excel Resmi (Mata Uang Rupiah)
-                                fmt_header = workbook.add_format({'bold': True, 'bg_color': '#FCA568', 'border': 1, 'align': 'center', 'valign': 'vcenter'})
+                                fmt_header = workbook.add_format({
+                                    'bold': True, 
+                                    'bg_color': '#FCA568', 
+                                    'border': 1, 
+                                    'align': 'center', 
+                                    'valign': 'vcenter',
+                                    'text_wrap': True  # Mengaktifkan bungkusan teks otomatis
+                                })
                                 fmt_locked = workbook.add_format({'bg_color': '#F3F4F6', 'border': 1, 'align': 'left'})
                                 
                                 # Format Angka Mata uang: Rp 1,250,000 (Gak ngerusak rumus matematika Excel)
@@ -2765,6 +2772,7 @@ def admin_dashboard():
                                         
                                         worksheet = writer.sheets[clean_sheet_name]
                                         worksheet.set_zoom(55)
+                                        worksheet.set_row(0, 30)
                                         
                                         # --- STYLING COLUMN & APPLY CURRENCY RUPIAH SECARA SAKLEK ---
                                         # Atur 4 kolom pembuka wajib dari kiri
