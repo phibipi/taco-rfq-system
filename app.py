@@ -2637,19 +2637,29 @@ def admin_dashboard():
             st.caption("Buat file Excel penawaran harga. Jika memilih Tahap 2, sistem otomatis menyalin histori harga Tahap 1 and Target Price vendor terkait.")
 
             if not df_g.empty and not df_r.empty and not df_units.empty and not df_u.empty:
+                df_p_merged = pd.DataFrame()
+                if not df_master.empty:
+                    df_p_merged = df_master.copy()
                 # --- 1. FILTER UTAMA TEMPLATE ---
-                c1, c2, c3, c4 = st.columns(4)
+                # ▼ POINTER FIX ATAS: TAMBAH FILTER PERIODE DI TAB TEMPLATE BIAR LOOKUP HISTORI GA ZONK ▼
+                c1, c2, c3, c4, c5 = st.columns(5)
                 
+                # 1. Filter Periode / Validity (Lookups data base)
+                avail_val_tmpl = sorted(df_p_merged['validity'].dropna().unique().tolist()) if not df_p_merged.empty else ["Januari - Desember 2026"]
+                sel_val_tmpl = c1.selectbox("Pilih Periode Laporan", avail_val_tmpl, key="tmpl_val_select")
+                
+                # 2. Filter Tipe Muatan
                 avail_load_tmpl = sorted(df_g['load_type'].unique().tolist())
-                sel_load_tmpl = c1.selectbox("Pilih Tipe Muatan", avail_load_tmpl, key="tmpl_load")
+                sel_load_tmpl = c2.selectbox("Pilih Tipe Muatan", avail_load_tmpl, key="tmpl_load")
 
+                # 3. Filter Origin Area (Dinamis sesuai Load Type)
                 avail_org_tmpl = sorted(df_g[df_g['load_type'] == sel_load_tmpl]['origin'].unique().tolist())
-                sel_org_tmpl = c2.multiselect("Pilih Origin Area", avail_org_tmpl, key="tmpl_org")
+                sel_org_tmpl = c3.multiselect("Pilih Origin Area", avail_org_tmpl, key="tmpl_org")
                 
-                # Tambahan dropdown Tahap and Vendor sesuai requst lo honey
-                sel_round_tmpl = c3.selectbox("Pilih Tahap Template", ["Tahap 1", "Tahap 2"], key="tmpl_round_select")
+                # 4. Filter Tahap Template
+                sel_round_tmpl = c4.selectbox("Pilih Tahap Template", ["Tahap 1", "Tahap 2"], key="tmpl_round_select")
                 
-                # Ambil daftar vendor resmi berupa email untuk sistem di belakang
+                # 5. Filter Vendor Penerima
                 vendor_emails_tmpl = sorted(df_u[df_u['role'] == 'vendor']['email'].unique().tolist())
                 
                 def fmt_ven_tmpl(eml):
@@ -2657,7 +2667,7 @@ def admin_dashboard():
                     if not match_name.empty: return match_name.iloc[0]
                     return eml
                 
-                sel_ven_tmpl = c4.selectbox("Pilih Vendor Penerima", vendor_emails_tmpl, format_func=fmt_ven_tmpl, key="tmpl_vendor_select")
+                sel_ven_tmpl = c5.selectbox("Pilih Vendor Penerima", vendor_emails_tmpl, format_func=fmt_ven_tmpl, key="tmpl_vendor_select")
 
                 # --- 2. TOMBOL EKSEKUSI GENERATE DENGAN LOGIKA PRE-POPULATE ---
                 if st.button("🚀 Generate & Pre-populate Excel", type="primary", key="btn_run_template_gen"):
@@ -2715,7 +2725,7 @@ def admin_dashboard():
                                                 # --- LOGIKA LOGIS REQUEST LU: LOOKUP HISTORI JIKA TAHAP 2 ---
                                                 if sel_round_tmpl == "Tahap 2":
                                                     # 1. Panggil nilai Target Price global rute ini
-                                                    row_entry["Target Price"] = get_target_price(df_p_merged, rid, unit, sel_val_comp if 'sel_val_comp' in locals() else "Januari - Desember 2026")
+                                                    row_entry["Target Price"] = get_target_price(df_p_merged, rid, unit, sel_val_tmpl)
                                                     
                                                     # 2. Lookup Harga Tahap 1 milik vendor ini
                                                     p1_val = 0
