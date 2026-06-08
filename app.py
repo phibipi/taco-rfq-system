@@ -2652,6 +2652,8 @@ def admin_dashboard():
                 # 2. Filter Tipe Muatan
                 avail_load_tmpl = sorted(df_g['load_type'].unique().tolist())
                 sel_load_tmpl = c2.selectbox("Pilih Tipe Muatan", avail_load_tmpl, key="tmpl_load")
+                avail_org_tmpl = sorted(df_g[df_g['load_type'] == sel_load_tmpl]['origin'].unique().tolist())
+                sel_org_tmpl = c3.multiselect("Pilih Origin Area", avail_org_tmpl, key="tmpl_org")
                 
                 sel_round_tmpl = c4.selectbox("Pilih Tahap Template", ["Tahap 1", "Tahap 2"], key="tmpl_round_select")
                 
