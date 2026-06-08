@@ -2665,11 +2665,11 @@ def admin_dashboard():
                 sel_ven_tmpl = c5.selectbox("Pilih Vendor Penerima", vendor_emails_tmpl, format_func=fmt_ven_tmpl, key="tmpl_vendor_select")
 
                 # --- 2. TOMBOL EKSEKUSI GENERATE HORIZONTAL ---
-                if st.button("🚀 Generate Template Horizontal", type="primary", key="btn_run_template_gen"):
+                if st.button("🚀 Generate Template", type="primary", key="btn_run_template_gen"):
                     if not sel_org_tmpl:
                         st.warning("Mohon pilih minimal satu Origin Area terlebih dahulu, Sayang.")
                     else:
-                        with st.spinner("Sedang merakit struktur sheet horizontal and menyalin histori harga..."):
+                        with st.spinner("Sedang merakit struktur sheet and menyalin histori harga..."):
                             output = io.BytesIO()
                             target_groups = df_g[(df_g['load_type'] == sel_load_tmpl) & (df_g['origin'].isin(sel_org_tmpl))]
                             
@@ -2764,6 +2764,7 @@ def admin_dashboard():
                                         df_sheet_final.to_excel(writer, sheet_name=clean_sheet_name, index=False)
                                         
                                         worksheet = writer.sheets[clean_sheet_name]
+                                        worksheet.set_zoom(55)
                                         
                                         # --- STYLING COLUMN & APPLY CURRENCY RUPIAH SECARA SAKLEK ---
                                         # Atur 4 kolom pembuka wajib dari kiri
@@ -2798,13 +2799,13 @@ def admin_dashboard():
                                         for col_idx, col_name in enumerate(df_sheet_final.columns):
                                             worksheet.write(0, col_idx, col_name, fmt_header)
                                             
-                            st.success(f"🎉 Sukses! Berhasil Merakit Template Horizontal {sel_round_tmpl} untuk {fmt_ven_tmpl(sel_ven_tmpl)}.")
+                            st.success(f"🎉 Sukses! Berhasil Merakit Template {sel_round_tmpl} untuk {fmt_ven_tmpl(sel_ven_tmpl)}.")
                             
                             safe_ven_fn = str(sel_ven_tmpl).split('@')[0].replace(".","")
                             st.download_button(
-                                label=f"⬇️ Ambil File Excel Horizontal ({fmt_ven_tmpl(sel_ven_tmpl)})",
+                                label=f"⬇️ Ambil File Excel  ({fmt_ven_tmpl(sel_ven_tmpl)})",
                                 data=output.getvalue(),
-                                file_name=f"Template_Horizontal_{sel_round_tmpl}_{safe_ven_fn}_{int(time.time())}.xlsx",
+                                file_name=f"Template_{sel_round_tmpl}_{safe_ven_fn}.xlsx",
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                 use_container_width=True
                             )
