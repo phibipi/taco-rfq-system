@@ -2633,107 +2633,93 @@ def admin_dashboard():
 
         # ==================== TIMPA TOTAL ISI TAB TEMPLATE (TABS[5]) DENGAN BLOK DI BAWAH INI ====================
         with tabs[5]:
-            st.subheader("📄 Generate Template & Pre-populate Excel RFQ")
-            st.caption("Buat file Excel penawaran harga. Jika memilih Tahap 2, sistem otomatis menyalin histori harga Tahap 1 and Target Price vendor terkait.")
+            st.subheader("📄 Template Generator & Pre-populate Horizontal Excel")
+            st.caption("Membuat file Excel penawaran harga berjejer ke samping per jenis unit dengan auto-format Currency Rupiah.")
 
             if not df_g.empty and not df_r.empty and not df_units.empty and not df_u.empty:
-                df_p_merged = pd.DataFrame()
-                if not df_master.empty:
-                    df_p_merged = df_master.copy()
                 # --- 1. FILTER UTAMA TEMPLATE ---
-                # ▼ POINTER FIX ATAS: TAMBAH FILTER PERIODE DI TAB TEMPLATE BIAR LOOKUP HISTORI GA ZONK ▼
                 c1, c2, c3, c4, c5 = st.columns(5)
                 
-                # 1. Filter Periode / Validity (Lookups data base)
                 avail_val_tmpl = sorted(df_p_merged['validity'].dropna().unique().tolist()) if not df_p_merged.empty else ["Januari - Desember 2026"]
                 sel_val_tmpl = c1.selectbox("Pilih Periode Laporan", avail_val_tmpl, key="tmpl_val_select")
                 
-                # 2. Filter Tipe Muatan
                 avail_load_tmpl = sorted(df_g['load_type'].unique().tolist())
                 sel_load_tmpl = c2.selectbox("Pilih Tipe Muatan", avail_load_tmpl, key="tmpl_load")
 
-                # 3. Filter Origin Area (Dinamis sesuai Load Type)
                 avail_org_tmpl = sorted(df_g[df_g['load_type'] == sel_load_tmpl]['origin'].unique().tolist())
                 sel_org_tmpl = c3.multiselect("Pilih Origin Area", avail_org_tmpl, key="tmpl_org")
                 
-                # 4. Filter Tahap Template
                 sel_round_tmpl = c4.selectbox("Pilih Tahap Template", ["Tahap 1", "Tahap 2"], key="tmpl_round_select")
                 
-                # 5. Filter Vendor Penerima
                 vendor_emails_tmpl = sorted(df_u[df_u['role'] == 'vendor']['email'].unique().tolist())
-                
                 def fmt_ven_tmpl(eml):
                     match_name = df_u[df_u['email'] == eml]['vendor_name']
                     if not match_name.empty: return match_name.iloc[0]
                     return eml
-                
                 sel_ven_tmpl = c5.selectbox("Pilih Vendor Penerima", vendor_emails_tmpl, format_func=fmt_ven_tmpl, key="tmpl_vendor_select")
 
-                # --- 2. TOMBOL EKSEKUSI GENERATE DENGAN LOGIKA PRE-POPULATE ---
-                if st.button("🚀 Generate & Pre-populate Excel", type="primary", key="btn_run_template_gen"):
+                # --- 2. TOMBOL EKSEKUSI GENERATE HORIZONTAL ---
+                if st.button("🚀 Generate Template Horizontal", type="primary", key="btn_run_template_gen"):
                     if not sel_org_tmpl:
-                        st.warning("Mohon pilih minimal satu Origin Area terlebih dahulu, Cinta.")
+                        st.warning("Mohon pilih minimal satu Origin Area terlebih dahulu, Sayang.")
                     else:
-                        with st.spinner("Sedang merakit struktur sheets and menyalin histori harga..."):
+                        with st.spinner("Sedang merakit struktur sheet horizontal and menyalin histori harga..."):
                             output = io.BytesIO()
-                            # Ambil data groups yang sesuai saringan area
                             target_groups = df_g[(df_g['load_type'] == sel_load_tmpl) & (df_g['origin'].isin(sel_org_tmpl))]
                             
-                            # Normalisasi data penawaran harga global sebagai rujukan lookup histori
-                            # ▼ FIX KEYERROR: RE-DEKLARASI DF_PRICES_REF DENGAN BENAR TANPA TYPO VARIABLE LAIN HONEY ▼
+                            # Siapkan dataframe rujukan harga yang sudah dibersihkan global
                             df_prices_ref = pd.DataFrame()
                             if not df_p.empty:
                                 df_prices_ref = df_p.copy()
+                                df_prices_ref['route_id_clean'] = df_prices_ref['route_id'].astype(str).str.strip()
                                 df_prices_ref['price'] = pd.to_numeric(df_prices_ref['price'], errors='coerce').fillna(0)
                                 df_prices_ref['round_clean_int'] = pd.to_numeric(df_prices_ref['round'], errors='coerce').fillna(1).astype(int)
                                 df_prices_ref['vendor_email_clean'] = df_prices_ref['vendor_email'].astype(str).str.strip().str.lower()
-                                df_prices_ref['validity_clean'] = df_prices_ref['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
-                                # Kunci saklek: Bikin kolom route_id_clean murni di dalam df_prices_ref!
-                                df_prices_ref['route_id_clean'] = df_prices_ref['route_id'].astype(str).str.strip()
 
-                            # Start writing Excel format via xlsxwriter
+                            # Jalankan modul penulisan Excel engine xlsxwriter
                             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                                 workbook = writer.book
                                 
-                                # Format styling
+                                # Pembuatan token format cell Excel Resmi (Mata Uang Rupiah)
                                 fmt_header = workbook.add_format({'bold': True, 'bg_color': '#FCA568', 'border': 1, 'align': 'center', 'valign': 'vcenter'})
-                                fmt_locked_col = workbook.add_format({'bg_color': '#F3F4F6', 'border': 1})
-                                fmt_input_col = workbook.add_format({'bg_color': '#FFFFFF', 'border': 1})
+                                fmt_locked = workbook.add_format({'bg_color': '#F3F4F6', 'border': 1, 'align': 'left'})
                                 
+                                # Format Angka Mata uang: Rp 1,250,000 (Gak ngerusak rumus matematika Excel)
+                                fmt_currency_locked = workbook.add_format({'num_format': '"Rp "#,##0', 'bg_color': '#F3F4F6', 'border': 1, 'align': 'right'})
+                                fmt_currency_input = workbook.add_format({'num_format': '"Rp "#,##0', 'bg_color': '#FFFFFF', 'border': 1, 'align': 'right'})
+                                fmt_normal_input = workbook.add_format({'bg_color': '#FFFFFF', 'border': 1, 'align': 'left'})
+                                
+                                target_email = str(sel_ven_tmpl).lower().strip()
+
                                 for _, g_row in target_groups.iterrows():
                                     gid = g_row['group_id']
                                     g_name = g_row['route_group']
                                     
-                                    # Ambil Master Rute untuk group rute ini
+                                    # Ambil rute unik and jenis unit armada horizontal pada group terkait
                                     routes_sub = df_r[df_r['group_id'] == gid][['route_id', 'kota_asal', 'kota_tujuan']].drop_duplicates().copy()
-                                    # Ambil Master Jenis Unit untuk group ini
-                                    units_sub = df_units[df_units['group_id'] == gid]['unit_type'].unique().tolist()
+                                    units_sub = sorted(df_units[df_units['group_id'] == gid]['unit_type'].unique().tolist())
                                     
                                     if not routes_sub.empty and units_sub:
-                                        # Rakit baris-baris matrix secara vertikal and dinamis
                                         matrix_rows = []
                                         
+                                        # Loop per baris Rute
                                         for _, r_row in routes_sub.iterrows():
                                             rid = str(r_row['route_id']).strip()
                                             
+                                            row_entry = {
+                                                "Route ID": rid,
+                                                "Kota Asal": r_row['kota_asal'],
+                                                "Kota Tujuan": r_row['kota_tujuan']
+                                            }
+                                            
+                                            # Loop per kolom Jenis Unit (JEJER KE SAMPING)
                                             for unit in units_sub:
-                                                row_entry = {
-                                                    "Route ID": rid,
-                                                    "Kota Asal": r_row['kota_asal'],
-                                                    "Kota Tujuan": r_row['kota_tujuan'],
-                                                    "Jenis Unit": unit
-                                                }
-                                                
-                                                # --- LOGIKA LOGIS REQUEST LU: LOOKUP HISTORI JIKA TAHAP 2 ---
-                                                # --- LOGIKA LOGIS REQUEST LU: LOOKUP HISTORI JIKA TAHAP 2 ---
                                                 if sel_round_tmpl == "Tahap 2":
-                                                    # 1. Panggil nilai Target Price global rute ini
-                                                    row_entry["Target Price"] = get_target_price(df_p_merged, rid, unit, sel_val_tmpl)
+                                                    # A. Lookup nilai Target Price global rute ini
+                                                    tgt_val = get_target_price(df_p_merged, rid, unit, sel_val_tmpl)
+                                                    row_entry[f"Target {unit}"] = tgt_val if tgt_val > 0 else 0
                                                     
-                                                    # KUNCI SUCI: Keluarkan logika if-else dari saringan Pandas ke variabel mandiri biar ga TypeError!
-                                                    target_email = str(sel_ven_comp).lower().strip() if 'sel_ven_comp' in locals() else str(sel_ven_tmpl).lower().strip()
-                                                    
-                                                    # 2. Lookup Harga Tahap 1 milik vendor terkait
+                                                    # B. Lookup histori Harga Tahap 1 milik vendor ini
                                                     p1_val = 0
                                                     if not df_prices_ref.empty:
                                                         p1_sub = df_prices_ref[
@@ -2742,11 +2728,10 @@ def admin_dashboard():
                                                             (df_prices_ref['vendor_email_clean'] == target_email) & 
                                                             (df_prices_ref['round_clean_int'] == 1)
                                                         ]
-                                                        if not p1_sub.empty: 
-                                                            p1_val = p1_sub['price'].max()
-                                                    row_entry["Harga Tahap 1"] = p1_val
+                                                        if not p1_sub.empty: p1_val = p1_sub['price'].max()
+                                                    row_entry[f"Harga Tahap 1 {unit}"] = p1_val
                                                     
-                                                    # 3. Lookup Harga Tahap 2 (jika dia sudah mencicil submit di system)
+                                                    # C. Lookup cicilan Harga Tahap 2 (jika ada)
                                                     p2_val = 0
                                                     if not df_prices_ref.empty:
                                                         p2_sub = df_prices_ref[
@@ -2755,54 +2740,70 @@ def admin_dashboard():
                                                             (df_prices_ref['vendor_email_clean'] == target_email) & 
                                                             (df_prices_ref['round_clean_int'] == 2)
                                                         ]
-                                                        if not p2_sub.empty: 
-                                                            p2_val = p2_sub['price'].max()
-                                                    
-                                                    # Masukkan nominal harga Tahap 2 ke kolom inputan utama Excel
-                                                    row_entry["Input Harga Tahap 2"] = p2_val if p2_val > 0 else ""
+                                                        if not p2_sub.empty: p2_val = p2_sub['price'].max()
+                                                    row_entry[f"Harga Tahap 2 {unit}"] = p2_val if p2_val > 0 else ""
                                                 else:
-                                                    # Jika milih Tahap 1, murni kosongan kosong melompong seperti biasa
-                                                    row_entry["Input Harga Tahap 1"] = ""
+                                                    # Jika milih Tahap 1, murni kolom kosong biasa siap ketik
+                                                    row_entry[f"Harga Tahap 1 {unit}"] = ""
                                                     
-                                                row_entry["Lead Time (Hari)"] = ""
-                                                row_entry["Keterangan Vendor"] = ""
-                                                matrix_rows.append(row_entry)
-                                                
-                                        # Convert matriks list rute menjadi Dataframe
+                                            # Tambahkan kolom buntut parameter pendukung di paling ujung kanan
+                                            row_entry["Lead Time (Hari)"] = ""
+                                            row_entry["Keterangan Vendor"] = ""
+                                            matrix_rows.append(row_entry)
+                                            
                                         df_sheet_final = pd.DataFrame(matrix_rows)
                                         
-                                        # Bersihkan nama sheet biar gak kepanjangan (Max 31 karakter Excel rule)
+                                        # Amankan penamaan sheet dari limit karakater
                                         clean_sheet_name = "".join(x for x in g_name if x.isalnum() or x in " -")[:30]
                                         df_sheet_final.to_excel(writer, sheet_name=clean_sheet_name, index=False)
                                         
-                                        # Mengatur format proteksi visual and ukuran sel kolom Excel
                                         worksheet = writer.sheets[clean_sheet_name]
-                                        worksheet.set_column('A:A', 12, fmt_locked_col) # Route ID locked
-                                        worksheet.set_column('B:C', 22, fmt_locked_col) # Asal-Tujuan locked
-                                        worksheet.set_column('D:D', 18, fmt_locked_col) # Jenis Unit locked
                                         
-                                        if sel_round_tmpl == "Tahap 2":
-                                            worksheet.set_column('E:G', 18, fmt_locked_col) # Target & T1 info locked
-                                            worksheet.set_column('H:J', 20, fmt_input_col)  # Slot input harga T2, LT, Ket open!
-                                        else:
-                                            worksheet.set_column('E:G', 20, fmt_input_col)  # Slot input harga T1, LT, Ket open!
-                                            
-                                        # Rewrite header row biar warna orange and tebel
+                                        # --- STYLING COLUMN & APPLY CURRENCY RUPIAH SECARA SAKLEK ---
+                                        # Atur 4 kolom pembuka wajib dari kiri
+                                        worksheet.set_column('A:A', 12, fmt_locked) # Route ID
+                                        worksheet.set_column('B:C', 22, fmt_locked) # Asal & Tujuan
+                                        
+                                        current_col_idx = 3 # Mulai dari kolom index ke-3 (kolom D)
+                                        
+                                        for unit in units_sub:
+                                            if sel_round_tmpl == "Tahap 2":
+                                                # Kolom Target Price (Locked & Rupiah format)
+                                                worksheet.set_column(current_col_idx, current_col_idx, 18, fmt_currency_locked)
+                                                current_col_idx += 1
+                                                
+                                                # Kolom Harga Tahap 1 (Locked & Rupiah format)
+                                                worksheet.set_column(current_col_idx, current_col_idx, 18, fmt_currency_locked)
+                                                current_col_idx += 1
+                                                
+                                                # Kolom Input Harga Tahap 2 (Bisa Diisi & Rupiah format!)
+                                                worksheet.set_column(current_col_idx, current_col_idx, 20, fmt_currency_input)
+                                                current_col_idx += 1
+                                            else:
+                                                # Kolom Input Harga Tahap 1 (Bisa Diisi & Rupiah format!)
+                                                worksheet.set_column(current_col_idx, current_col_idx, 20, fmt_currency_input)
+                                                current_col_idx += 1
+                                                
+                                        # Atur 2 kolom paling ujung kanan (Lead time and Keterangan)
+                                        worksheet.set_column(current_col_idx, current_col_idx, 16, fmt_normal_input) # Lead time
+                                        worksheet.set_column(current_col_idx + 1, current_col_idx + 1, 30, fmt_normal_input) # Keterangan
+                                        
+                                        # Timpa baris paling atas (Header) dengan warna orange mentereng
                                         for col_idx, col_name in enumerate(df_sheet_final.columns):
                                             worksheet.write(0, col_idx, col_name, fmt_header)
                                             
-                            st.success(f"✅ Berhasil Merakit Template {sel_round_tmpl}! Histori data vendor otomatis disalin.")
+                            st.success(f"🎉 Sukses! Berhasil Merakit Template Horizontal {sel_round_tmpl} untuk {fmt_ven_tmpl(sel_ven_tmpl)}.")
                             
                             safe_ven_fn = str(sel_ven_tmpl).split('@')[0].replace(".","")
                             st.download_button(
-                                label=f"📥 Unduh Template {sel_round_tmpl} ({fmt_ven_tmpl(sel_ven_tmpl)}) .xlsx",
+                                label=f"⬇️ Ambil File Excel Horizontal ({fmt_ven_tmpl(sel_ven_tmpl)})",
                                 data=output.getvalue(),
-                                file_name=f"Template_RFQ_{sel_round_tmpl}_{safe_ven_fn}_{int(time.time())}.xlsx",
+                                file_name=f"Template_Horizontal_{sel_round_tmpl}_{safe_ven_fn}_{int(time.time())}.xlsx",
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                 use_container_width=True
                             )
             else:
-                st.error("Database Master tidak lengkap (Groups/Routes/Units/Users ada yang kosong).")  
+                st.error("Database Master tidak lengkap (Master Groups/Routes/Units/Users ada yang kosong).")  
 
         with tabs[6]: # Tab Perbandingan
             st.subheader("⚖️ Perbandingan Harga Tahap 1 vs Tahap 2")
