@@ -2504,7 +2504,7 @@ def admin_dashboard():
                     st.markdown("### 2. Surat Perintah Kerja (SPK)")
                     st.caption("Dokumen perintah kerja spesifik untuk satu vendor berdasarkan entitas PT, tahap penawaran, and prioritas global yang valid.")
                     
-                    # Kita bagi baris filter menjadi 4 kolom biar muat dropdown PT nya honey
+                    # Kita bagi baris filter menjadi 4 kolom biar muat dropdown PT nya 
                     c3, c4, c5, c6 = st.columns(4)
                     spk_val = c3.selectbox("Periode SPK", avail_val, key="spk_val")
                     spk_load = c4.selectbox("Muatan SPK", avail_load, key="spk_load")
@@ -2554,20 +2554,20 @@ def admin_dashboard():
                             if st.button("📄 Generate File SPK", type="primary", key="btn_execute_spk_gen"):
                                 import requests
                                 
-                                # 🔔 KUNCI SUCI 2: Mapping URL Raw GitHub lo di sini, sesuaikan nama repo and filenya ya honey!
+                                # 🔔 KUNCI SUCI 2: Mapping URL Raw GitHub lo di sini, sesuaikan nama repo and filenya ya !
                                 GITHUB_BASE = "https://raw.githubusercontent.com/phibipi/taco-rfq-system/main/templates/"
                                 
                                 if sel_pt_entitas == "PT Tangkas Cipta Optimal":
-                                    template_url = GITHUB_BASE + "template_spk_tangkas.docx" # Nama file di github lo
+                                    template_url = GITHUB_BASE + "template_spk_tangkas.docx" 
                                 else:
-                                    template_url = GITHUB_BASE + "template_spk_tac.docx" # Nama file di github lo
+                                    template_url = GITHUB_BASE + "template_spk_tac.docx" 
                                     
                                 with st.spinner(f"Mengunduh template {sel_pt_entitas} dari GitHub and memproses SPK..."):
                                     try:
                                         # Tembak URL Raw GitHub secara rahasia
                                         response = requests.get(template_url)
                                         if response.status_code != 200:
-                                            st.error(f"Gagal mendownload template dari GitHub. Status Code: {response.status_code}. Cek apakah repository lo private atau link-nya salah, honey.")
+                                            st.error(f"Gagal mendownload template dari GitHub. Status Code: {response.status_code}. Cek apakah repository lo private atau link-nya salah, .")
                                             st.stop()
                                             
                                         # Ubah hantaran internet menjadi format file object memory (BytesIO)
@@ -2696,7 +2696,7 @@ def admin_dashboard():
             st.caption("Membuat file Excel penawaran harga berjejer ke samping per jenis unit dengan auto-format Currency Rupiah.")
 
             if not df_g.empty and not df_r.empty and not df_units.empty and not df_u.empty:
-                # 🥇 KUNCI SAKLEK: DEKLARASIKAN DF_P_MERGED DI SINI (PALING ATAS) BIAR GAK UNBOUND-LOCAL-ERROR LAGI HONEY!
+                # 🥇 KUNCI SAKLEK: DEKLARASIKAN DF_P_MERGED DI SINI (PALING ATAS) BIAR GAK UNBOUND-LOCAL-ERROR LAGI !
                 df_p_merged = pd.DataFrame()
                 if not df_master.empty:
                     df_p_merged = df_master.copy()
