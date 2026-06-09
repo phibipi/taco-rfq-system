@@ -2583,6 +2583,8 @@ def admin_dashboard():
 
                                         
                                         # ▼ FIX TOTAL MULTIDROP SPK: PAKSA BACA UNDERSCORE PALING KANAN & AMANKAN LOOKUP MERGE ▼
+                                        # --- RE-MAPPING LOGIKA MULTIDROP DAN BIAYA BURUH SESUAI TAHAP AKTIF ---
+                                        # ▼ FIX FINAL NUKLIR: PAKSA NORMALISASI SAKLEK VALIDITY KEDUA BELAH PIHAK BIAR PASTI KEBACA VINDAL ▼
                                         df_spk_merged = df_final_spk.copy()
                                         df_spk_merged['inner_city_price'] = 0
                                         df_spk_merged['outer_city_price'] = 0
@@ -2594,15 +2596,15 @@ def admin_dashboard():
                                                 for _, rmd in df_md.iterrows():
                                                     id_md_raw = str(rmd.get('id_multidrop', '')).strip()
                                                     
-                                                    # Ambil angka ronde murni dari potongan underscore paling kanan
+                                                    # Potong and ambil angka ronde dari underscore paling kanan
                                                     if '_' in id_md_raw:
                                                         md_rnd_check = id_md_raw.split('_')[-1]
                                                     else:
                                                         md_rnd_check = '1'
                                                         
-                                                    # Cocokkan saklek dengan Tahap SPK yang sedang dipilih admin di screen
+                                                    # Cocokkan dengan Tahap SPK yang dipilih admin di layar
                                                     if str(md_rnd_check) == str(sel_spk_round):
-                                                        # Lakukan pembersihan spasi total pada key matriks biar ga zonk join
+                                                        # KUNCI SUCI 1: Paksa validity database multidrop huruf kecil, rapat tanpa spasi, and strip total!
                                                         v_email_clean = str(rmd['vendor_email']).strip().lower()
                                                         v_val_clean = str(rmd['validity']).astype(str).str.replace(" ", "").str.lower().str.strip()
                                                         v_gid_clean = str(rmd['group_id']).strip()
@@ -2615,7 +2617,7 @@ def admin_dashboard():
                                                         }
                                                 
                                                 def get_md_val(row, kind):
-                                                    # Samakan format key pembanding rute dengan data master sheets
+                                                    # KUNCI SUCI 2: Samakan! Paksa validity data rute SPK juga huruf kecil, rapat tanpa spasi, and strip total!
                                                     r_email = str(row['vendor_email']).strip().lower()
                                                     r_val = str(row['validity']).astype(str).str.replace(" ", "").str.lower().str.strip()
                                                     r_gid = str(row['group_id']).strip()
@@ -2624,7 +2626,7 @@ def admin_dashboard():
                                                     res = md_dict.get(key, {'in': 0, 'out': 0, 'lab': 0})
                                                     return res[kind]
 
-                                                # Suntik balik nilainya ke dalam dataframe utama SPK lo honey
+                                                # Suntik datanya secara live ke memori cetak SPK lo honey
                                                 df_spk_merged['inner_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'in'), axis=1)
                                                 df_spk_merged['outer_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'out'), axis=1)
                                                 df_spk_merged['labor_cost'] = df_spk_merged.apply(lambda x: get_md_val(x, 'lab'), axis=1)
