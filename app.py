@@ -2549,7 +2549,7 @@ def admin_dashboard():
                         if not df_final_spk.empty:
                             st.info(f"Vendor **{sel_ven}** memiliki **{len(df_final_spk)} rute aktif** di {spk_load} {spk_val} (Tahap {sel_spk_round}).")
                         
-                            no_spk = col_d.text_input("Nomor Surat SPK:", f"", key="no_spk")
+                            no_spk = st.text_input("Nomor Surat SPK:", value="", placeholder="Contoh: 001/SPK/TACO/III/2026", key="no_spk")
                             
                             if st.button("📄 Generate File SPK", type="primary", key="btn_execute_spk_gen"):
                                 import requests
