@@ -2581,7 +2581,8 @@ def admin_dashboard():
                                         else: alamat_list.append("(Sheet Gudang Kosong)")
                                         alamat_str_combined = "\n".join(alamat_list)
 
-                                        # --- RE-MAPPING LOGIKA MULTIDROP DAN BIAYA BURUH SESUAI TAHAP AKTIF ---
+                                        
+                                        # ▼ FIX TOTAL MULTIDROP SPK: PAKSA BACA UNDERSCORE PALING KANAN & AMANKAN LOOKUP MERGE ▼
                                         df_spk_merged = df_final_spk.copy()
                                         df_spk_merged['inner_city_price'] = 0
                                         df_spk_merged['outer_city_price'] = 0
@@ -2591,21 +2592,44 @@ def admin_dashboard():
                                             try:
                                                 md_dict = {}
                                                 for _, rmd in df_md.iterrows():
-                                                    # Ambil data ronde multidrop dari ID-nya, sesuaikan dengan tahap SPK terpilih
-                                                    md_rnd_check = str(rmd['id_multidrop']).split('_')[-1] if '_' in str(rmd['id_multidrop']) else '1'
-                                                    if md_rnd_check == str(sel_spk_round):
-                                                        k = (str(rmd['vendor_email']).strip(), str(rmd['validity']).strip(), str(rmd['group_id']).strip())
-                                                        md_dict[k] = {'in': rmd.get('inner_city_price', 0), 'out': rmd.get('outer_city_price', 0), 'lab': rmd.get('labor_cost', 0)}
+                                                    id_md_raw = str(rmd.get('id_multidrop', '')).strip()
+                                                    
+                                                    # Ambil angka ronde murni dari potongan underscore paling kanan
+                                                    if '_' in id_md_raw:
+                                                        md_rnd_check = id_md_raw.split('_')[-1]
+                                                    else:
+                                                        md_rnd_check = '1'
+                                                        
+                                                    # Cocokkan saklek dengan Tahap SPK yang sedang dipilih admin di screen
+                                                    if str(md_rnd_check) == str(sel_spk_round):
+                                                        # Lakukan pembersihan spasi total pada key matriks biar ga zonk join
+                                                        v_email_clean = str(rmd['vendor_email']).strip().lower()
+                                                        v_val_clean = str(rmd['validity']).astype(str).str.replace(" ", "").str.lower().str.strip()
+                                                        v_gid_clean = str(rmd['group_id']).strip()
+                                                        
+                                                        k = (v_email_clean, v_val_clean, v_gid_clean)
+                                                        md_dict[k] = {
+                                                            'in': rmd.get('inner_city_price', 0), 
+                                                            'out': rmd.get('outer_city_price', 0), 
+                                                            'lab': rmd.get('labor_cost', 0)
+                                                        }
                                                 
                                                 def get_md_val(row, kind):
-                                                    key = (str(row['vendor_email']).strip(), str(row['validity']).strip(), str(row['group_id']).strip())
+                                                    # Samakan format key pembanding rute dengan data master sheets
+                                                    r_email = str(row['vendor_email']).strip().lower()
+                                                    r_val = str(row['validity']).astype(str).str.replace(" ", "").str.lower().str.strip()
+                                                    r_gid = str(row['group_id']).strip()
+                                                    
+                                                    key = (r_email, r_val, r_gid)
                                                     res = md_dict.get(key, {'in': 0, 'out': 0, 'lab': 0})
                                                     return res[kind]
 
+                                                # Suntik balik nilainya ke dalam dataframe utama SPK lo honey
                                                 df_spk_merged['inner_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'in'), axis=1)
                                                 df_spk_merged['outer_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'out'), axis=1)
                                                 df_spk_merged['labor_cost'] = df_spk_merged.apply(lambda x: get_md_val(x, 'lab'), axis=1)
-                                            except: pass
+                                            except Exception as ex_md:
+                                                pass
 
                                         # Generate File SPK Word via docxtpl
                                         f_spk = create_docx_spk(tpl_spk, no_spk, spk_val, spk_load, sel_ven, pic, final_pass, origin_str_combined, alamat_str_combined, df_spk_merged)
