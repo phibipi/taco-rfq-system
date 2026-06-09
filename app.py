@@ -2555,12 +2555,12 @@ def admin_dashboard():
                                 import requests
                                 
                                 # 🔔 KUNCI SUCI 2: Mapping URL Raw GitHub lo di sini, sesuaikan nama repo and filenya ya honey!
-                                GITHUB_BASE = "https://raw.githubusercontent.com/username/repo/main/templates/" # GANTI SESUAI REPO LO
+                                GITHUB_BASE = "https://raw.githubusercontent.com/phibipi/taco-rfq-system/main/templates/"
                                 
                                 if sel_pt_entitas == "PT Tangkas Cipta Optimal":
                                     template_url = GITHUB_BASE + "template_spk_tangkas.docx" # Nama file di github lo
                                 else:
-                                    template_url = GITHUB_BASE + "template_spk_taco.docx" # Nama file di github lo
+                                    template_url = GITHUB_BASE + "template_spk_tac.docx" # Nama file di github lo
                                     
                                 with st.spinner(f"Mengunduh template {sel_pt_entitas} dari GitHub and memproses SPK..."):
                                     try:
