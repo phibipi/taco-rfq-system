@@ -19,6 +19,7 @@ import io
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 import hashlib
+import requests
 
 
 # --- MAIN APP ---
@@ -2553,7 +2554,7 @@ def admin_dashboard():
                             
                             if st.button("📄 Generate File SPK", type="primary", key="btn_execute_spk_gen"):
                                 import requests
-                                import io
+                               
                                 # 🔔 KUNCI SUCI 2: Mapping URL Raw GitHub lo di sini, sesuaikan nama repo and filenya ya !
                                 GITHUB_BASE = "https://raw.githubusercontent.com/phibipi/taco-rfq-system/main/templates/"
                                 
@@ -2654,7 +2655,7 @@ def admin_dashboard():
                                                 pass
 
                                         # Generate File SPK Word via docxtpl
-                                        f_spk = create_docx_spk(tpl_spk, no_spk, spk_val, spk_load, sel_ven, pic, final_pass, origin_str_combined, alamat_str_combined, df_spk_merged)
+                                        f_spk = create_docx_spk(tpl_spk_stram, no_spk, spk_val, spk_load, sel_ven, pic, final_pass, origin_str_combined, alamat_str_combined, df_spk_merged)
                                         
                                         safe_val = str(spk_val).replace(" - ", "-").replace(" ", "_")
                                         safe_load = str(spk_load).replace(" ", "")
