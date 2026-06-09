@@ -2553,7 +2553,7 @@ def admin_dashboard():
                             
                             if st.button("📄 Generate File SPK", type="primary", key="btn_execute_spk_gen"):
                                 import requests
-                                
+                                import io
                                 # 🔔 KUNCI SUCI 2: Mapping URL Raw GitHub lo di sini, sesuaikan nama repo and filenya ya !
                                 GITHUB_BASE = "https://raw.githubusercontent.com/phibipi/taco-rfq-system/main/templates/"
                                 
@@ -2600,7 +2600,7 @@ def admin_dashboard():
 
                                         
                                         # --- RE-MAPPING LOGIKA MULTIDROP DAN BIAYA BURUH ---
-                                        # ▼ SINKRONISASI TOTAL: PAKAI LOGIKA TAB LOCK DATA YANG SUDAH TERBUKTI MUNCUL ANGKANYA ▼
+                                        # ▼ FIX SAKLEK NUKLIR: PAKSA BACA UNDERSCORE PALING KANAN DARI ID MULTIDROP BIAR GA ANGKA 0 ▼
                                         df_spk_merged = df_final_spk.copy()
                                         df_spk_merged['inner_city_price'] = 0
                                         df_spk_merged['outer_city_price'] = 0
@@ -2608,22 +2608,32 @@ def admin_dashboard():
 
                                         if not df_md.empty:
                                             try:
-                                                # Bersihkan dataframe multidrop pembanding (kebal spasi & huruf kecil)
+                                                # 1. Normalisasi database multidrop (Huruf kecil & rapat tanpa spasi)
                                                 df_md_clean = df_md.copy()
                                                 df_md_clean['vendor_email_clean'] = df_md_clean['vendor_email'].astype(str).str.strip().str.lower()
                                                 df_md_clean['validity_clean'] = df_md_clean['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
                                                 df_md_clean['group_id_clean'] = df_md_clean['group_id'].astype(str).str.strip()
 
-                                                # Siapkan parameter pembanding dari rute SPK aktif saat ini
+                                                # 2. Ambil email dan periode dari rute SPK aktif saat ini
                                                 clean_vendor_email = str(df_final_spk.iloc[0]['vendor_email']).strip().lower()
                                                 clean_validity = str(spk_val).replace(" ", "").lower().strip()
 
-                                                # Buat dictionary map lokal biar lookup-nya instan and akurat
+                                                # 3. Kumpulkan data ke dictionary map
                                                 md_dict = {}
                                                 for _, rmd in df_md_clean.iterrows():
-                                                    # Saring murni berdasarkan kecocokan Vendor + Periode
-                                                    if rmd['vendor_email_clean'] == clean_vendor_email and rmd['validity_clean'] == clean_validity:
-                                                        # Gunakan group_id sebagai key utama (Sama persis kayak logika Tab Lock Data lo!)
+                                                    id_md_raw = str(rmd.get('id_multidrop', '')).strip()
+                                                    
+                                                    # 🔥 LOGIKA REQUEST LU: Pecah and ambil angka ronde dari underscore paling kanan ID!
+                                                    if '_' in id_md_raw:
+                                                        md_rnd_check = id_md_raw.split('_')[-1]
+                                                    else:
+                                                        md_rnd_check = '1'
+                                                        
+                                                    # Filter mutlak: Hanya masukkan jika Vendor, Periode, AND Rondenya COCOK SAKLEK!
+                                                    if (rmd['vendor_email_clean'] == clean_vendor_email and 
+                                                        rmd['validity_clean'] == clean_validity and 
+                                                        str(md_rnd_check) == str(sel_spk_round)):
+                                                        
                                                         k_gid = rmd['group_id_clean']
                                                         md_dict[k_gid] = {
                                                             'in': rmd.get('inner_city_price', 0),
@@ -2632,12 +2642,11 @@ def admin_dashboard():
                                                         }
 
                                                 def get_md_val(row, kind):
-                                                    # Ambil group_id dari baris rute SPK untuk di-matching ke dictionary
                                                     r_gid = str(row['group_id']).strip()
                                                     res = md_dict.get(r_gid, {'in': 0, 'out': 0, 'lab': 0})
                                                     return res[kind]
 
-                                                # Suntik nominal aslinya ke dalam dataframe matriks harga SPK Word
+                                                # 4. Suntik balik nominal aslinya ke dalam dataframe utama SPK Word
                                                 df_spk_merged['inner_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'in'), axis=1)
                                                 df_spk_merged['outer_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'out'), axis=1)
                                                 df_spk_merged['labor_cost'] = df_spk_merged.apply(lambda x: get_md_val(x, 'lab'), axis=1)
