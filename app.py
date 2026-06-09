@@ -1767,6 +1767,7 @@ def admin_dashboard():
         df_md = get_data("Multidrop_Data")
         df_acc = get_data("Access_Rights")
         df_units = get_data("Master_Units")
+        df_gudang = get_data("Gudang")
     
         # BIG MERGE MASTER (Untuk Tab 2, 3, 4)
         df_master = pd.DataFrame()
