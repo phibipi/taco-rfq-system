@@ -2502,15 +2502,22 @@ def admin_dashboard():
             # ==================== TIMPA KHUSUS AREA KOTAK SPK (DI DALAM TABS[3]) DENGAN BLOK INI ====================
                 with st.container(border=True):
                     st.markdown("### 2. Surat Perintah Kerja (SPK)")
-                    st.caption("Dokumen perintah kerja spesifik untuk satu vendor berdasarkan tahap penawaran and prioritas global yang valid.")
+                    st.caption("Dokumen perintah kerja spesifik untuk satu vendor berdasarkan entitas PT, tahap penawaran, and prioritas global yang valid.")
                     
-                    c3, c4, c5 = st.columns(3)
+                    # Kita bagi baris filter menjadi 4 kolom biar muat dropdown PT nya honey
+                    c3, c4, c5, c6 = st.columns(4)
                     spk_val = c3.selectbox("Periode SPK", avail_val, key="spk_val")
                     spk_load = c4.selectbox("Muatan SPK", avail_load, key="spk_load")
                     
-                    # 🔔 KUNCI SUCI 1: Tambah filter Tahap/Ronde di SPK biar gak buta tahap lagi, honey!
                     avail_spk_rounds = sorted(df_master['round'].dropna().unique().tolist()) if not df_master.empty else ["1", "2"]
-                    sel_spk_round = c5.selectbox("Pilih Tahap SPK", avail_spk_rounds, key="spk_round_select", index=len(avail_spk_rounds)-1) # Default set ke tahap tertinggi (Tahap 2)
+                    sel_spk_round = c5.selectbox("Pilih Tahap SPK", avail_spk_rounds, key="spk_round_select", index=len(avail_spk_rounds)-1)
+                    
+                    # 🔔 KUNCI SUCI 1: Tambah dropdown pemilih Entitas PT untuk rujukan template GitHub!
+                    sel_pt_entitas = c6.selectbox(
+                        "Pilih Entitas Penerbit SPK", 
+                        ["PT Tangkas Cipta Optimal", "PT Taco Anugrah Corporindo"], 
+                        key="spk_pt_entitas_select"
+                    )
 
                     # --- PROSES GENERATE LIVE RANKING GLOBAL UNTUK SPK (BIAR RANKINGNYA GA ZONK ANGKA 1) ---
                     df_master_norm = df_master.copy()
@@ -2541,24 +2548,34 @@ def admin_dashboard():
                         
                         if not df_final_spk.empty:
                             st.info(f"Vendor **{sel_ven}** memiliki **{len(df_final_spk)} rute aktif** di {spk_load} {spk_val} (Tahap {sel_spk_round}).")
-                            
-                            col_c, col_d = st.columns(2)
-                            upl_spk = col_c.file_uploader("Upload Template SPK", type="docx", key="upl_spk")
+                        
                             no_spk = col_d.text_input("Nomor Surat SPK:", f"", key="no_spk")
                             
                             if st.button("📄 Generate File SPK", type="primary", key="btn_execute_spk_gen"):
-                                tpl_spk = "template_spk.docx"
-                                if upl_spk: tpl_spk = upl_spk
-                                elif not os.path.exists(tpl_spk): 
-                                    st.error("Template SPK tidak ditemukan di server.")
-                                    st.stop()
+                                import requests
+                                
+                                # 🔔 KUNCI SUCI 2: Mapping URL Raw GitHub lo di sini, sesuaikan nama repo and filenya ya honey!
+                                GITHUB_BASE = "https://raw.githubusercontent.com/username/repo/main/templates/" # GANTI SESUAI REPO LO
+                                
+                                if sel_pt_entitas == "PT Tangkas Cipta Optimal":
+                                    template_url = GITHUB_BASE + "template_spk_tangkas.docx" # Nama file di github lo
+                                else:
+                                    template_url = GITHUB_BASE + "template_spk_taco.docx" # Nama file di github lo
                                     
-                                with st.spinner(f"Memproses SPK {sel_ven} Tahap {sel_spk_round}..."):
+                                with st.spinner(f"Mengunduh template {sel_pt_entitas} dari GitHub and memproses SPK..."):
                                     try:
+                                        # Tembak URL Raw GitHub secara rahasia
+                                        response = requests.get(template_url)
+                                        if response.status_code != 200:
+                                            st.error(f"Gagal mendownload template dari GitHub. Status Code: {response.status_code}. Cek apakah repository lo private atau link-nya salah, honey.")
+                                            st.stop()
+                                            
+                                        # Ubah hantaran internet menjadi format file object memory (BytesIO)
+                                        tpl_spk_stream = io.BytesIO(response.content)
+                                        
                                         pic = df_final_spk.iloc[0].get('contact_person', 'Pimpinan Perusahaan')
                                         if pd.isna(pic) or pic == "-": pic = "Pimpinan Perusahaan"
                                         
-                                        # Lookup password vendor
                                         try:
                                             user_row = df_u[df_u['vendor_name'] == sel_ven]
                                             if not user_row.empty:
@@ -2582,9 +2599,8 @@ def admin_dashboard():
                                         alamat_str_combined = "\n".join(alamat_list)
 
                                         
-                                        # ▼ FIX TOTAL MULTIDROP SPK: PAKSA BACA UNDERSCORE PALING KANAN & AMANKAN LOOKUP MERGE ▼
-                                        # --- RE-MAPPING LOGIKA MULTIDROP DAN BIAYA BURUH SESUAI TAHAP AKTIF ---
-                                        # ▼ FIX FINAL NUKLIR: PAKSA NORMALISASI SAKLEK VALIDITY KEDUA BELAH PIHAK BIAR PASTI KEBACA VINDAL ▼
+                                        # --- RE-MAPPING LOGIKA MULTIDROP DAN BIAYA BURUH ---
+                                        # ▼ SINKRONISASI TOTAL: PAKAI LOGIKA TAB LOCK DATA YANG SUDAH TERBUKTI MUNCUL ANGKANYA ▼
                                         df_spk_merged = df_final_spk.copy()
                                         df_spk_merged['inner_city_price'] = 0
                                         df_spk_merged['outer_city_price'] = 0
@@ -2592,41 +2608,36 @@ def admin_dashboard():
 
                                         if not df_md.empty:
                                             try:
+                                                # Bersihkan dataframe multidrop pembanding (kebal spasi & huruf kecil)
+                                                df_md_clean = df_md.copy()
+                                                df_md_clean['vendor_email_clean'] = df_md_clean['vendor_email'].astype(str).str.strip().str.lower()
+                                                df_md_clean['validity_clean'] = df_md_clean['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
+                                                df_md_clean['group_id_clean'] = df_md_clean['group_id'].astype(str).str.strip()
+
+                                                # Siapkan parameter pembanding dari rute SPK aktif saat ini
+                                                clean_vendor_email = str(df_final_spk.iloc[0]['vendor_email']).strip().lower()
+                                                clean_validity = str(spk_val).replace(" ", "").lower().strip()
+
+                                                # Buat dictionary map lokal biar lookup-nya instan and akurat
                                                 md_dict = {}
-                                                for _, rmd in df_md.iterrows():
-                                                    id_md_raw = str(rmd.get('id_multidrop', '')).strip()
-                                                    
-                                                    # Potong and ambil angka ronde dari underscore paling kanan
-                                                    if '_' in id_md_raw:
-                                                        md_rnd_check = id_md_raw.split('_')[-1]
-                                                    else:
-                                                        md_rnd_check = '1'
-                                                        
-                                                    # Cocokkan dengan Tahap SPK yang dipilih admin di layar
-                                                    if str(md_rnd_check) == str(sel_spk_round):
-                                                        # KUNCI SUCI 1: Paksa validity database multidrop huruf kecil, rapat tanpa spasi, and strip total!
-                                                        v_email_clean = str(rmd['vendor_email']).strip().lower()
-                                                        v_val_clean = str(rmd['validity']).astype(str).str.replace(" ", "").str.lower().str.strip()
-                                                        v_gid_clean = str(rmd['group_id']).strip()
-                                                        
-                                                        k = (v_email_clean, v_val_clean, v_gid_clean)
-                                                        md_dict[k] = {
-                                                            'in': rmd.get('inner_city_price', 0), 
-                                                            'out': rmd.get('outer_city_price', 0), 
+                                                for _, rmd in df_md_clean.iterrows():
+                                                    # Saring murni berdasarkan kecocokan Vendor + Periode
+                                                    if rmd['vendor_email_clean'] == clean_vendor_email and rmd['validity_clean'] == clean_validity:
+                                                        # Gunakan group_id sebagai key utama (Sama persis kayak logika Tab Lock Data lo!)
+                                                        k_gid = rmd['group_id_clean']
+                                                        md_dict[k_gid] = {
+                                                            'in': rmd.get('inner_city_price', 0),
+                                                            'out': rmd.get('outer_city_price', 0),
                                                             'lab': rmd.get('labor_cost', 0)
                                                         }
-                                                
+
                                                 def get_md_val(row, kind):
-                                                    # KUNCI SUCI 2: Samakan! Paksa validity data rute SPK juga huruf kecil, rapat tanpa spasi, and strip total!
-                                                    r_email = str(row['vendor_email']).strip().lower()
-                                                    r_val = str(row['validity']).astype(str).str.replace(" ", "").str.lower().str.strip()
+                                                    # Ambil group_id dari baris rute SPK untuk di-matching ke dictionary
                                                     r_gid = str(row['group_id']).strip()
-                                                    
-                                                    key = (r_email, r_val, r_gid)
-                                                    res = md_dict.get(key, {'in': 0, 'out': 0, 'lab': 0})
+                                                    res = md_dict.get(r_gid, {'in': 0, 'out': 0, 'lab': 0})
                                                     return res[kind]
 
-                                                # Suntik datanya secara live ke memori cetak SPK lo honey
+                                                # Suntik nominal aslinya ke dalam dataframe matriks harga SPK Word
                                                 df_spk_merged['inner_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'in'), axis=1)
                                                 df_spk_merged['outer_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'out'), axis=1)
                                                 df_spk_merged['labor_cost'] = df_spk_merged.apply(lambda x: get_md_val(x, 'lab'), axis=1)
