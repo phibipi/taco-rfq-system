@@ -1245,13 +1245,15 @@ def user_dashboard():
         if df_master.empty:
             st.info("Data harga belum tersedia.")
         else:
-            c1, c2 = st.columns(2)
+            c1, c2, c3 = st.columns(3)
             # Filter
             avail_val = sorted(df_master['validity'].unique().tolist())
             avail_load = sorted(df_master['load_type'].unique().tolist())
+            avail_rounds = sorted(df_master['round'].dropna().unique().tolist())
             
             sel_val = c1.selectbox("Filter Periode", avail_val, key="sum_val")
             sel_load = c2.selectbox("Filter Tipe Muatan", avail_load, key="sum_load")
+            sel_round = c3.selectbox("Filter Tahap/Round", avail_rounds, key="sum_round_user", index=len(avail_rounds)-1)
             
             if not df_master.empty:
                 df_master_norm = df_master.copy()
