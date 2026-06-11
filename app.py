@@ -2619,7 +2619,7 @@ def admin_dashboard():
 
                                                 # 2. Ambil email dan periode dari rute SPK aktif saat ini
                                                 clean_vendor_email = str(df_final_spk.iloc[0]['vendor_email']).strip().lower()
-                                                clean_validity = str(spk_val).replace(" ", "").lower().strip()
+                                                clean_validity = str(spk_val).strip()
 
                                                 # 3. Kumpulkan data ke dictionary map
                                                 md_dict = {}
@@ -2634,7 +2634,7 @@ def admin_dashboard():
                                                         
                                                     # Filter mutlak: Hanya masukkan jika Vendor, Periode, AND Rondenya COCOK SAKLEK!
                                                     if (rmd['vendor_email_clean'] == clean_vendor_email and 
-                                                        rmd['validity_clean'] == clean_validity and 
+                                                        str(rmd['validity']).strip() == clean_validity and 
                                                         str(md_rnd_check) == str(sel_spk_round)):
                                                         
                                                         k_gid = rmd['group_id_clean']
