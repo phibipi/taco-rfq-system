@@ -1852,14 +1852,27 @@ def admin_dashboard():
                             raw_pending_groups = v['raw_pending_groups']
                             
                             # 💎 SINKRONISASI MUTLAK: Hitung murni berbasis set nama group rute unik lo honey
-                            total_g_unik = len(assigned_groups)
-                            pending_g_unik = len(pending_groups)
+                            # ====================================================================================
+                            # 🎯 KUNCI AMNUR: PAKSA SINKRONISASI BERDASARKAN JUMLAH GROUP UNIK DI LAYAR EXPANDER
+                            # ====================================================================================
+                            # 1. Hitung total nama group unik murni yang ada di list assigned_groups
+                            total_g_unik = len(set(assigned_groups))
+                            
+                            # 2. Hitung sisa group yang belum diisi (jika belum di-bypass)
+                            if current_check_key in list_bypassed_keys:
+                                pending_g_unik = 0
+                            else:
+                                # Hitung berapa nama group unik yang masuk daftar raw_pending_groups
+                                pending_g_unik = len(set(raw_pending_groups))
+                            
+                            # 3. Hitung berapa group yang sudah sukses terisi
                             done_g_unik = total_g_unik - pending_g_unik
                             
                             if pending_g_unik > 0:
                                 header_text = f"⚠️ {v_name} — (Selesai: {done_g_unik}/{total_g_unik})"
                             else:
                                 header_text = f"✅ {v_name} — (Lengkap: {total_g_unik}/{total_g_unik})"
+                            
                                 
                             with st.expander(header_text, expanded=False):
                                 st.caption(f"📍 Area: {', '.join(v['origins'])}")
