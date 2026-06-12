@@ -1851,13 +1851,19 @@ def admin_dashboard():
                             pending_groups = v['pending_groups']
                             raw_pending_groups = v['raw_pending_groups']
                             
-                            total_g = len(assigned_groups)
+                            total_g_unik = len(assigned_groups)
                             
-                            # Judul otomatis dinamis membaca sisa pending groups hasil kalkulasi bypass lo!
-                            if len(pending_groups) > 0:
-                                header_text = f"⚠️ {v_name} — (Selesai: {total_g - len(pending_groups)}/{total_g})"
+                            # 2. Hitung berapa group unik yang BELUM diisi murni (setelah dipotong efek bypass suci lo)
+                            # Kita ambil daftar group unik pending yang murni belum terisi murni di layar
+                            pending_g_unik = len(pending_groups)
+                            
+                            # 3. Hitung berapa group yang sudah sukses terisi
+                            done_g_unik = total_g_unik - pending_g_unik
+                            
+                            if pending_g_unik > 0:
+                                header_text = f"⚠️ {v_name} — (Selesai: {done_g_unik}/{total_g_unik})"
                             else:
-                                header_text = f"✅ {v_name} — (Lengkap: {total_g}/{total_g})"
+                                header_text = f"✅ {v_name} — (Lengkap: {total_g_unik}/{total_g_unik})"
                                 
                             with st.expander(header_text, expanded=False):
                                 st.caption(f"📍 Area: {', '.join(v['origins'])}")
