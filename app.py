@@ -684,21 +684,17 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
             hdr_cells[i].vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER 
             format_paragraph(hdr_cells[i].paragraphs[0], size=8, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
             
-        # Data Loop
+
+        # Di dalam loop data row, ubah menjadi:
         for _, row in df_sub.iterrows():
             row_cells = table.add_row().cells
             try: harga = f"Rp {int(row['price']):,}".replace(",", ".")
             except: harga = "Rp 0"
               
-            # --- LOGIC LEAD TIME (+ Hari) ---
             lt_raw = str(row['lead_time'])
-            if lt_raw.isdigit() or (lt_raw.replace('.','',1).isdigit()):
-                lt_fmt = f"{lt_raw} Hari"
-            elif lt_raw in ["-", "", "0"]:
-                lt_fmt = "-"
-            else:
-                lt_fmt = f"{lt_raw} Hari"
+            lt_fmt = f"{lt_raw} Hari" if lt_raw.isdigit() else "-"
             
+            # Amankan parameter parsing data rute utama
             data_map = [
                 str(row.get('kota_asal', '-')), 
                 str(row['kota_tujuan']), 
@@ -713,6 +709,8 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
             for idx, val in enumerate(data_map):
                 cell = row_cells[idx]; cell.text = val
                 cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+                align = WD_ALIGN_PARAGRAPH.RIGHT if idx == 5 else (WD_ALIGN_PARAGRAPH.CENTER if idx in [3,7] else WD_ALIGN_PARAGRAPH.LEFT)
+                format_paragraph(cell.paragraphs[0], size=7, bold=False, align=align)
                 
                 # Alignment
                 if idx in [0, 1, 2, 6]: align = WD_ALIGN_PARAGRAPH.LEFT
@@ -1296,182 +1294,105 @@ def user_dashboard():
                 st.warning("Data tidak ditemukan untuk filter ini.")
 
     # === TAB 2: SEARCH VENDOR BY ROUTE ===
-    with tab2:
-        if df_master.empty:
-            st.info("Data belum tersedia.")
-        else:
-            # 1. Filter Utama
-            c1, c2, c3 = st.columns(3)
-            # Filter Periode
-            avail_val_s = sorted(df_master['validity'].unique().tolist())
-            s_val = c1.selectbox("1. Pilih Periode", avail_val_s, key="s_val")
+with tab2:
+    if df_master.empty:
+        st.info("Data belum tersedia.")
+    else:
+        # 1. Filter Utama
+        c1, c2, c3 = st.columns(3)
+        avail_val_s = sorted(df_master['validity'].unique().tolist())
+        s_val = c1.selectbox("1. Pilih Periode", avail_val_s, key="s_val")
+        
+        avail_load_s = sorted(df_master['load_type'].unique().tolist())
+        s_load = c2.selectbox("2. Pilih Muatan", avail_load_s, key="s_load")
+        
+        filtered_1 = df_master[(df_master['validity'] == s_val) & (df_master['load_type'] == s_load)]
+        avail_asal_s = sorted(filtered_1['kota_asal'].dropna().unique().tolist())
+        s_org = c3.selectbox("3. Pilih Kota Asal", avail_asal_s, key="s_org")
+        
+        st.write("")
+        df_for_dest = filtered_1[filtered_1['kota_asal'] == s_org].copy()
+        avail_dest = sorted(df_for_dest['kota_tujuan'].dropna().unique().tolist())
+        
+        if avail_dest:
+            search_dest = st.selectbox("🔍 Pilih Kota Tujuan", avail_dest, key="s_dest")
             
-            # Filter Load Type
-            avail_load_s = sorted(df_master['load_type'].unique().tolist())
-            s_load = c2.selectbox("2. Pilih Muatan", avail_load_s, key="s_load")
+            if search_dest:
+                df_search = df_for_dest[df_for_dest['kota_tujuan'] == search_dest].copy()
             
-                    # Filter Kota Asal (Dinamis berdasarkan 2 filter sebelumnya)
-            filtered_1 = df_master[(df_master['validity'] == s_val) & (df_master['load_type'] == s_load)]
-            avail_asal_s = sorted(filtered_1['kota_asal'].dropna().unique().tolist())
-            s_org = c3.selectbox("3. Pilih Kota Asal", avail_asal_s, key="s_org")
-            
-            # 2. Input Search Kota Tujuan
-            st.write("")
-            # Dropdown kota tujuan (dinamis dari data)
-            df_for_dest = filtered_1[filtered_1['kota_asal'] == s_org].copy()
-            avail_dest = sorted(df_for_dest['kota_tujuan'].dropna().unique().tolist())
-            
-            if avail_dest:
-                search_dest = st.selectbox("🔍 Pilih Kota Tujuan", avail_dest, key="s_dest")
-                
-                if search_dest:
-                    df_search = df_for_dest[df_for_dest['kota_tujuan'] == search_dest].copy()
-                
-                if not df_search.empty:
-                    # === 1. STRIP & NORMALISASI ===
-                    df_search['vendor_email'] = df_search['vendor_email'].astype(str).str.strip().str.lower()
-                    df_search['route_id'] = df_search['route_id'].astype(str).str.strip()
-                    df_search['validity'] = df_search['validity'].astype(str).str.strip().str.lower()
-                    df_search['unit_type'] = df_search['unit_type'].astype(str).str.strip().str.lower()
-                    df_search['price'] = pd.to_numeric(df_search['price'], errors='coerce').fillna(0)
+            if not df_search.empty:
+                df_search['vendor_email'] = df_search['vendor_email'].astype(str).str.strip().str.lower()
+                df_search['route_id'] = df_search['route_id'].astype(str).str.strip()
+                df_search['validity_clean'] = df_search['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
+                df_search['unit_type'] = df_search['unit_type'].astype(str).str.strip().str.lower()
+                df_search['price'] = pd.to_numeric(df_search['price'], errors='coerce').fillna(0)
 
-                    # === 2. AMBIL HARGA TERMURAH PER vendor+route+unit+validity ===
-                    # Sort harga ascending → keep='first' = ambil yang paling murah
-                    df_search = df_search.sort_values(
-                        by=['vendor_email', 'route_id', 'unit_type', 'validity', 'price'],
-                        ascending=True
-                    )
-                    df_search_clean = df_search.drop_duplicates(
-                        subset=['vendor_email', 'route_id', 'unit_type', 'validity'],
-                        keep='first'
-                    )
+                df_search = df_search.sort_values(by=['vendor_email', 'route_id', 'unit_type', 'price'], ascending=True)
+                df_search_clean = df_search.drop_duplicates(subset=['vendor_email', 'route_id', 'unit_type'], keep='first').copy()
+                df_search_clean['group_id_match'] = df_search_clean['route_id'].str[:5].str.upper().str.strip()
 
-                    # === 3. GROUP_ID MATCH: 5 HURUF PERTAMA route_id ===
-                    df_search_clean = df_search_clean.copy()
-                    df_search_clean['group_id_match'] = df_search_clean['route_id'].str[:5].str.lower()
-
-                    # === 4. PROSES MULTIDROP ===
-                    if not df_md.empty:
-                        df_md['vendor_email'] = df_md['vendor_email'].astype(str).str.strip().str.lower()
-                        df_md['validity'] = df_md['validity'].astype(str).str.strip().str.lower()
-
-                        # Deteksi kolom group_id multidrop
-                        col_group = None
-                        for candidate in ['group_id', 'group id']:
-                            if candidate in df_md.columns:
-                                col_group = candidate
-                                break
-                        if col_group:
-                            df_md['group_id_md_clean'] = df_md[col_group].astype(str).str.strip().str.lower()
-                        else:
-                            df_md['group_id_md_clean'] = ""
-
-                        # Normalisasi harga multidrop
-                        for mc in ['inner_city_price', 'outer_city_price', 'labor_cost']:
-                            if mc in df_md.columns:
-                                df_md[mc] = pd.to_numeric(df_md[mc], errors='coerce').fillna(0)
-
-                        # DEDUP MULTIDROP: ambil harga inner_city termurah per vendor+group+validity
-                        df_md = df_md.sort_values(
-                            by=['vendor_email', 'group_id_md_clean', 'validity', 'inner_city_price'],
-                            ascending=True
-                        )
-                        df_md_clean = df_md.drop_duplicates(
-                            subset=['vendor_email', 'group_id_md_clean', 'validity'],
-                            keep='first'
-                        )
-
-                        md_subset = df_md_clean[[
-                            'vendor_email', 'group_id_md_clean', 'validity',
-                            'inner_city_price', 'outer_city_price', 'labor_cost'
-                        ]].copy()
-
-                        # === 5. LOOKUP: email + 5 huruf route_id + validity ===
-                        df_result = pd.merge(
-                            df_search_clean,
-                            md_subset,
-                            left_on=['vendor_email', 'group_id_match', 'validity'],
-                            right_on=['vendor_email', 'group_id_md_clean', 'validity'],
-                            how='left'
-                        )
-                    else:
-                        df_result = df_search_clean.copy()
-                        df_result['inner_city_price'] = 0
-                        df_result['outer_city_price'] = 0
-                        df_result['labor_cost'] = 0
-
-                    # === 6. SAFETY NET: PASTIKAN TIDAK ADA DUPLIKAT DI HASIL AKHIR ===
-                    df_result = df_result.sort_values(
-                        by=['vendor_email', 'route_id', 'unit_type', 'price'],
-                        ascending=True
-                    )
-                    df_result = df_result.drop_duplicates(
-                        subset=['vendor_email', 'route_id', 'unit_type'],
-                        keep='first'
-                    )
-
-                    # === 7. PAKSA NOMINAL JADI ANGKA ===
-                    for col in ['price', 'inner_city_price', 'outer_city_price', 'labor_cost']:
-                        if col in df_result.columns:
-                            df_result[col] = pd.to_numeric(df_result[col], errors='coerce').fillna(0)
-                        else:
-                            df_result[col] = 0
-
-                    # === 8. SORT DISPLAY ===
-                    df_result = df_result.sort_values(by=['unit_type', 'price'], ascending=True)
-
-                    # === 9. FORMAT RUPIAH ===
-                    def fmt_rp(x):
-                        try:
-                            return f"Rp {int(float(x)):,}".replace(",", ".")
-                        except:
-                            return "Rp 0"
-
-                    df_result['Harga Unit']      = df_result['price'].apply(fmt_rp)
-                    df_result['Multidrop Dalam'] = df_result['inner_city_price'].apply(fmt_rp)
-                    df_result['Multidrop Luar']  = df_result['outer_city_price'].apply(fmt_rp)
-                    df_result['Biaya Buruh']     = df_result['labor_cost'].apply(fmt_rp)
-
-                    # Hitung ulang setelah filter kota asal + dedup
-                    df_result_display = df_result[df_result['kota_asal'] == s_org].copy()
-                    df_result_display = df_result_display.sort_values(by='price', ascending=True)
-                    df_result_display = df_result_display.drop_duplicates(
-                        subset=['vendor_email', 'kota_tujuan', 'unit_type'],
-                        keep='first'
-                    )
+                # === PROSES LOOKUP MULTIDROP PERBAIKAN SAKLEK ===
+                if not df_md.empty:
+                    df_md_copy = df_md.copy()
+                    df_md_copy['vendor_email_clean'] = df_md_copy['vendor_email'].astype(str).str.strip().str.lower()
+                    df_md_copy['validity_clean'] = df_md_copy['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
+                    df_md_copy['group_id_clean'] = df_md_copy['group_id'].astype(str).str.upper().str.strip()
                     
-                    unique_units = df_result_display['unit_type'].unique()
-                    st.success(f"Ditemukan {len(df_result_display)} penawaran untuk tujuan '{search_dest}'.")
+                    # Bersihkan nominal dari koma/titik string bawaan Sheets
+                    for mc in ['inner_city_price', 'outer_city_price', 'labor_cost']:
+                        if mc in df_md_copy.columns:
+                            df_md_copy[mc] = df_md_copy[mc].astype(str).str.replace(",", "")
+                            df_md_copy[mc] = pd.to_numeric(df_md_copy[mc], errors='coerce').fillna(0)
 
-                    for unit in unique_units:
-                        st.markdown(f"##### 🚛 Unit: {unit}")
-                        sub_res = df_result_display[df_result_display['unit_type'] == unit].copy()
-                        
-                        # DEDUP FINAL DI DISPLAY
-                        sub_res = sub_res.sort_values(by='price', ascending=True)
-                        sub_res = sub_res.drop_duplicates(
-                            subset=['vendor_email', 'kota_tujuan'],
-                            keep='first'
-                        )
-                        
-                        sub_res['Rank'] = range(1, len(sub_res) + 1)
-                        
-                        display_cols = [
-                            'Rank', 'vendor_name', 'Harga Unit', 'top',
-                            'lead_time', 'Multidrop Dalam', 'Multidrop Luar', 'Biaya Buruh'
-                        ]
-                        
-                        st.dataframe(
-                            sub_res[display_cols],
-                            use_container_width=True,
-                            hide_index=True,
-                            column_config={
-                                "vendor_name": "Vendor",
-                                "top": "TOP (Term of Payment)",
-                                "lead_time": "Lead Time (Hari)"
-                            }
-                        )
-                        st.markdown("---")
+                    df_md_clean = df_md_copy.drop_duplicates(subset=['vendor_email_clean', 'group_id_clean', 'validity_clean'], keep='last')
+                    
+                    df_result = pd.merge(
+                        df_search_clean,
+                        df_md_clean[['vendor_email_clean', 'group_id_clean', 'validity_clean', 'inner_city_price', 'outer_city_price', 'labor_cost', 'catatan_tambahan']],
+                        left_on=['vendor_email', 'group_id_match', 'validity_clean'],
+                        right_on=['vendor_email_clean', 'group_id_clean', 'validity_clean'],
+                        how='left'
+                    )
+                else:
+                    df_result = df_search_clean.copy()
+                    df_result['inner_city_price'] = 0
+                    df_result['outer_city_price'] = 0
+                    df_result['labor_cost'] = 0
+                    df_result['catatan_tambahan'] = '-'
+
+                df_result['price'] = pd.to_numeric(df_result['price'], errors='coerce').fillna(0)
+                df_result['inner_city_price'] = pd.to_numeric(df_result['inner_city_price'], errors='coerce').fillna(0)
+                df_result['outer_city_price'] = pd.to_numeric(df_result['outer_city_price'], errors='coerce').fillna(0)
+                df_result['labor_cost'] = pd.to_numeric(df_result['labor_cost'], errors='coerce').fillna(0)
+
+                df_result_display = df_result[df_result['kota_asal'] == s_org].copy()
+                df_result_display = df_result_display.sort_values(by='price', ascending=True)
+                
+                def fmt_rp(x):
+                    try: return f"Rp {int(float(x)):,}".replace(",", ".")
+                    except: return "Rp 0"
+
+                df_result_display['Harga Unit']      = df_result_display['price'].apply(fmt_rp)
+                df_result_display['Multidrop Dalam'] = df_result_display['inner_city_price'].apply(fmt_rp)
+                df_result_display['Multidrop Luar']  = df_result_display['outer_city_price'].apply(fmt_rp)
+                df_result_display['Biaya Buruh']     = df_result_display['labor_cost'].apply(fmt_rp)
+
+                unique_units = df_result_display['unit_type'].unique()
+                st.success(f"Ditemukan {len(df_result_display)} penawaran untuk tujuan '{search_dest}'.")
+
+                for unit in unique_units:
+                    st.markdown(f"##### 🚛 Unit: {unit}")
+                    sub_res = df_result_display[df_result_display['unit_type'] == unit].copy().reset_index(drop=True)
+                    sub_res['Rank'] = range(1, len(sub_res) + 1)
+                    
+                    display_cols = ['Rank', 'vendor_name', 'Harga Unit', 'top', 'lead_time', 'Multidrop Dalam', 'Multidrop Luar', 'Biaya Buruh']
+                    st.dataframe(
+                        sub_res[display_cols],
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={"vendor_name": "Vendor", "top": "TOP", "lead_time": "Lead Time (Hari)"}
+                    )
+                    st.markdown("---")
                 else:
                     st.warning(f"Tidak ditemukan rute ke '{search_dest}' dari {s_org}.")
             else:
@@ -2452,51 +2373,148 @@ def admin_dashboard():
                 avail_val = sorted(df_master['validity'].unique().tolist())
                 avail_load = sorted(df_master['load_type'].unique().tolist())
 
-                # ==========================================
-                # BAGIAN 1: SURAT KEPUTUSAN (SK)
+               # ==========================================
+                # BAGIAN 1: SURAT KEPUTUSAN (SK) - LIVE RE-MAPPING GITHUB (DUAL ENTITAS)
                 # ==========================================
                 with st.container(border=True):
                     st.markdown("### 1. Surat Keputusan (SK)")
-                    st.caption("Dokumen rekapitulasi pemenang tender (Top 3).")
+                    st.caption("Dokumen rekapitulasi pemenang tender (Top 3) berdasarkan entitas PT otomatis dari server GitHub.")
                 
-                    c1, c2 = st.columns(2)
+                    # Baris filter dibagi menjadi 4 kolom agar sejajar dan muat dropdown PT nya
+                    c1, c2, c3, c4 = st.columns(4)
                     sk_val = c1.selectbox("Periode SK", avail_val, key="sk_val")
                     sk_load = c2.selectbox("Muatan SK", avail_load, key="sk_load")
-                
-                    # Filter Data SK
-                    df_sk = df_master[(df_master['validity'] == sk_val) & (df_master['load_type'] == sk_load)].copy()
                     
-                    # --- TAMBAHAN FILTER HARGA 0 ---
-                    df_sk = df_sk[df_sk['price'] > 0]
-                
-                    if not df_sk.empty:
-                        avail_org = sorted(df_sk['origin'].unique())
-                        sel_orgs = st.multiselect("Pilih Origin (SK):", avail_org, default=avail_org, key="sk_orgs")
+                    avail_sk_rounds = sorted(df_master['round'].dropna().unique().tolist()) if not df_master.empty else ["1", "2"]
+                    sel_sk_round = c3.selectbox("Pilih Tahap SK", avail_sk_rounds, key="sk_round_select", index=len(avail_sk_rounds)-1)
                     
+                    # 🔔 KUNCI SUCI: Dropdown pemilih Entitas PT untuk rujukan template SK di GitHub
+                    sel_pt_sk = c4.selectbox(
+                        "Pilih Entitas Penerbit SK", 
+                        ["PT Tangkas Cipta Optimal", "PT Taco Anugrah Corporindo"], 
+                        key="sk_pt_entitas_select"
+                    )
+                
+                    # --- PROSES GENERATE DATA FILTER UNTUK SK ---
+                    df_master_norm = df_master.copy()
+                    df_master_norm['validity_clean'] = df_master_norm['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
+                    df_master_norm['round_clean'] = pd.to_numeric(df_master_norm['round'], errors='coerce').fillna(1).astype(int)
+                    clean_sk_val = str(sk_val).replace(" ", "").lower().strip()
+                
+                    # Saring basis data kompetisi global seluruh vendor untuk menghitung ranking asli Top 3
+                    df_sk_global = df_master_norm[
+                        (df_master_norm['validity_clean'] == clean_sk_val) & 
+                        (df_master_norm['load_type'] == sk_load) & 
+                        (df_master_norm['round_clean'] == int(sel_sk_round)) &
+                        (df_master_norm['price'] > 0)
+                    ].copy()
+                
+                    if not df_sk_global.empty:
+                        # Hitung ranking kumulatif global
+                        df_sk_global['price_sort_temp'] = df_sk_global['price']
+                        df_sk_global = df_sk_global.sort_values(by=['origin', 'kota_asal', 'kota_tujuan', 'unit_type', 'price_sort_temp'])
+                        df_sk_global['Ranking'] = df_sk_global.groupby(['origin', 'kota_asal', 'kota_tujuan', 'unit_type']).cumcount() + 1
+                        
+                        # Saring HANYA pemenang peringkat 1, 2, dan 3 secara global
+                        df_sk_top3 = df_sk_global[df_sk_global['Ranking'] <= 3].copy()
+                        
+                        avail_org = sorted(df_sk_top3['origin'].unique())
+                        sel_orgs = st.multiselect("Pilih Origin Area (SK):", avail_org, default=avail_org, key="sk_orgs")
+                
                         if sel_orgs:
-                            df_final_sk = df_sk[df_sk['origin'].isin(sel_orgs)].copy()
-                            df_final_sk = df_final_sk.sort_values(by=['origin', 'kota_tujuan', 'unit_type', 'price'])
-                            df_final_sk['Ranking'] = df_final_sk.groupby(['origin', 'kota_tujuan', 'unit_type']).cumcount() + 1
-                        
-                            col_a, col_b = st.columns(2)
-                            upl_sk = col_a.file_uploader("Upload Template SK", type="docx", key="upl_sk")
-                            no_sk = col_b.text_input("Nomor Surat SK:", "", key="no_sk")
-                        
-                            if st.button("📄 Generate File SK", type="primary"):
-                                tpl_sk = "template_sk.docx"
-                                if upl_sk: tpl_sk = upl_sk
-                                elif not os.path.exists(tpl_sk): st.error("Template SK tidak ditemukan."); st.stop()
+                            df_final_sk = df_sk_top3[df_sk_top3['origin'].isin(sel_orgs)].copy()
+                            no_sk = st.text_input("Nomor Surat SK:", value="", placeholder="Contoh: 001/SK-PROC/TACO/III/2026", key="no_sk")
                             
-                                try:
-                                    f_sk = create_docx_sk(tpl_sk, no_sk, sk_val, sk_load, df_final_sk)
-                                    fn_sk = f"SK_{sk_load}_{sk_val}.docx"
-                                    with open(f_sk, "rb") as f:
-                                        st.download_button("⬇️ Download SK", f, file_name=fn_sk)
-                                        os.remove(f_sk)
-                                except Exception as e: st.error(f"Gagal: {e}")
-                        else: st.warning("Pilih minimal 1 origin.")
-                    else: st.warning("Data tidak ditemukan.")
-    
+                            if st.button("📄 Generate File SK", type="primary", key="btn_execute_sk_gen"):
+                                import requests
+                                
+                                # Mapping URL Raw GitHub sesuai entitas yang dipilih
+                                GITHUB_BASE = "https://raw.githubusercontent.com/phibipi/taco-rfq-system/main/templates/"
+                                
+                                if sel_pt_sk == "PT Tangkas Cipta Optimal":
+                                    template_url_sk = GITHUB_BASE + "template_sk_tangkas.docx" 
+                                else:
+                                    template_url_sk = GITHUB_BASE + "template_sk_tac.docx" 
+                                
+                                with st.spinner(f"Mengunduh template SK {sel_pt_sk} dari GitHub..."):
+                                    try:
+                                        # Tembak URL Raw GitHub
+                                        response_sk = requests.get(template_url_sk)
+                                        if response_sk.status_code != 200:
+                                            st.error(f"Gagal mendownload template SK dari GitHub. Status Code: {response_sk.status_code}. Pastikan file template tujuan sudah di-push ke GitHub repo Anda.")
+                                            st.stop()
+                                            
+                                        # Ubah hantaran internet menjadi format file object memory (BytesIO)
+                                        tpl_sk_stream = io.BytesIO(response_sk.content)
+                                        
+                                        # --- RE-MAPPING LOGIKA MULTIDROP DAN BIAYA BURUH UNTUK SK ---
+                                        df_sk_merged = df_final_sk.copy()
+                                        df_sk_merged['inner_city_price'] = 0
+                                        df_sk_merged['outer_city_price'] = 0
+                                        df_sk_merged['labor_cost'] = 0
+                                        df_sk_merged['catatan_tambahan'] = '-'
+                
+                                        if not df_md.empty:
+                                            try:
+                                                df_md_clean = df_md.copy()
+                                                df_md_clean['vendor_email_clean'] = df_md_clean['vendor_email'].astype(str).str.strip().str.lower()
+                                                df_md_clean['validity_norm'] = df_md_clean['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
+                                                df_md_clean['group_id_clean'] = df_md_clean['group_id'].astype(str).str.upper().str.strip()
+                
+                                                md_dict_sk = {}
+                                                for _, rmd in df_md_clean.iterrows():
+                                                    id_md_raw = str(rmd.get('id_multidrop', '')).strip()
+                                                    
+                                                    # Ambil karakter terakhir penentu round secara aman
+                                                    md_rnd_check = id_md_raw[-1] if id_md_raw else '1'
+                                                    
+                                                    if rmd['validity_norm'] == clean_sk_val and str(md_rnd_check) == str(sel_sk_round):
+                                                        # Key gabungan unik: vendor_email + group_id
+                                                        k_key = f"{rmd['vendor_email_clean']}_{rmd['group_id_clean']}"
+                                                        
+                                                        ic_val = str(rmd.get('inner_city_price', '0')).replace(",", "")
+                                                        oc_val = str(rmd.get('outer_city_price', '0')).replace(",", "")
+                                                        lc_val = str(rmd.get('labor_cost', '0')).replace(",", "")
+                                                        
+                                                        md_dict_sk[k_key] = {
+                                                            'in': pd.to_numeric(ic_val, errors='coerce') or 0,
+                                                            'out': pd.to_numeric(oc_val, errors='coerce') or 0,
+                                                            'lab': pd.to_numeric(lc_val, errors='coerce') or 0,
+                                                            'note': str(rmd.get('catatan_tambahan', '-'))
+                                                        }
+                
+                                                def merge_md_to_sk(row, kind):
+                                                    v_email = str(row['vendor_email']).strip().lower()
+                                                    r_gid = str(row['group_id']).strip().upper()
+                                                    lookup_key = f"{v_email}_{r_gid}"
+                                                    
+                                                    res = md_dict_sk.get(lookup_key, {'in': 0, 'out': 0, 'lab': 0, 'note': '-'})
+                                                    return res[kind]
+                
+                                                df_sk_merged['inner_city_price'] = df_sk_merged.apply(lambda x: merge_md_to_sk(x, 'in'), axis=1)
+                                                df_sk_merged['outer_city_price'] = df_sk_merged.apply(lambda x: merge_md_to_sk(x, 'out'), axis=1)
+                                                df_sk_merged['labor_cost'] = df_sk_merged.apply(lambda x: merge_md_to_sk(x, 'lab'), axis=1)
+                                                df_sk_merged['catatan_tambahan'] = df_sk_merged.apply(lambda x: merge_md_to_sk(x, 'note'), axis=1)
+                                            except Exception as ex_md_sk:
+                                                pass
+                
+                                        # Generate File SK menggunakan fungsi docxtpl bawaan
+                                        f_sk_out = create_docx_sk(tpl_sk_stream, no_sk, sk_val, sk_load, df_sk_merged)
+                                        
+                                        # Formatting nama file download agar rapi
+                                        safe_val_sk = str(sk_val).replace(" - ", "-").replace(" ", "_")
+                                        safe_pt_name = "Tangkas" if sel_pt_sk == "PT Tangkas Cipta Optimal" else "TAC"
+                                        custom_filename_sk = f"SK_{safe_pt_name}_Tahap{sel_sk_round}_{sk_load}_{safe_val_sk}.docx"
+                                        
+                                        with open(f_sk_out, "rb") as f:
+                                            st.download_button("⬇️ Download File SK Word", f, file_name=custom_filename_sk, type="primary", use_container_width=True)
+                                        os.remove(f_sk_out)
+                                    except Exception as e:
+                                        st.error(f"Gagal memproses file Word SK: {e}")
+                        else:
+                            st.warning("Pilih minimal 1 origin area.")
+                    else:
+                        st.warning("Tidak ditemukan data penawaran harga kompetitor yang aktif untuk kriteria filter ini.")    
                 st.write("") # Jarak
 
             # ==========================================
@@ -2602,60 +2620,60 @@ def admin_dashboard():
                                         alamat_str_combined = "\n".join(alamat_list)
 
                                         
-                                        # --- RE-MAPPING LOGIKA MULTIDROP DAN BIAYA BURUH ---
-                                        # ▼ FIX SAKLEK NUKLIR: PAKSA BACA UNDERSCORE PALING KANAN DARI ID MULTIDROP BIAR GA ANGKA 0 ▼
+                                        # --- RE-MAPPING LOGIKA MULTIDROP DAN BIAYA BURUH UNTUK DOKUMEN WORD SPK ---
                                         df_spk_merged = df_final_spk.copy()
                                         df_spk_merged['inner_city_price'] = 0
                                         df_spk_merged['outer_city_price'] = 0
                                         df_spk_merged['labor_cost'] = 0
-
+                                        
                                         if not df_md.empty:
                                             try:
-                                                # 1. Normalisasi database multidrop (Huruf kecil & rapat tanpa spasi)
                                                 df_md_clean = df_md.copy()
                                                 df_md_clean['vendor_email_clean'] = df_md_clean['vendor_email'].astype(str).str.strip().str.lower()
-                                                df_md_clean['validity_clean'] = df_md_clean['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
-                                                df_md_clean['group_id_clean'] = df_md_clean['group_id'].astype(str).str.strip()
-
-                                                # 2. Ambil email dan periode dari rute SPK aktif saat ini
+                                                # Normalisasi karakter pemisah strip/spasi periode
+                                                df_md_clean['validity_norm'] = df_md_clean['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
+                                                df_md_clean['group_id_clean'] = df_md_clean['group_id'].astype(str).str.upper().str.strip()
+                                        
                                                 clean_vendor_email = str(df_final_spk.iloc[0]['vendor_email']).strip().lower()
-                                                clean_validity = str(spk_val).strip()
-
-                                                # 3. Kumpulkan data ke dictionary map
+                                                clean_validity_spk = str(spk_val).replace(" ", "").replace("-","").lower().strip()
+                                        
                                                 md_dict = {}
                                                 for _, rmd in df_md_clean.iterrows():
                                                     id_md_raw = str(rmd.get('id_multidrop', '')).strip()
                                                     
-                                                    # 🔥 LOGIKA REQUEST LU: Pecah and ambil angka ronde dari underscore paling kanan ID!
-                                                    if '_' in id_md_raw:
-                                                        md_rnd_check = id_md_raw.split('_')[-1]
+                                                    # AMBIL KARAKTER TERAKHIR SECARA AMAN (Mengantisipasi email memiliki banyak underscore)
+                                                    if id_md_raw:
+                                                        md_rnd_check = id_md_raw[-1] 
                                                     else:
                                                         md_rnd_check = '1'
                                                         
-                                                    # Filter mutlak: Hanya masukkan jika Vendor, Periode, AND Rondenya COCOK SAKLEK!
                                                     if (rmd['vendor_email_clean'] == clean_vendor_email and 
-                                                        str(rmd['validity']).strip() == clean_validity and 
+                                                        rmd['validity_norm'] == clean_validity_spk and 
                                                         str(md_rnd_check) == str(sel_spk_round)):
                                                         
                                                         k_gid = rmd['group_id_clean']
+                                                        
+                                                        # Bersihkan data uang dari string koma bawaan gspread
+                                                        ic_val = str(rmd.get('inner_city_price', '0')).replace(",", "")
+                                                        oc_val = str(rmd.get('outer_city_price', '0')).replace(",", "")
+                                                        lc_val = str(rmd.get('labor_cost', '0')).replace(",", "")
+                                                        
                                                         md_dict[k_gid] = {
-                                                            'in': rmd.get('inner_city_price', 0),
-                                                            'out': rmd.get('outer_city_price', 0),
-                                                            'lab': rmd.get('labor_cost', 0)
+                                                            'in': pd.to_numeric(ic_val, errors='coerce') or 0,
+                                                            'out': pd.to_numeric(oc_val, errors='coerce') or 0,
+                                                            'lab': pd.to_numeric(lc_val, errors='coerce') or 0
                                                         }
-
+                                        
                                                 def get_md_val(row, kind):
-                                                    r_gid = str(row['group_id']).strip()
+                                                    r_gid = str(row['group_id']).strip().upper()
                                                     res = md_dict.get(r_gid, {'in': 0, 'out': 0, 'lab': 0})
                                                     return res[kind]
-
-                                                # 4. Suntik balik nominal aslinya ke dalam dataframe utama SPK Word
+                                        
                                                 df_spk_merged['inner_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'in'), axis=1)
                                                 df_spk_merged['outer_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'out'), axis=1)
                                                 df_spk_merged['labor_cost'] = df_spk_merged.apply(lambda x: get_md_val(x, 'lab'), axis=1)
                                             except Exception as ex_md:
-                                                pass
-
+                                                st.error(f"Gagal memproses data biaya tambahan: {ex_md}")
                                         # Generate File SPK Word via docxtpl
                                         f_spk = create_docx_spk(tpl_spk_stream, no_spk, spk_val, spk_load, sel_ven, pic, final_pass, origin_str_combined, alamat_str_combined, df_spk_merged)
                                         
