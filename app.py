@@ -1718,7 +1718,6 @@ def admin_dashboard():
         
 # --- TAB 1: SUBMIT MONITOR (UPDATE: STATS & SEARCH BAR) ---
         with tabs[0]:
-                        
             if not df_acc.empty and not df_g.empty:
                 # Merge Access dengan Group untuk tahu origin, route_group & load type
                 acc_merge = pd.merge(df_acc, df_g[['group_id', 'origin', 'route_group', 'load_type']], on='group_id', how='left')
@@ -1736,8 +1735,7 @@ def admin_dashboard():
                     (acc_merge['round'] == sel_sm_rnd)
                 ].drop_duplicates(subset=['vendor_email', 'route_group'])
                 
-                # Ambil Data yg sudah disubmit (dari df_master)
-                # ▼ POINTER FIX 1: PAKSA SINKRON RONDE JADI INT & STRIP VALIDITY MONITOR ▼
+                # Ambil Data yg sudah disubmit (dari df_master) dengan normalisasi clean spasi
                 sub_master = pd.DataFrame()
                 if not df_master.empty:
                     df_m_mon = df_master.copy()
@@ -1753,13 +1751,21 @@ def admin_dashboard():
                     ]
                 
                 if not acc_target.empty:
+                    # 🎯 KUNCI SUCI 1: Tarik database log bypass dari Sheets biar monitor tahu rute mana yang diputihkan
+                    df_bp = get_data("Bypass_Monitor")
+                    list_bypassed_keys = []
+                    if not df_bp.empty:
+                        df_bp['bp_key'] = df_bp['vendor_email'].astype(str).str.strip().str.lower() + "_" + \
+                                          df_bp['validity'].astype(str).str.replace(" ", "").str.lower().str.strip() + "_" + \
+                                          df_bp['round'].astype(str).str.strip()
+                        list_bypassed_keys = df_bp['bp_key'].tolist()
+
                     # --- 1. TAHAP PRE-CALCULATION & PENGUMPULAN DATA ---
                     vendor_data_list = []
                     
-                    # Variabel untuk Statistik
                     total_vendors = 0
-                    completed_vendors = 0  # Untuk yang selesai FULL
-                    started_vendors = 0    # Untuk yang sudah mulai (Minimal 1)
+                    completed_vendors = 0  
+                    started_vendors = 0    
                     total_groups_assigned = 0
                     total_groups_filled = 0
                     
@@ -1774,17 +1780,25 @@ def admin_dashboard():
                         if not sub_master.empty:
                             submitted_groups = sub_master[sub_master['vendor_email'] == vendor]['route_group'].dropna().unique().tolist()
                         
-                        pending_groups = [grp for grp in assigned_groups if grp not in submitted_groups]
+                        # Hitung sisa grup rute asli (sebelum dipotong filter bypass)
                         filled_groups = [grp for grp in assigned_groups if grp in submitted_groups]
+                        raw_pending_groups = [grp for grp in assigned_groups if grp not in submitted_groups]
                         
-                        # Hitung Statistik Global
+                        # 🎯 KUNCI SUCI 2: KONSEP BYPASS IDAMAN VAL! 
+                        # Cek apakah kombinasi Vendor + Periode + Round ini sudah pernah di-bypass Admin
+                        current_check_key = f"{str(vendor).strip().lower()}_{str(sel_sm_val).replace(' ','').lower().strip()}_{str(sel_sm_rnd).strip()}"
+                        
+                        if current_check_key in list_bypassed_keys:
+                            # Jika sudah dibypass, paksa sisa antrean menjadi KOSONG (Biar auto-Hijau Lengkap)
+                            pending_groups = []
+                        else:
+                            # Jika belum dibypass, daftarkan antrean normal yang belum diisi
+                            pending_groups = raw_pending_groups
+                        
+                        # Hitung Kalkulasi Statistik Lapangan
                         total_vendors += 1
-                        
-                        # Jika selesai FULL
                         if len(pending_groups) == 0 and len(assigned_groups) > 0:
                             completed_vendors += 1
-                            
-                        # Jika sudah mengisi MINIMAL 1
                         if len(filled_groups) > 0:
                             started_vendors += 1
                             
@@ -1797,38 +1811,37 @@ def admin_dashboard():
                             'assigned_groups': assigned_groups,
                             'submitted_groups': submitted_groups,
                             'pending_groups': pending_groups,
+                            'raw_pending_groups': raw_pending_groups,
                             'origins': assigned_origins
                         })
                     
-                    # Sort berdasarkan Alfabet Nama Vendor
+                    # Urutkan nama vendor sesuai alfabet biar rapi and cantik
                     vendor_data_list.sort(key=lambda x: str(x['name']).strip().lower())
                     
-                    # --- 2. TAMPILKAN UI STATISTIK ---
+                    # --- 2. TAMPILKAN MATRIKS CARD STATISTIK DI ATAS ---
                     st.divider()
                     col_stat1, col_stat2, col_stat3 = st.columns(3)
                     with col_stat1:
-                        st.info(f"🏆 **Selesai (Full):** {completed_vendors} / {total_vendors} Vendor")
+                        st.info(f"🏆 **Selesai / Pemutihan:** {completed_vendors} / {total_vendors} Vendor")
                     with col_stat2:
-                        st.info(f"🏃 **Sudah Isi (Min. 1):** {started_vendors} / {total_vendors} Vendor")
+                        st.info(f"🏃 **Sudah Mulai Mengisi:** {started_vendors} / {total_vendors} Vendor")
                     with col_stat3:
-                        st.info(f"📝 **Grup Rute Terisi:** {total_groups_filled} / {total_groups_assigned} Grup")
+                        st.info(f"📝 **Grup Rute Sukses Terisi:** {total_groups_filled} / {total_groups_assigned} Grup")
                     
-                    # --- 3. TAMPILKAN SEARCH BAR ---
-                    search_query = st.text_input("🔍 Cari berdasarkan Nama Vendor atau Origin (Area)...", placeholder="Contoh: Logistik atau Jakarta").strip().lower()
+                    # --- 3. SEARCH BAR MONITORING ---
+                    search_query = st.text_input("🔍 Cari berdasarkan Nama Vendor atau Origin (Area)...", placeholder="Contoh: Logistik atau Jakarta", key="sm_search_bar_input").strip().lower()
                     st.write("")
                     
-                    # --- 4. FILTER & RENDER LIST VENDOR ---
+                    # --- 4. RENDER COLLAPSE EXPANDER VENDOR ---
                     filtered_vendors = []
                     for v in vendor_data_list:
-                        # Logika Pencarian: Cocokkan dengan Nama ATAU salah satu Origin-nya
                         match_name = search_query in str(v['name']).lower()
                         match_origin = any(search_query in str(org).lower() for org in v['origins'])
-                        
                         if search_query == "" or match_name or match_origin:
                             filtered_vendors.append(v)
                             
                     if not filtered_vendors:
-                        st.warning("Tidak ada vendor atau origin yang cocok dengan pencarian.")
+                        st.warning("Tidak ada nama vendor atau nama area origin yang cocok dengan pencarian.")
                     else:
                         for v in filtered_vendors:
                             v_name = v['name']
@@ -1836,20 +1849,17 @@ def admin_dashboard():
                             assigned_groups = v['assigned_groups']
                             submitted_groups = v['submitted_groups']
                             pending_groups = v['pending_groups']
+                            raw_pending_groups = v['raw_pending_groups']
                             
                             total_g = len(assigned_groups)
-                            done_g = total_g - len(pending_groups)
                             
+                            # Judul otomatis dinamis membaca sisa pending groups hasil kalkulasi bypass lo!
                             if len(pending_groups) > 0:
-                                header_text = f"⚠️ {v_name} — (Selesai: {done_g}/{total_g})"
-                                is_expanded = False 
+                                header_text = f"⚠️ {v_name} — (Selesai: {total_g - len(pending_groups)}/{total_g})"
                             else:
                                 header_text = f"✅ {v_name} — (Lengkap: {total_g}/{total_g})"
-                                is_expanded = False 
                                 
-                            # --- BUAT UI COLLAPSE ---
-                            with st.expander(header_text, expanded=is_expanded):
-                                # (Optional Info) Tampilkan origin apa saja yg dipegang vendor ini
+                            with st.expander(header_text, expanded=False):
                                 st.caption(f"📍 Area: {', '.join(v['origins'])}")
                                 
                                 c_h1, c_h2 = st.columns([4, 2])
@@ -1858,6 +1868,10 @@ def admin_dashboard():
                                 st.divider()
                                 
                                 for grp in assigned_groups:
+                                    # 🎯 KUNCI SUCI 3: Sesuai request lo, kalau rute ini belum diisi tapi statusnya sudah di-bypass, LENYAPKAN BARISNYA DARI LAYAR!
+                                    if grp in raw_pending_groups and len(pending_groups) == 0:
+                                        continue # Langsung skip, line baris merah otomatis hilang!
+                                        
                                     c_r1, c_r2 = st.columns([4, 2])
                                     c_r1.write(f"{grp}")
                                     if grp in submitted_groups: 
@@ -1866,50 +1880,40 @@ def admin_dashboard():
                                         c_r2.markdown('<span class="status-pending">❌ Belum Ada Data</span>', unsafe_allow_html=True)
                                     st.markdown("<hr style='margin: 0.5em 0;'>", unsafe_allow_html=True)
                                 
-                                if pending_groups:
-                                    st.write("") # Memberi sedikit jarak
+                                # Jika vendor ini belum lengkap murni di sistem, sediakan panel pengingat and tombol bypass
+                                if raw_pending_groups and len(pending_groups) > 0:
+                                    st.write("")
                                     c_btn1, c_btn2 = st.columns(2)
                                     
-                                    # --- TOMBOL EMAIL ---
                                     with c_btn1:
                                         if st.button(f"📨 Kirim Email", key=f"remind_{vendor_email}_{sel_sm_rnd}", type="primary", use_container_width=True):
                                             with st.spinner(f"Mengirim email ke {v_name}..."):
                                                 vendor_pw = "Hubungi Admin"
                                                 if not df_u[df_u['email']==vendor_email].empty:
                                                     vendor_pw = df_u[df_u['email']==vendor_email].iloc[0]['password']
-                                                    
-                                                res = send_reminder_email(vendor_email, v_name, sel_sm_lt, sel_sm_val, sel_sm_rnd, pending_groups, vendor_pw)
+                                                res = send_reminder_email(vendor_email, v_name, sel_sm_lt, sel_sm_val, sel_sm_rnd, raw_pending_groups, vendor_pw)
                                                 if res: st.success("Email terkirim!")
                                                 else: st.error("Gagal mengirim email.")
                                     
-                                    # --- TOMBOL WHATSAPP ---
                                     with c_btn2:
                                         vendor_phone = ""
-                                        # Cari nomor HP dari tabel Vendor Profile
                                         if not df_prof.empty:
                                             prof_subset = df_prof[df_prof['email'] == vendor_email]
                                             if not prof_subset.empty:
                                                 vendor_phone = str(prof_subset.iloc[0].get('phone', '')).strip()
                                         
-                                        # Jika nomor HP ada dan valid
                                         if vendor_phone and vendor_phone != "-" and vendor_phone.lower() != "nan":
-                                            # Ubah awalan "08" menjadi "628" sesuai standar API WA
                                             if vendor_phone.startswith("0"):
                                                 vendor_phone = "62" + vendor_phone[1:]
-                                            
-                                            # Siapkan teks draf WA
-                                            pending_str = ", ".join([str(g) for g in pending_groups])
+                                            pending_str = ", ".join([str(g) for g in raw_pending_groups])
                                             wa_text = f"Halo *{v_name}*,\n\nKami dari TACO Group ingin mengingatkan bahwa Anda *belum menyelesaikan* pengisian harga Tender {sel_sm_lt} ({sel_sm_val}) Tahap {sel_sm_rnd} untuk area:\n\n📌 {pending_str}\n\nMohon segera melengkapi penawaran Anda di sistem.\nLink: https://taco-transport.streamlit.app/\n\n*BATAS PENGISIAN: RABU, 11 MARET 2026*\nJika tidak dilakukan pengisian, kami akan anggap dari {v_name} *TIDAK* akan mengikuti tender rute tersebut dan *TIDAK* dapat menyusul.\n\nTerima Kasih."
-                                            
-                                            # Encode teks agar aman di URL
                                             wa_text_encoded = urllib.parse.quote(wa_text)
                                             wa_url = f"https://wa.me/{vendor_phone}?text={wa_text_encoded}"
-                                            
-                                            # Render tombol hijau ala WhatsApp
                                             st.markdown(f'<a href="{wa_url}" target="_blank" style="background-color:#25D366; color:white; padding:10px 16px; border-radius:8px; text-decoration:none; font-weight:bold; display:inline-block; text-align:center; width:100%; border: 1px solid #1eaa50; box-shadow: 0 2px 4px rgba(37, 211, 102, 0.2);">💬 Kirim WA</a>', unsafe_allow_html=True)
                                         else:
-                                            # Render tombol abu-abu jika nomor tidak ada
                                             st.markdown(f'<div style="background-color:#E5E7EB; color:#6B7280; padding:10px 16px; border-radius:8px; text-decoration:none; font-weight:bold; display:inline-block; text-align:center; width:100%; cursor:not-allowed; border: 1px solid #D1D5DB;">❌ No WA Tidak Ada</div>', unsafe_allow_html=True)
+                                    
+                                    # 🎴 TOMBOL SAKTI BYPASS KONSEPTUAL PILIHAN VAL
                                     st.write("")
                                     if st.button(f"🔒 Set Selesai Manual (Bypass Rute)", key=f"bypass_{vendor_email}_{sel_sm_rnd}", use_container_width=True, type="secondary"):
                                         with st.spinner("Memproses bypass status vendor..."):
