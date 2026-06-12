@@ -1831,7 +1831,7 @@ def admin_dashboard():
                     st.divider()
                     col_stat1, col_stat2, col_stat3 = st.columns(3)
                     with col_stat1:
-                        st.info(f"🏆 **Selesai / Pemutihan:** {completed_vendors} / {total_vendors} Vendor")
+                        st.info(f"🏆 **Selesai** {completed_vendors} / {total_vendors} Vendor")
                     with col_stat2:
                         st.info(f"🏃 **Sudah Mulai Mengisi:** {started_vendors} / {total_vendors} Vendor")
                     with col_stat3:
