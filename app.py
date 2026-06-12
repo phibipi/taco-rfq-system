@@ -1923,7 +1923,7 @@ def admin_dashboard():
                                             st.markdown(f'<div style="background-color:#E5E7EB; color:#6B7280; padding:10px 16px; border-radius:8px; text-decoration:none; font-weight:bold; display:inline-block; text-align:center; width:100%; cursor:not-allowed; border: 1px solid #D1D5DB;">❌ No WA Tidak Ada</div>', unsafe_allow_html=True)
                                     
                                     st.write("")
-                                    if st.button(f"🔒 Set Selesai Manual (Bypass Rute)", key=f"bypass_{vendor_email}_{sel_sm_rnd}", use_container_width=True, type="secondary"):
+                                    if st.button(f"🔒 Set Selesai Manual", key=f"bypass_{vendor_email}_{sel_sm_rnd}", use_container_width=True, type="secondary"):
                                         with st.spinner("Memproses bypass status vendor..."):
                                             id_bp = f"BP_{vendor_email}_{str(sel_sm_val).replace(' ','')}_{sel_sm_rnd}"
                                             res_bp = save_data("Bypass_Monitor", [[id_bp, vendor_email, sel_sm_val, sel_sm_rnd, "Bypassed", datetime.now().strftime("%Y-%m-%d %H:%M:%S")]])
