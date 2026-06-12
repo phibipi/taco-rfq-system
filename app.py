@@ -1728,7 +1728,7 @@ def admin_dashboard():
                 sel_sm_val = c2.selectbox("Filter Periode", acc_merge['validity'].dropna().unique().tolist())
                 sel_sm_rnd = c3.selectbox("Filter Tahap", sorted(acc_merge['round'].dropna().unique().tolist()))
                 
-                # Filter Data Target (Unik berdasarkan Vendor dan Route Group)
+                # Filter Data Target (Unik berdasarkan Vendor dan Route Group murni)
                 acc_target = acc_merge[
                     (acc_merge['load_type'] == sel_sm_lt) & 
                     (acc_merge['validity'] == sel_sm_val) & 
@@ -1751,7 +1751,7 @@ def admin_dashboard():
                     ]
                 
                 if not acc_target.empty:
-                    # 🎯 KUNCI SUCI 1: Tarik database log bypass dari Sheets biar monitor tahu rute mana yang diputihkan
+                    # Tarik database log bypass dari Sheets biar monitor tahu rute mana yang diputihkan
                     df_bp = get_data("Bypass_Monitor")
                     list_bypassed_keys = []
                     if not df_bp.empty:
@@ -1773,29 +1773,29 @@ def admin_dashboard():
                         v_name = df_u[df_u['email']==vendor]['vendor_name'].iloc[0] if not df_u[df_u['email']==vendor].empty else vendor
                         
                         v_acc_subset = acc_target[acc_target['vendor_email'] == vendor]
-                        assigned_groups = sorted(v_acc_subset['route_group'].dropna().tolist())
-                        assigned_origins = v_acc_subset['origin'].dropna().unique().tolist()
+                        
+                        # 🔒 KUNCI UTAMA: Paksa semua data rute group menjadi SET UNIK murni (Anti-Duplikat Armada)
+                        assigned_groups = sorted(list(set(v_acc_subset['route_group'].dropna().tolist())))
+                        assigned_origins = sorted(list(set(v_acc_subset['origin'].dropna().tolist())))
                         
                         submitted_groups = []
                         if not sub_master.empty:
-                            submitted_groups = sub_master[sub_master['vendor_email'] == vendor]['route_group'].dropna().unique().tolist()
+                            raw_sub = sub_master[sub_master['vendor_email'] == vendor]['route_group'].dropna().tolist()
+                            submitted_groups = sorted(list(set(raw_sub))) # Paksa unik
                         
-                        # Hitung sisa grup rute asli (sebelum dipotong filter bypass)
+                        # Hitung sisa grup rute menggunakan basis data unik group
                         filled_groups = [grp for grp in assigned_groups if grp in submitted_groups]
                         raw_pending_groups = [grp for grp in assigned_groups if grp not in submitted_groups]
                         
-                        # 🎯 KUNCI SUCI 2: KONSEP BYPASS IDAMAN VAL! 
-                        # Cek apakah kombinasi Vendor + Periode + Round ini sudah pernah di-bypass Admin
+                        # Cek status bypass penawaran selesai manual
                         current_check_key = f"{str(vendor).strip().lower()}_{str(sel_sm_val).replace(' ','').lower().strip()}_{str(sel_sm_rnd).strip()}"
                         
                         if current_check_key in list_bypassed_keys:
-                            # Jika sudah dibypass, paksa sisa antrean menjadi KOSONG (Biar auto-Hijau Lengkap)
                             pending_groups = []
                         else:
-                            # Jika belum dibypass, daftarkan antrean normal yang belum diisi
                             pending_groups = raw_pending_groups
                         
-                        # Hitung Kalkulasi Statistik Lapangan
+                        # Hitung Kalkulasi Statistik Lapangan Global
                         total_vendors += 1
                         if len(pending_groups) == 0 and len(assigned_groups) > 0:
                             completed_vendors += 1
@@ -1815,10 +1815,10 @@ def admin_dashboard():
                             'origins': assigned_origins
                         })
                     
-                    # Urutkan nama vendor sesuai alfabet biar rapi and cantik
+                    # Urutkan nama vendor sesuai alfabet biar rapi
                     vendor_data_list.sort(key=lambda x: str(x['name']).strip().lower())
                     
-                    # --- 2. TAMPILKAN MATRIKS CARD STATISTIK DI ATAS ---
+                    # --- 2. TAMPILKAN MATRIKS CARD STATISTIK ---
                     st.divider()
                     col_stat1, col_stat2, col_stat3 = st.columns(3)
                     with col_stat1:
@@ -1851,13 +1851,9 @@ def admin_dashboard():
                             pending_groups = v['pending_groups']
                             raw_pending_groups = v['raw_pending_groups']
                             
+                            # 💎 SINKRONISASI MUTLAK: Hitung murni berbasis set nama group rute unik lo honey
                             total_g_unik = len(assigned_groups)
-                            
-                            # 2. Hitung berapa group unik yang BELUM diisi murni (setelah dipotong efek bypass suci lo)
-                            # Kita ambil daftar group unik pending yang murni belum terisi murni di layar
                             pending_g_unik = len(pending_groups)
-                            
-                            # 3. Hitung berapa group yang sudah sukses terisi
                             done_g_unik = total_g_unik - pending_g_unik
                             
                             if pending_g_unik > 0:
@@ -1874,9 +1870,9 @@ def admin_dashboard():
                                 st.divider()
                                 
                                 for grp in assigned_groups:
-                                    # 🎯 KUNCI SUCI 3: Sesuai request lo, kalau rute ini belum diisi tapi statusnya sudah di-bypass, LENYAPKAN BARISNYA DARI LAYAR!
+                                    # Jika rute ini belum diisi tapi statusnya sudah di-bypass admin, hilangkan line rutenya!
                                     if grp in raw_pending_groups and len(pending_groups) == 0:
-                                        continue # Langsung skip, line baris merah otomatis hilang!
+                                        continue 
                                         
                                     c_r1, c_r2 = st.columns([4, 2])
                                     c_r1.write(f"{grp}")
@@ -1886,7 +1882,7 @@ def admin_dashboard():
                                         c_r2.markdown('<span class="status-pending">❌ Belum Ada Data</span>', unsafe_allow_html=True)
                                     st.markdown("<hr style='margin: 0.5em 0;'>", unsafe_allow_html=True)
                                 
-                                # Jika vendor ini belum lengkap murni di sistem, sediakan panel pengingat and tombol bypass
+                                # Panel aksi bawah expander
                                 if raw_pending_groups and len(pending_groups) > 0:
                                     st.write("")
                                     c_btn1, c_btn2 = st.columns(2)
@@ -1919,7 +1915,6 @@ def admin_dashboard():
                                         else:
                                             st.markdown(f'<div style="background-color:#E5E7EB; color:#6B7280; padding:10px 16px; border-radius:8px; text-decoration:none; font-weight:bold; display:inline-block; text-align:center; width:100%; cursor:not-allowed; border: 1px solid #D1D5DB;">❌ No WA Tidak Ada</div>', unsafe_allow_html=True)
                                     
-                                    # 🎴 TOMBOL SAKTI BYPASS KONSEPTUAL PILIHAN VAL
                                     st.write("")
                                     if st.button(f"🔒 Set Selesai Manual (Bypass Rute)", key=f"bypass_{vendor_email}_{sel_sm_rnd}", use_container_width=True, type="secondary"):
                                         with st.spinner("Memproses bypass status vendor..."):
