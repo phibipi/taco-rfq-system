@@ -1774,14 +1774,14 @@ def admin_dashboard():
                         
                         v_acc_subset = acc_target[acc_target['vendor_email'] == vendor]
                         
-                        # 🔒 KUNCI UTAMA 1: Paksa semua data rute group menjadi SET UNIK murni sejak awal loop
+                        # 🔒 KUNCI MUTLAK 1: Hancurkan duplikasi armada di level array group sejak dari akar loop honey
                         assigned_groups = sorted(list(set(v_acc_subset['route_group'].dropna().tolist())))
                         assigned_origins = sorted(list(set(v_acc_subset['origin'].dropna().tolist())))
                         
                         submitted_groups = []
                         if not sub_master.empty:
                             raw_sub = sub_master[sub_master['vendor_email'] == vendor]['route_group'].dropna().tolist()
-                            submitted_groups = sorted(list(set(raw_sub))) # Paksa unik
+                            submitted_groups = sorted(list(set(raw_sub))) # Paksa unik group
                         
                         # Hitung sisa grup rute menggunakan basis data unik group rute murni
                         filled_groups = [grp for grp in assigned_groups if grp in submitted_groups]
@@ -1795,7 +1795,7 @@ def admin_dashboard():
                         else:
                             pending_groups = raw_pending_groups
                         
-                        # Hitung Kalkulasi Statistik Lapangan Global Berbasis Group Unik
+                        # Hitung Kalkulasi Statistik Lapangan Global Berbasis Group Unik (Biar Card Atasnya Ikutan Sinkron 3/3)
                         total_vendors += 1
                         if len(pending_groups) == 0 and len(assigned_groups) > 0:
                             completed_vendors += 1
@@ -1805,6 +1805,7 @@ def admin_dashboard():
                         total_groups_assigned += len(assigned_groups)
                         total_groups_filled += len(filled_groups)
                         
+                        # Masukkan data bersih ke array display monitor admin
                         vendor_data_list.append({
                             'email': vendor,
                             'name': v_name,
@@ -1819,7 +1820,7 @@ def admin_dashboard():
                     # Urutkan nama vendor sesuai alfabet biar rapi
                     vendor_data_list.sort(key=lambda x: str(x['name']).strip().lower())
                     
-                    # --- 2. TAMPILKAN MATRIKS CARD STATISTIK ---
+                    # --- 2. TAMPILKAN MATRIKS CARD STATISTIK DI ATAS ---
                     st.divider()
                     col_stat1, col_stat2, col_stat3 = st.columns(3)
                     with col_stat1:
@@ -1853,12 +1854,12 @@ def admin_dashboard():
                             raw_pending_groups = v['raw_pending_groups']
                             current_check_key = v['current_check_key']
                             
-                            # 💎 KUNCI UTAMA 2: Hitung murni berbasis total group unik rute, paksa jadi 3/3 saklek!
+                            # 🔒 KUNCI SAKLEK DETECTED: Hitung mutlak berdasarkan jumlah element di dalam list group unik lo honey
                             total_g_unik = len(assigned_groups)
                             pending_g_unik = len(pending_groups)
                             done_g_unik = total_g_unik - pending_g_unik
                             
-                            # Jika group unik yang pending bernilai 0, langsung ubah jadi Ceklis Hijau Lengkap!
+                            # Jika rute group yang pending bernilai 0, langsung paksa statusnya ganti Ceklis Hijau Lengkap 3/3!
                             if pending_g_unik == 0:
                                 header_text = f"✅ {v_name} — (Lengkap: {total_g_unik}/{total_g_unik})"
                             else:
@@ -1922,7 +1923,7 @@ def admin_dashboard():
                                     if st.button(f"🔒 Set Selesai Manual (Bypass Rute)", key=f"bypass_{vendor_email}_{sel_sm_rnd}", use_container_width=True, type="secondary"):
                                         with st.spinner("Memproses bypass status vendor..."):
                                             id_bp = f"BP_{vendor_email}_{str(sel_sm_val).replace(' ','')}_{sel_sm_rnd}"
-                                            res_bp = save_data("Bypass_Monitor", [[id_bp, vendor_email, sel_sm_val, sel_sm_rnd, "Bypassed", datetime.now().strftime("%Y-%m-%d %H:%M:%S")]])
+                                            res_bp = save_data("Bypass_Monitor", [[id_bp, vendor_email, sel_sm_val, res_sm_rnd, "Bypassed", datetime.now().strftime("%Y-%m-%d %H:%M:%S")]])
                                             if res_bp:
                                                 st.success(f"Berhasil! Status {v_name} sekarang dianggap selesai oleh sistem.")
                                                 st.cache_data.clear()
