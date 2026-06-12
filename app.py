@@ -1774,7 +1774,7 @@ def admin_dashboard():
                         
                         v_acc_subset = acc_target[acc_target['vendor_email'] == vendor]
                         
-                        # 🔒 KUNCI UTAMA: Paksa semua data rute group menjadi SET UNIK murni (Anti-Duplikat Armada)
+                        # 🔒 KUNCI UTAMA 1: Paksa semua data rute group menjadi SET UNIK murni sejak awal loop
                         assigned_groups = sorted(list(set(v_acc_subset['route_group'].dropna().tolist())))
                         assigned_origins = sorted(list(set(v_acc_subset['origin'].dropna().tolist())))
                         
@@ -1783,7 +1783,7 @@ def admin_dashboard():
                             raw_sub = sub_master[sub_master['vendor_email'] == vendor]['route_group'].dropna().tolist()
                             submitted_groups = sorted(list(set(raw_sub))) # Paksa unik
                         
-                        # Hitung sisa grup rute menggunakan basis data unik group
+                        # Hitung sisa grup rute menggunakan basis data unik group rute murni
                         filled_groups = [grp for grp in assigned_groups if grp in submitted_groups]
                         raw_pending_groups = [grp for grp in assigned_groups if grp not in submitted_groups]
                         
@@ -1795,7 +1795,7 @@ def admin_dashboard():
                         else:
                             pending_groups = raw_pending_groups
                         
-                        # Hitung Kalkulasi Statistik Lapangan Global
+                        # Hitung Kalkulasi Statistik Lapangan Global Berbasis Group Unik
                         total_vendors += 1
                         if len(pending_groups) == 0 and len(assigned_groups) > 0:
                             completed_vendors += 1
@@ -1812,7 +1812,8 @@ def admin_dashboard():
                             'submitted_groups': submitted_groups,
                             'pending_groups': pending_groups,
                             'raw_pending_groups': raw_pending_groups,
-                            'origins': assigned_origins
+                            'origins': assigned_origins,
+                            'current_check_key': current_check_key
                         })
                     
                     # Urutkan nama vendor sesuai alfabet biar rapi
@@ -1850,29 +1851,18 @@ def admin_dashboard():
                             submitted_groups = v['submitted_groups']
                             pending_groups = v['pending_groups']
                             raw_pending_groups = v['raw_pending_groups']
+                            current_check_key = v['current_check_key']
                             
-                            # 💎 SINKRONISASI MUTLAK: Hitung murni berbasis set nama group rute unik lo honey
-                            # ====================================================================================
-                            # 🎯 KUNCI AMNUR: PAKSA SINKRONISASI BERDASARKAN JUMLAH GROUP UNIK DI LAYAR EXPANDER
-                            # ====================================================================================
-                            # 1. Hitung total nama group unik murni yang ada di list assigned_groups
-                            total_g_unik = len(set(assigned_groups))
-                            
-                            # 2. Hitung sisa group yang belum diisi (jika belum di-bypass)
-                            if current_check_key in list_bypassed_keys:
-                                pending_g_unik = 0
-                            else:
-                                # Hitung berapa nama group unik yang masuk daftar raw_pending_groups
-                                pending_g_unik = len(set(raw_pending_groups))
-                            
-                            # 3. Hitung berapa group yang sudah sukses terisi
+                            # 💎 KUNCI UTAMA 2: Hitung murni berbasis total group unik rute, paksa jadi 3/3 saklek!
+                            total_g_unik = len(assigned_groups)
+                            pending_g_unik = len(pending_groups)
                             done_g_unik = total_g_unik - pending_g_unik
                             
-                            if pending_g_unik > 0:
-                                header_text = f"⚠️ {v_name} — (Selesai: {done_g_unik}/{total_g_unik})"
-                            else:
+                            # Jika group unik yang pending bernilai 0, langsung ubah jadi Ceklis Hijau Lengkap!
+                            if pending_g_unik == 0:
                                 header_text = f"✅ {v_name} — (Lengkap: {total_g_unik}/{total_g_unik})"
-                            
+                            else:
+                                header_text = f"⚠️ {v_name} — (Selesai: {done_g_unik}/{total_g_unik})"
                                 
                             with st.expander(header_text, expanded=False):
                                 st.caption(f"📍 Area: {', '.join(v['origins'])}")
