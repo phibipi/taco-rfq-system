@@ -2503,21 +2503,31 @@ def admin_dashboard():
                                                     try:
                                                         df_md_clean = df_md.copy()
                                                         df_md_clean['vendor_email_clean'] = df_md_clean['vendor_email'].astype(str).str.strip().str.lower()
-                                                        df_md_clean['validity_norm'] = df_md_clean['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
+                                                        
+                                                        # ✅ FIX BUG #2: Konsisten strip "-" seperti di SPK
+                                                        df_md_clean['validity_norm'] = df_md_clean['validity'].astype(str)\
+                                                            .str.replace(" ", "").str.replace("-", "").str.lower().str.strip()
+                                                        clean_sk_val_md = str(sk_val).replace(" ", "").replace("-", "").lower().strip()
+                                                        
                                                         df_md_clean['group_id_clean'] = df_md_clean['group_id'].astype(str).str.upper().str.strip()
                                                 
                                                         md_dict_sk = {}
                                                         for _, rmd in df_md_clean.iterrows():
                                                             id_md_raw = str(rmd.get('id_multidrop', '')).strip()
-                                                            md_rnd_check = id_md_raw[-1] if id_md_raw else '1'
                                                             
-                                                            if rmd['validity_norm'] == clean_sk_val and str(md_rnd_check) == str(sel_sk_round):
-                                                                k_key = f"{rmd['vendor_email_clean']}_{rmd['group_id_clean']}"
+                                                            # ✅ FIX BUG #3: Ambil round dari split "_", bukan karakter terakhir
+                                                            md_rnd_check = id_md_raw.split("_")[-1] if "_" in id_md_raw else '1'
+                                                
+                                                            # ✅ FIX BUG #1: Tambahkan filter validity_norm (dulu tanpa vendor filter)
+                                                            if (rmd['validity_norm'] == clean_sk_val_md and
+                                                                    str(md_rnd_check) == str(sel_sk_round)):
                                                                 
+                                                                k_key = f"{rmd['vendor_email_clean']}_{rmd['group_id_clean']}"
+                                                
                                                                 ic_val = str(rmd.get('inner_city_price', '0')).replace(",", "")
                                                                 oc_val = str(rmd.get('outer_city_price', '0')).replace(",", "")
                                                                 lc_val = str(rmd.get('labor_cost', '0')).replace(",", "")
-                                                                
+                                                
                                                                 md_dict_sk[k_key] = {
                                                                     'in': pd.to_numeric(ic_val, errors='coerce') or 0,
                                                                     'out': pd.to_numeric(oc_val, errors='coerce') or 0,
@@ -2525,16 +2535,18 @@ def admin_dashboard():
                                                                     'note': str(rmd.get('catatan_tambahan', '-'))
                                                                 }
                                                 
-                                                        # Pencarian menggunakan nama kolom group_id asli hasil mapping, bukan potong route_id
                                                         def merge_md_to_sk_fixed(row_sk):
                                                             v_email = str(row_sk['vendor_email']).strip().lower()
                                                             g_id = str(row_sk.get('group_id', row_sk['route_id'][:5])).strip().upper()
                                                             lookup_key = f"{v_email}_{g_id}"
                                                             return md_dict_sk.get(lookup_key, {'in': 0, 'out': 0, 'lab': 0})
                                                 
-                                                        df_sk_merged['inner_city_price'] = df_sk_merged.apply(lambda x: merge_md_to_sk_fixed(x)['in'], axis=1)
-                                                        df_sk_merged['outer_city_price'] = df_sk_merged.apply(lambda x: merge_md_to_sk_fixed(x)['out'], axis=1)
-                                                        df_sk_merged['labor_cost'] = df_sk_merged.apply(lambda x: merge_md_to_sk_fixed(x)['lab'], axis=1)
+                                                        df_sk_merged['inner_city_price'] = df_sk_merged.apply(
+                                                            lambda x: merge_md_to_sk_fixed(x)['in'], axis=1)
+                                                        df_sk_merged['outer_city_price'] = df_sk_merged.apply(
+                                                            lambda x: merge_md_to_sk_fixed(x)['out'], axis=1)
+                                                        df_sk_merged['labor_cost'] = df_sk_merged.apply(
+                                                            lambda x: merge_md_to_sk_fixed(x)['lab'], axis=1)
                                                     except Exception:
                                                         pass
                                                 
