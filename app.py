@@ -607,7 +607,7 @@ def send_rejection_email(to_email, vendor_name, load_type, validity, group_name,
     except Exception as e:
         return False
         
-# --- FUNGSI GENERATE WORD (OPTIMIZED: SUPER CEPAT & RAPI) ---
+# --- FUNGSI GENERATE WORD SK (UPDATED: 11 KOLOM DENGAN MULTIDROP & BURUH) ---
 def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     doc = DocxTemplate(template_file)
     
@@ -615,13 +615,11 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     unique_origins = sorted(df_data['origin'].unique())
     origin_list_str = ", ".join(unique_origins) 
 
-    # --- HELPER 1: SET LEBAR KOLOM (DIPANGGIL SEKALI SAJA NANTI) ---
+    # --- HELPER 1: SET LEBAR KOLOM ---
     def set_col_widths(table, widths):
         """Mengatur lebar kolom tabel dalam satuan Centimeter (Cm)"""
-        # Matikan autofit agar ukuran kolom patuh
         table.autofit = False 
         table.allow_autofit = False
-        
         for row in table.rows:
             for idx, width in enumerate(widths):
                 if idx < len(row.cells):
@@ -652,39 +650,40 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
         tblHeader.set(qn('w:val'), "true")
         trPr.append(tblHeader)
 
+    def fmt_val_rp(x):
+        try: return f"Rp {int(float(x)):,}".replace(",", ".") if float(x) > 0 else "-"
+        except: return "-"
+
     # --- BAGIAN A: TABEL HARGA ---
     sd = doc.new_subdoc()
     winning_vendors_data = [] 
     
     for org in unique_origins:
-        # Judul Origin
+        # Judul Origin Area
         p = sd.add_paragraph(f"Origin: {org}")
         p.paragraph_format.space_after = Pt(2)
         run = p.runs[0]; run.bold = True; run.font.size = Pt(10)
         
-        # Filter & Top 3 Logic
         df_sub = df_data[df_data['origin'] == org].copy()
         df_sub = df_sub.sort_values(by=['kota_asal', 'kota_tujuan', 'unit_type', 'price'])
-               
         winning_vendors_data.append(df_sub)
         
-        # Buat Tabel (8 Kolom)
-        headers = ['Asal', 'Tujuan', 'Unit', 'Rank', 'Vendor', 'Biaya/unit', 'LeadTime', 'Term of Payment']
+        # Buat Tabel Baru (Melar Jadi 11 Kolom untuk memuat biaya tambahan)
+        headers = ['Asal', 'Tujuan', 'Unit', 'Rank', 'Vendor', 'Biaya/Unit', 'MD Dalam', 'MD Luar', 'B.Buruh', 'LeadTime', 'TOP']
         table = sd.add_table(rows=1, cols=len(headers))
         table.style = 'Table Grid'
         table.alignment = WD_TABLE_ALIGNMENT.CENTER 
         
-        # Header
+        # Render Table Header
         hdr_row = table.rows[0]; set_repeat_table_header(hdr_row)
         hdr_cells = hdr_row.cells
         for i, h in enumerate(headers):
             hdr_cells[i].text = h
             set_cell_background(hdr_cells[i], "ED7D31")
             hdr_cells[i].vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER 
-            format_paragraph(hdr_cells[i].paragraphs[0], size=8, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
+            format_paragraph(hdr_cells[i].paragraphs[0], size=7.5, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
             
-
-        # Di dalam loop data row, ubah menjadi:
+        # Render Data Rows
         for _, row in df_sub.iterrows():
             row_cells = table.add_row().cells
             try: harga = f"Rp {int(row['price']):,}".replace(",", ".")
@@ -693,7 +692,7 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
             lt_raw = str(row['lead_time'])
             lt_fmt = f"{lt_raw} Hari" if lt_raw.isdigit() else "-"
             
-            # Amankan parameter parsing data rute utama
+            # Suntik data multidrop and buruh ke dalam matriks rute Word
             data_map = [
                 str(row.get('kota_asal', '-')), 
                 str(row['kota_tujuan']), 
@@ -701,6 +700,9 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
                 str(row['Ranking']), 
                 str(row['vendor_name']), 
                 harga,
+                fmt_val_rp(row.get('inner_city_price', 0)),
+                fmt_val_rp(row.get('outer_city_price', 0)),
+                fmt_val_rp(row.get('labor_cost', 0)),
                 lt_fmt,
                 str(row['top'])
             ]
@@ -708,22 +710,17 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
             for idx, val in enumerate(data_map):
                 cell = row_cells[idx]; cell.text = val
                 cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-                align = WD_ALIGN_PARAGRAPH.RIGHT if idx == 5 else (WD_ALIGN_PARAGRAPH.CENTER if idx in [3,7] else WD_ALIGN_PARAGRAPH.LEFT)
-                format_paragraph(cell.paragraphs[0], size=7, bold=False, align=align)
                 
-                # Alignment
-                if idx in [0, 1, 2, 6]: align = WD_ALIGN_PARAGRAPH.LEFT
-                elif idx == 5: align = WD_ALIGN_PARAGRAPH.RIGHT
-                else: align = WD_ALIGN_PARAGRAPH.CENTER
+                # Pengaturan posisi teks angka di kanan, text biasa di kiri, rank di tengah
+                if idx in [5, 6, 7, 8]: align = WD_ALIGN_PARAGRAPH.RIGHT
+                elif idx in [3, 9, 10]: align = WD_ALIGN_PARAGRAPH.CENTER
+                else: align = WD_ALIGN_PARAGRAPH.LEFT
                 
-                format_paragraph(cell.paragraphs[0], size=7, bold=False, align=align)
+                format_paragraph(cell.paragraphs[0], size=6.5, bold=False, align=align)
         
-        # --- OPTIMASI PENTING: SET LEBAR SETELAH LOOP SELESAI ---
-        # Asal(2.0), Tujuan(2.8), Unit(2.2), Rank(0.8), Vendor(3.5), Harga(2.5), L.Time(1.2), TOP(2.0)
-        col_widths = [Cm(2.0), Cm(2.8), Cm(2.2), Cm(0.8), Cm(3.5), Cm(2.5), Cm(1.2), Cm(2.0)]
+        # Set Lebar Kolom 11 Kolom secara presisi (Total margin kertas muat rapi)
+        col_widths = [Cm(1.8), Cm(2.4), Cm(1.8), Cm(0.7), Cm(2.6), Cm(2.0), Cm(1.5), Cm(1.5), Cm(1.3), Cm(1.2), Cm(1.2)]
         set_col_widths(table, col_widths) 
-        # --------------------------------------------------------
-
         sd.add_paragraph("") 
 
     # --- BAGIAN B: TABEL VENDOR ---
@@ -761,8 +758,6 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
                 cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
                 format_paragraph(cell.paragraphs[0], size=7, bold=False, align=WD_ALIGN_PARAGRAPH.LEFT)
 
-        # --- OPTIMASI PENTING: SET LEBAR SETELAH LOOP SELESAI ---
-        # Vendor(4.0), Alamat(5.0), Email(3.5), PIC(2.5), Telepon(2.5)
         v_widths = [Cm(4.0), Cm(5.0), Cm(3.5), Cm(2.5), Cm(2.5)]
         set_col_widths(v_table, v_widths)
    
@@ -2466,7 +2461,7 @@ def admin_dashboard():
                                             st.error(f"Gagal mendownload template SK dari GitHub. Status Code: {response_sk.status_code}.")
                                             st.stop()
                                             
-                                        # Amankan basis nomor urut SK dari 3 angka depan pilihan lo, honey!
+                                        # Potong 3 angka urut depan nomor surat resmi
                                         nomor_mentah = str(no_sk).strip()
                                         prefix_angka_str = nomor_mentah[:3]
                                         sisa_nomor_surat = nomor_mentah[3:]
@@ -2477,19 +2472,18 @@ def admin_dashboard():
                                         except ValueError:
                                             is_numeric_prefix = False
                                             
-                                        # Buat memory buffer untuk menampung bungkusan file ZIP final
                                         zip_buffer = io.BytesIO()
                                         generated_files_count = 0
                                         
                                         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                                            # 🎯 LOOPING UTAMA: Pecah berkas saklek murni per satu nama origin area
+                                            # 🎯 LOOPING UTAMA: Pecah berkas terpisah murni per nama origin area
                                             for idx_loop, org_tunggal in enumerate(sorted(sel_orgs)):
                                                 df_single_org = df_final_sk[df_final_sk['origin'] == org_tunggal].copy()
                                                 
                                                 if df_single_org.empty:
                                                     continue
                                                     
-                                                # Generator running number otomatis untuk nomor surat SK
+                                                # Auto-increment running number nomor surat
                                                 if is_numeric_prefix:
                                                     current_num_str = str(start_counter + idx_loop).zfill(3)
                                                     custom_no_sk = f"{current_num_str}{sisa_nomor_surat}"
@@ -2498,7 +2492,7 @@ def admin_dashboard():
                                                     
                                                 tpl_sk_stream = io.BytesIO(response_sk.content)
                                                 
-                                                # --- RE-MAPPING LOGIKA MULTIDROP DAN BIAYA BURUH UNTUK SINGLE ORIGIN SK ---
+                                                # --- 💎 ENGINE RE-MAPPING MULTIDROP REAL UNTUK 11 KOLOM SK ---
                                                 df_sk_merged = df_single_org.copy()
                                                 df_sk_merged['inner_city_price'] = 0
                                                 df_sk_merged['outer_city_price'] = 0
@@ -2531,43 +2525,43 @@ def admin_dashboard():
                                                                     'note': str(rmd.get('catatan_tambahan', '-'))
                                                                 }
                                                 
-                                                        def merge_md_to_sk(row, kind):
-                                                            v_email = str(row['vendor_email']).strip().lower()
-                                                            r_gid = str(row['group_id']).strip().upper()
+                                                        # 🎯 KUNCI UTAMA: Ambil 5 huruf depan route_id untuk dapet group_id asli (ex: R-001)
+                                                        def merge_md_to_sk_fixed(row_sk):
+                                                            v_email = str(row_sk['vendor_email']).strip().lower()
+                                                            r_gid = str(row_sk['route_id'])[:5].strip().upper()
                                                             lookup_key = f"{v_email}_{r_gid}"
-                                                            res = md_dict_sk.get(lookup_key, {'in': 0, 'out': 0, 'lab': 0, 'note': '-'})
-                                                            return res[kind]
+                                                            return md_dict_sk.get(lookup_key, {'in': 0, 'out': 0, 'lab': 0, 'note': '-'})
                                                 
-                                                        df_sk_merged['inner_city_price'] = df_sk_merged.apply(lambda x: merge_md_to_sk(x, 'in'), axis=1)
-                                                        df_sk_merged['outer_city_price'] = df_sk_merged.apply(lambda x: merge_md_to_sk(x, 'out'), axis=1)
-                                                        df_sk_merged['labor_cost'] = df_sk_merged.apply(lambda x: merge_md_to_sk(x, 'lab'), axis=1)
-                                                        df_sk_merged['catatan_tambahan'] = df_sk_merged.apply(lambda x: merge_md_to_sk(x, 'note'), axis=1)
+                                                        df_sk_merged['inner_city_price'] = df_sk_merged.apply(lambda x: merge_md_to_sk_fixed(x)['in'], axis=1)
+                                                        df_sk_merged['outer_city_price'] = df_sk_merged.apply(lambda x: merge_md_to_sk_fixed(x)['out'], axis=1)
+                                                        df_sk_merged['labor_cost'] = df_sk_merged.apply(lambda x: merge_md_to_sk_fixed(x)['lab'], axis=1)
+                                                        df_sk_merged['catatan_tambahan'] = df_sk_merged.apply(lambda x: merge_md_to_sk_fixed(x)['note'], axis=1)
                                                     except Exception as ex_md_sk:
                                                         pass
                                                 
-                                                # Cetak file Word temporary untuk origin tunggal ini
+                                                # Lempar ke fungsi cetak 11 kolom
                                                 f_sk_out = create_docx_sk(tpl_sk_stream, custom_no_sk, sk_val, sk_load, df_sk_merged)
                                                 
-                                                # Susun penamaan file Word dinamis per nama daerah aslinya, Cinta!
-                                                safe_val_sk = str(sk_val).replace(" - ", "-").replace(" ", "_")
-                                                safe_pt_name = "Tangkas" if sel_pt_sk == "PT Tangkas Cipta Optimal" else "TAC"
-                                                safe_org_name = str(org_tunggal).replace(" ", "")
+                                                # Inject 3 angka running number ke dalam penamaan file .docx di dalam ZIP
                                                 if is_numeric_prefix:
                                                     nomor_urut_file = str(start_counter + idx_loop).zfill(3)
                                                 else:
                                                     nomor_urut_file = prefix_angka_str
+                                                    
+                                                safe_val_sk = str(sk_val).replace(" - ", "-").replace(" ", "_")
+                                                safe_pt_name = "Tangkas" if sel_pt_sk == "PT Tangkas Cipta Optimal" else "TAC"
+                                                safe_org_name = str(org_tunggal).replace(" ", "")
                                                 
                                                 filename_word = f"SK_{safe_pt_name}_{safe_org_name}_{sk_load}_{nomor_urut_file}_{safe_val_sk}.docx"
                                                 
-                                                # Masukkan file docx barusan ke dalam bungkusan ZIP, lalu buang file sampahnya
+                                                # Masukkan file tunggal ini ke bungkusan zip, lalu hapus temporary file-nya
                                                 zip_file.write(f_sk_out, arcname=filename_word)
                                                 os.remove(f_sk_out)
                                                 generated_files_count += 1
                                                 
                                         if generated_files_count > 0:
-                                            # Sediakan tombol download ZIP tunggal raksasa di layar admin
                                             safe_val_sk = str(sk_val).replace(" - ", "-").replace(" ", "_")
-                                            st.success(f"🎉 Sukses Membelah Data! Berhasil memproduksi {generated_files_count} berkas SK terpisah.")
+                                            st.success(f"🎉 Sukses Membelah Data! Berhasil memproduksi {generated_files_count} berkas SK terpisah per origin area.")
                                             st.download_button(
                                                 label="⬇️ Download Semua Berkas SK Per Origin (.ZIP)", 
                                                 data=zip_buffer.getvalue(), 
