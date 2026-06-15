@@ -2492,30 +2492,36 @@ def admin_dashboard():
                                                     
                                                 tpl_sk_stream = io.BytesIO(response_sk.content)
                                                 
-                                                # --- 💎 ENGINE RE-MAPPING MULTIDROP REAL UNTUK 11 KOLOM SK (FIXED) ---
+                                                # --- 💎 ENGINE RE-MAPPING MULTIDROP REAL UNTUK 11 KOLOM SK (FIXED PERMANEN) ---
                                                 df_sk_merged = df_single_org.copy()
                                                 
                                                 if not df_md.empty:
                                                     try:
                                                         df_md_clean = df_md.copy()
+                                                        
+                                                        # Pastikan semua kolom krusial dikonversi ke string murni sebelum di-strip!
                                                         df_md_clean['vendor_email_clean'] = df_md_clean['vendor_email'].astype(str).str.strip().str.lower()
                                                         df_md_clean['validity_norm'] = df_md_clean['validity'].astype(str).str.replace(" ", "").str.replace("-", "").str.lower().str.strip()
-                                                        df_md_clean['group_id_clean'] = df_md_clean['group_id'].astype(str).str.upper().str.strip()
+                                                        df_md_clean['group_id_clean'] = df_md_clean['group_id'].astype(str).str.strip().str.upper()
                                                         
-                                                        # Normalisasi nominal angka agar bersih dari string currency bawaan sheet
+                                                        # Normalisasi nominal angka (Buang Rp, titik, koma bawaan Google Sheets)
                                                         for col_num in ['inner_city_price', 'outer_city_price', 'labor_cost']:
                                                             if col_num in df_md_clean.columns:
-                                                                df_md_clean[col_num] = df_md_clean[col_num].astype(str).str.replace("Rp", "").str.replace(".", "").str.replace(",", "").str.replace(" ", "").strip()
+                                                                df_md_clean[col_num] = df_md_clean[col_num].astype(str).str.replace("Rp", "").str.replace(".", "").str.replace(",", "").str.replace(" ", "").str.strip()
                                                                 df_md_clean[col_num] = pd.to_numeric(df_md_clean[col_num], errors='coerce').fillna(0)
                                                         
-                                                        # Buat dictionary lookup berbasis tuple agar pencarian super presisi (Vendor + Group + Validity + Round)
+                                                        # Amankan variabel string filter dari UI Admin (Gunakan str() murni)
+                                                        string_sk_val_target = str(sk_val).replace(" ", "").replace("-", "").lower().strip()
+                                                        string_sk_round_target = str(sel_sk_round).strip()
+                                                        
+                                                        # Buat dictionary lookup super cepat
                                                         md_dict_sk = {}
                                                         for _, rmd in df_md_clean.iterrows():
                                                             id_md_raw = str(rmd.get('id_multidrop', '')).strip()
                                                             md_rnd_check = id_md_raw.split("_")[-1] if "_" in id_md_raw else '1'
                                                             
-                                                            # Filter kecocokan data multidrop dengan filter SK yang dipilih Admin
-                                                            if (rmd['validity_norm'] == clean_sk_val.replace("-", "") and str(md_rnd_check) == str(sel_sk_round)):
+                                                            # Filter validasi kecocokan data multidrop vendor dengan filter pilihan Admin
+                                                            if (rmd['validity_norm'] == string_sk_val_target and str(md_rnd_check) == string_sk_round_target):
                                                                 k_key = f"{rmd['vendor_email_clean']}_{rmd['group_id_clean']}"
                                                                 md_dict_sk[k_key] = {
                                                                     'in': rmd.get('inner_city_price', 0),
@@ -2523,16 +2529,16 @@ def admin_dashboard():
                                                                     'lab': rmd.get('labor_cost', 0)
                                                                 }
                                                         
-                                                        # Mapping balik ke data matrix SK
+                                                        # Rumus Mapping balik ke matriks data SK
                                                         def lookup_md_to_sk(row_sk):
                                                             v_email = str(row_sk['vendor_email']).strip().lower()
-                                                            # Potong route_id jika kolom group_id tidak tersedia
                                                             g_id_raw = row_sk.get('group_id', row_sk['route_id'][:5])
                                                             g_id = str(g_id_raw).strip().upper()
                                                             
                                                             lookup_key = f"{v_email}_{g_id}"
                                                             return md_dict_sk.get(lookup_key, {'in': 0, 'out': 0, 'lab': 0})
                                                         
+                                                        # Suntikkan data harga multidrop ke DataFrame final SK
                                                         df_sk_merged['inner_city_price'] = df_sk_merged.apply(lambda x: lookup_md_to_sk(x)['in'], axis=1)
                                                         df_sk_merged['outer_city_price'] = df_sk_merged.apply(lambda x: lookup_md_to_sk(x)['out'], axis=1)
                                                         df_sk_merged['labor_cost'] = df_sk_merged.apply(lambda x: lookup_md_to_sk(x)['lab'], axis=1)
