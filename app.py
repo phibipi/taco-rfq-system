@@ -2552,8 +2552,12 @@ def admin_dashboard():
                                                 safe_val_sk = str(sk_val).replace(" - ", "-").replace(" ", "_")
                                                 safe_pt_name = "Tangkas" if sel_pt_sk == "PT Tangkas Cipta Optimal" else "TAC"
                                                 safe_org_name = str(org_tunggal).replace(" ", "")
+                                                if is_numeric_prefix:
+                                                    nomor_urut_file = str(start_counter + idx_loop).zfill(3)
+                                                else:
+                                                    nomor_urut_file = prefix_angka_str
                                                 
-                                                filename_word = f"SK_{safe_pt_name}_{safe_org_name}_{sk_load}_{safe_val_sk}.docx"
+                                                filename_word = f"SK_{safe_pt_name}_{safe_org_name}_{sk_load}_{nomor_urut_file}_{safe_val_sk}.docx"
                                                 
                                                 # Masukkan file docx barusan ke dalam bungkusan ZIP, lalu buang file sampahnya
                                                 zip_file.write(f_sk_out, arcname=filename_word)
