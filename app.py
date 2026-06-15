@@ -669,7 +669,7 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
         winning_vendors_data.append(df_sub)
         
         # Buat Tabel Baru (Melar Jadi 11 Kolom untuk memuat biaya tambahan)
-        headers = ['Asal', 'Tujuan', 'Unit', 'Rank', 'Vendor', 'Biaya/Unit', 'MD Dalam', 'MD Luar', 'B.Buruh', 'LeadTime', 'TOP']
+        headers = ['Asal', 'Tujuan', 'Unit', 'Rank', 'Vendor', 'Biaya/Unit', 'Multidrop Dalam', 'Multidrop Luar', 'B.Buruh', 'Lead Time', 'TOP']
         table = sd.add_table(rows=1, cols=len(headers))
         table.style = 'Table Grid'
         table.alignment = WD_TABLE_ALIGNMENT.CENTER 
@@ -2525,18 +2525,17 @@ def admin_dashboard():
                                                                     'note': str(rmd.get('catatan_tambahan', '-'))
                                                                 }
                                                 
-                                                        # 🎯 KUNCI UTAMA: Ambil 5 huruf depan route_id untuk dapet group_id asli (ex: R-001)
+                                                        # Pencarian menggunakan nama kolom group_id asli hasil mapping, bukan potong route_id
                                                         def merge_md_to_sk_fixed(row_sk):
                                                             v_email = str(row_sk['vendor_email']).strip().lower()
-                                                            r_gid = str(row_sk['route_id'])[:5].strip().upper()
-                                                            lookup_key = f"{v_email}_{r_gid}"
-                                                            return md_dict_sk.get(lookup_key, {'in': 0, 'out': 0, 'lab': 0, 'note': '-'})
+                                                            g_id = str(row_sk.get('group_id', row_sk['route_id'][:5])).strip().upper()
+                                                            lookup_key = f"{v_email}_{g_id}"
+                                                            return md_dict_sk.get(lookup_key, {'in': 0, 'out': 0, 'lab': 0})
                                                 
                                                         df_sk_merged['inner_city_price'] = df_sk_merged.apply(lambda x: merge_md_to_sk_fixed(x)['in'], axis=1)
                                                         df_sk_merged['outer_city_price'] = df_sk_merged.apply(lambda x: merge_md_to_sk_fixed(x)['out'], axis=1)
                                                         df_sk_merged['labor_cost'] = df_sk_merged.apply(lambda x: merge_md_to_sk_fixed(x)['lab'], axis=1)
-                                                        df_sk_merged['catatan_tambahan'] = df_sk_merged.apply(lambda x: merge_md_to_sk_fixed(x)['note'], axis=1)
-                                                    except Exception as ex_md_sk:
+                                                    except Exception:
                                                         pass
                                                 
                                                 # Lempar ke fungsi cetak 11 kolom
@@ -2565,7 +2564,7 @@ def admin_dashboard():
                                             st.download_button(
                                                 label="⬇️ Download Semua Berkas SK Per Origin (.ZIP)", 
                                                 data=zip_buffer.getvalue(), 
-                                                file_name=f"PAKET_SK_{safe_pt_name}_{sk_load}_{safe_val_sk}.zip", 
+                                                file_name=f"SK_{safe_pt_name}_{sk_load}_{safe_val_sk}.zip", 
                                                 mime="application/zip",
                                                 type="primary",
                                                 use_container_width=True
