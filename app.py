@@ -2449,84 +2449,134 @@ def admin_dashboard():
                             df_final_sk = df_sk_top_filtered[df_sk_top_filtered['origin'].isin(sel_orgs)].copy()
                             no_sk = st.text_input("Nomor Surat SK:", value="", placeholder="Contoh: 001/SK-PROC/TACO/III/2026", key="no_sk")
                             
-                            if st.button("📄 Generate File SK", type="primary", key="btn_execute_sk_gen"):
+                            if st.button("📄 Generate File SK (Otomatis Pisah Per Origin)", type="primary", key="btn_execute_sk_gen"):
                                 import requests
+                                import zipfile
                                 
-                                # Mapping URL Raw GitHub sesuai entitas yang dipilih
                                 GITHUB_BASE = "https://raw.githubusercontent.com/phibipi/taco-rfq-system/main/templates/"
-                                
                                 if sel_pt_sk == "PT Tangkas Cipta Optimal":
                                     template_url_sk = GITHUB_BASE + "template_sk_tangkas.docx" 
                                 else:
                                     template_url_sk = GITHUB_BASE + "template_sk_tac.docx" 
                                 
-                                with st.spinner(f"Mengunduh template SK {sel_pt_sk} dari GitHub..."):
+                                with st.spinner(f"Mengunduh template SK {sel_pt_sk} dan memproses pemecahan origin..."):
                                     try:
                                         response_sk = requests.get(template_url_sk)
                                         if response_sk.status_code != 200:
                                             st.error(f"Gagal mendownload template SK dari GitHub. Status Code: {response_sk.status_code}.")
                                             st.stop()
                                             
-                                        tpl_sk_stream = io.BytesIO(response_sk.content)
+                                        # Amankan basis nomor urut SK dari 3 angka depan pilihan lo, honey!
+                                        nomor_mentah = str(no_sk).strip()
+                                        prefix_angka_str = nomor_mentah[:3]
+                                        sisa_nomor_surat = nomor_mentah[3:]
                                         
-                                        # --- RE-MAPPING LOGIKA MULTIDROP DAN BIAYA BURUH UNTUK SK ---
-                                        df_sk_merged = df_final_sk.copy()
-                                        df_sk_merged['inner_city_price'] = 0
-                                        df_sk_merged['outer_city_price'] = 0
-                                        df_sk_merged['labor_cost'] = 0
-                                        df_sk_merged['catatan_tambahan'] = '-'
-                                
-                                        if not df_md.empty:
-                                            try:
-                                                df_md_clean = df_md.copy()
-                                                df_md_clean['vendor_email_clean'] = df_md_clean['vendor_email'].astype(str).str.strip().str.lower()
-                                                df_md_clean['validity_norm'] = df_md_clean['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
-                                                df_md_clean['group_id_clean'] = df_md_clean['group_id'].astype(str).str.upper().str.strip()
+                                        try:
+                                            start_counter = int(prefix_angka_str)
+                                            is_numeric_prefix = True
+                                        except ValueError:
+                                            is_numeric_prefix = False
+                                            
+                                        # Buat memory buffer untuk menampung bungkusan file ZIP final
+                                        zip_buffer = io.BytesIO()
+                                        generated_files_count = 0
                                         
-                                                md_dict_sk = {}
-                                                for _, rmd in df_md_clean.iterrows():
-                                                    id_md_raw = str(rmd.get('id_multidrop', '')).strip()
-                                                    md_rnd_check = id_md_raw[-1] if id_md_raw else '1'
+                                        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                                            # 🎯 LOOPING UTAMA: Pecah berkas saklek murni per satu nama origin area
+                                            for idx_loop, org_tunggal in enumerate(sorted(sel_orgs)):
+                                                df_single_org = df_final_sk[df_final_sk['origin'] == org_tunggal].copy()
+                                                
+                                                if df_single_org.empty:
+                                                    continue
                                                     
-                                                    if rmd['validity_norm'] == clean_sk_val and str(md_rnd_check) == str(sel_sk_round):
-                                                        k_key = f"{rmd['vendor_email_clean']}_{rmd['group_id_clean']}"
-                                                        
-                                                        ic_val = str(rmd.get('inner_city_price', '0')).replace(",", "")
-                                                        oc_val = str(rmd.get('outer_city_price', '0')).replace(",", "")
-                                                        lc_val = str(rmd.get('labor_cost', '0')).replace(",", "")
-                                                        
-                                                        md_dict_sk[k_key] = {
-                                                            'in': pd.to_numeric(ic_val, errors='coerce') or 0,
-                                                            'out': pd.to_numeric(oc_val, errors='coerce') or 0,
-                                                            'lab': pd.to_numeric(lc_val, errors='coerce') or 0,
-                                                            'note': str(rmd.get('catatan_tambahan', '-'))
-                                                        }
+                                                # Generator running number otomatis untuk nomor surat SK
+                                                if is_numeric_prefix:
+                                                    current_num_str = str(start_counter + idx_loop).zfill(3)
+                                                    custom_no_sk = f"{current_num_str}{sisa_nomor_surat}"
+                                                else:
+                                                    custom_no_sk = nomor_mentah
+                                                    
+                                                tpl_sk_stream = io.BytesIO(response_sk.content)
+                                                
+                                                # --- RE-MAPPING LOGIKA MULTIDROP DAN BIAYA BURUH UNTUK SINGLE ORIGIN SK ---
+                                                df_sk_merged = df_single_org.copy()
+                                                df_sk_merged['inner_city_price'] = 0
+                                                df_sk_merged['outer_city_price'] = 0
+                                                df_sk_merged['labor_cost'] = 0
+                                                df_sk_merged['catatan_tambahan'] = '-'
                                         
-                                                def merge_md_to_sk(row, kind):
-                                                    v_email = str(row['vendor_email']).strip().lower()
-                                                    r_gid = str(row['group_id']).strip().upper()
-                                                    lookup_key = f"{v_email}_{r_gid}"
-                                                    res = md_dict_sk.get(lookup_key, {'in': 0, 'out': 0, 'lab': 0, 'note': '-'})
-                                                    return res[kind]
-                                        
-                                                df_sk_merged['inner_city_price'] = df_sk_merged.apply(lambda x: merge_md_to_sk(x, 'in'), axis=1)
-                                                df_sk_merged['outer_city_price'] = df_sk_merged.apply(lambda x: merge_md_to_sk(x, 'out'), axis=1)
-                                                df_sk_merged['labor_cost'] = df_sk_merged.apply(lambda x: merge_md_to_sk(x, 'lab'), axis=1)
-                                                df_sk_merged['catatan_tambahan'] = df_sk_merged.apply(lambda x: merge_md_to_sk(x, 'note'), axis=1)
-                                            except Exception as ex_md_sk:
-                                                pass
-                                
-                                        f_sk_out = create_docx_sk(tpl_sk_stream, no_sk, sk_val, sk_load, df_sk_merged)
-                                        
-                                        safe_val_sk = str(sk_val).replace(" - ", "-").replace(" ", "_")
-                                        safe_pt_name = "Tangkas" if sel_pt_sk == "PT Tangkas Cipta Optimal" else "TAC"
-                                        custom_filename_sk = f"SK_{safe_pt_name}_Prio1-{limit_prio_sk}_Tahap{sel_sk_round}_{sk_load}_{safe_val_sk}.docx"
-                                        
-                                        with open(f_sk_out, "rb") as f:
-                                            st.download_button("⬇️ Download File SK Word", f, file_name=custom_filename_sk, type="primary", use_container_width=True)
-                                        os.remove(f_sk_out)
-                                    except Exception as e:
-                                        st.error(f"Gagal memproses file Word SK: {e}")
+                                                if not df_md.empty:
+                                                    try:
+                                                        df_md_clean = df_md.copy()
+                                                        df_md_clean['vendor_email_clean'] = df_md_clean['vendor_email'].astype(str).str.strip().str.lower()
+                                                        df_md_clean['validity_norm'] = df_md_clean['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
+                                                        df_md_clean['group_id_clean'] = df_md_clean['group_id'].astype(str).str.upper().str.strip()
+                                                
+                                                        md_dict_sk = {}
+                                                        for _, rmd in df_md_clean.iterrows():
+                                                            id_md_raw = str(rmd.get('id_multidrop', '')).strip()
+                                                            md_rnd_check = id_md_raw[-1] if id_md_raw else '1'
+                                                            
+                                                            if rmd['validity_norm'] == clean_sk_val and str(md_rnd_check) == str(sel_sk_round):
+                                                                k_key = f"{rmd['vendor_email_clean']}_{rmd['group_id_clean']}"
+                                                                
+                                                                ic_val = str(rmd.get('inner_city_price', '0')).replace(",", "")
+                                                                oc_val = str(rmd.get('outer_city_price', '0')).replace(",", "")
+                                                                lc_val = str(rmd.get('labor_cost', '0')).replace(",", "")
+                                                                
+                                                                md_dict_sk[k_key] = {
+                                                                    'in': pd.to_numeric(ic_val, errors='coerce') or 0,
+                                                                    'out': pd.to_numeric(oc_val, errors='coerce') or 0,
+                                                                    'lab': pd.to_numeric(lc_val, errors='coerce') or 0,
+                                                                    'note': str(rmd.get('catatan_tambahan', '-'))
+                                                                }
+                                                
+                                                        def merge_md_to_sk(row, kind):
+                                                            v_email = str(row['vendor_email']).strip().lower()
+                                                            r_gid = str(row['group_id']).strip().upper()
+                                                            lookup_key = f"{v_email}_{r_gid}"
+                                                            res = md_dict_sk.get(lookup_key, {'in': 0, 'out': 0, 'lab': 0, 'note': '-'})
+                                                            return res[kind]
+                                                
+                                                        df_sk_merged['inner_city_price'] = df_sk_merged.apply(lambda x: merge_md_to_sk(x, 'in'), axis=1)
+                                                        df_sk_merged['outer_city_price'] = df_sk_merged.apply(lambda x: merge_md_to_sk(x, 'out'), axis=1)
+                                                        df_sk_merged['labor_cost'] = df_sk_merged.apply(lambda x: merge_md_to_sk(x, 'lab'), axis=1)
+                                                        df_sk_merged['catatan_tambahan'] = df_sk_merged.apply(lambda x: merge_md_to_sk(x, 'note'), axis=1)
+                                                    except Exception as ex_md_sk:
+                                                        pass
+                                                
+                                                # Cetak file Word temporary untuk origin tunggal ini
+                                                f_sk_out = create_docx_sk(tpl_sk_stream, custom_no_sk, sk_val, sk_load, df_sk_merged)
+                                                
+                                                # Susun penamaan file Word dinamis per nama daerah aslinya, Cinta!
+                                                safe_val_sk = str(sk_val).replace(" - ", "-").replace(" ", "_")
+                                                safe_pt_name = "Tangkas" if sel_pt_sk == "PT Tangkas Cipta Optimal" else "TAC"
+                                                safe_org_name = str(org_tunggal).replace(" ", "")
+                                                
+                                                filename_word = f"SK_{safe_pt_name}_{safe_org_name}_{sk_load}_{safe_val_sk}.docx"
+                                                
+                                                # Masukkan file docx barusan ke dalam bungkusan ZIP, lalu buang file sampahnya
+                                                zip_file.write(f_sk_out, arcname=filename_word)
+                                                os.remove(f_sk_out)
+                                                generated_files_count += 1
+                                                
+                                        if generated_files_count > 0:
+                                            # Sediakan tombol download ZIP tunggal raksasa di layar admin
+                                            safe_val_sk = str(sk_val).replace(" - ", "-").replace(" ", "_")
+                                            st.success(f"🎉 Sukses Membelah Data! Berhasil memproduksi {generated_files_count} berkas SK terpisah.")
+                                            st.download_button(
+                                                label="⬇️ Download Semua Berkas SK Per Origin (.ZIP)", 
+                                                data=zip_buffer.getvalue(), 
+                                                file_name=f"PAKET_SK_{safe_pt_name}_{sk_load}_{safe_val_sk}.zip", 
+                                                mime="application/zip",
+                                                type="primary",
+                                                use_container_width=True
+                                            )
+                                        else:
+                                            st.warning("Tidak ada rute valid yang bisa di-generate.")
+                                            
+                                    except Exception as e_batch:
+                                        st.error(f"Gagal memproses batch split SK: {str(e_batch)}")
                         else:
                             st.warning("Pilih minimal 1 origin area.")
                     else:
