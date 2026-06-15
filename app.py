@@ -2125,14 +2125,14 @@ def admin_dashboard():
                                         else:
                                             st.error("Gagal mengirim email alert.")
     
-        # --- TAB 7: SUMMARY ---   
+        # === TAB 3: SUMMARY & RANKING VENDOR (PATUH TAHAP & AMANKAN TARGET PRICE) ===   
         with tabs[2]:
             st.subheader("📊 Summary & Ranking Vendor")
             
             if df_master.empty:
                 st.info("Belum ada data harga masuk.")
             else:
-                # --- FILTER HARUS DI ATAS ---
+                # --- FILTER UTAMA LAYAR MONITOR ---
                 c1, c2, c3, c4 = st.columns(4)
                 avail_val = sorted(df_master['validity'].unique().tolist())
                 avail_load = sorted(df_master['load_type'].unique().tolist())
@@ -2140,35 +2140,47 @@ def admin_dashboard():
             
                 sel_val = c1.selectbox("Filter Periode", avail_val, key="es_val")
                 sel_load = c2.selectbox("Filter Tipe Muatan", avail_load, key="es_load")
+                # Dropdown filter tahap dilahirkan kembali secara resmi biar disembah oleh database bawah!
                 sel_round = c3.selectbox("Filter Tahap", avail_round, key="es_round")
-            
-                # 1. Filter Awal (Periode & Muatan)
-                # ▼ POINTER FIX 2: SINKRONISASI VALIDITY & RONDE DI TAB SUMMARY ADMIN ▼
-                if not df_master.empty:
-                    df_master_norm = df_master.copy()
-                    df_master_norm['validity_clean'] = df_master_norm['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
-                    df_master_norm['round_clean'] = pd.to_numeric(df_master_norm['round'], errors='coerce').fillna(1).astype(int)
-                    
-                    clean_sel_val = str(sel_val).replace(" ", "").lower().strip()
-                    
-                    df_view = df_master_norm[
-                        (df_master_norm['validity_clean'] == clean_sel_val) & 
-                        (df_master_norm['load_type'] == sel_load) & 
-                        (df_master_norm['round_clean'] == int(sel_round))
-                    ].copy()
-                else:
-                    df_view = pd.DataFrame()
-                df_view = df_view[df_view['price'] > 0]
                 
-                # 2. Tambahan Filter Kota Asal & Search Bar
-                avail_asal = ["Semua Kota Asal"] + sorted(df_view['kota_asal'].dropna().unique().tolist())
-                sel_asal = c3.selectbox("Filter Kota Asal", avail_asal, key="es_asal")
+                # Saring data kota asal secara dinamis berdasarkan periode and muatan
+                df_filter_asal = df_master[(df_master['validity'] == sel_val) & (df_master['load_type'] == sel_load)]
+                avail_asal = ["Semua Kota Asal"] + sorted(df_filter_asal['kota_asal'].dropna().unique().tolist())
+                sel_asal = c3.selectbox("Filter Kota Asal", avail_asal, key="es_asal") # override kolom c3 untuk kota asal
                 
                 search_keyword = c4.text_input("🔍 Cari Lokasi", placeholder="Ketik Asal/Tujuan...", key="es_dest").strip().lower()
                 
-                # --- TOMBOL DOWNLOAD BARU DI SINI ---
+                # --- ENGINE FILTER SAKLEK BERDASARKAN TAHAP PILIHAN MONITOR ---
+                df_master_norm = df_master.copy()
+                df_master_norm['validity_clean'] = df_master_norm['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
+                df_master_norm['round_clean'] = pd.to_numeric(df_master_norm['round'], errors='coerce').fillna(1).astype(int)
+                
+                clean_sel_val = str(sel_val).replace(" ", "").lower().strip()
+                
+                # Saring data murni hanya yang sesuai ronde and periode di dropdown pilihan admin!
+                df_view = df_master_norm[
+                    (df_master_norm['validity_clean'] == clean_sel_val) & 
+                    (df_master_norm['load_type'] == sel_load) & 
+                    (df_master_norm['round_clean'] == int(sel_round))
+                ].copy()
+                
+                df_view = df_view[df_view['price'] > 0]
+                
+                # --- LANJUTAN FILTER TAMPILAN UI ---
+                if sel_asal != "Semua Kota Asal":
+                    df_view = df_view[df_view['kota_asal'] == sel_asal]
+                    
+                if search_keyword:
+                    match_org = df_view['origin'].fillna("").str.lower().str.contains(search_keyword)
+                    match_asal = df_view['kota_asal'].fillna("").str.lower().str.contains(search_keyword)
+                    match_tujuan = df_view['kota_tujuan'].fillna("").str.lower().str.contains(search_keyword)
+                    df_view = df_view[match_org | match_asal | match_tujuan]
+
+                # ==========================================================
+                # 📥 TAB TABEL EXCEL MASTER SUMMARY (PATUH FILTER TAHAP)
+                # ==========================================================
                 with st.expander("📥 Download Master Summary (Excel)", expanded=False):
-                    st.write("Unduh rekap seluruh rute sesuai filter di atas. Rute yang belum diisi vendor akan tetap muncul dengan harga Rp 0.")
+                    st.write("Unduh rekap seluruh rute sesuai filter periode, muatan, and tahap di atas. Rute yang belum diisi vendor akan tetap muncul dengan harga Rp 0.")
                     
                     if not df_r.empty and not df_g.empty and not df_units.empty:
                         # Bersihkan ID
@@ -2180,7 +2192,7 @@ def admin_dashboard():
                         df_u_clean = df_units.copy()
                         df_u_clean['group_id'] = df_u_clean['group_id'].astype(str).str.strip()
 
-                        # Gabungkan Master
+                        # Gabungkan Master Kerangka Rute
                         base_df = pd.merge(df_r_clean, df_g_clean, on='group_id', how='left')
                         base_df = pd.merge(base_df, df_u_clean, on='group_id', how='left')
                         
@@ -2189,23 +2201,26 @@ def admin_dashboard():
                         if sel_asal != "Semua Kota Asal":
                             base_df = base_df[base_df['kota_asal'] == sel_asal]
                         if search_keyword:
-                            match_org = base_df['origin'].fillna("").str.lower().str.contains(search_keyword)
-                            match_asal = base_df['kota_asal'].fillna("").str.lower().str.contains(search_keyword)
-                            match_tujuan = base_df['kota_tujuan'].fillna("").str.lower().str.contains(search_keyword)
-                            base_df = base_df[match_org | match_asal | match_tujuan]
+                            match_org_b = base_df['origin'].fillna("").str.lower().str.contains(search_keyword)
+                            match_asal_b = base_df['kota_asal'].fillna("").str.lower().str.contains(search_keyword)
+                            match_tujuan_b = base_df['kota_tujuan'].fillna("").str.lower().str.contains(search_keyword)
+                            base_df = base_df[match_org_b | match_asal_b | match_tujuan_b]
 
                         # Siapkan Harga & Vendor
                         prices_clean = df_p.copy() if not df_p.empty else pd.DataFrame(columns=['route_id', 'unit_type', 'vendor_email', 'price', 'validity', 'round', 'lead_time'])
                         if not prices_clean.empty:
                             prices_clean['route_id'] = prices_clean['route_id'].astype(str).str.strip()
                             prices_clean['price'] = pd.to_numeric(prices_clean['price'], errors='coerce').fillna(0)
-                            prices_clean = prices_clean[(prices_clean['price'] > 0) & (prices_clean['validity'] == sel_val)]
+                            prices_clean['round_int'] = pd.to_numeric(prices_clean['round'], errors='coerce').fillna(1).astype(int)
+                            
+                            # 🎯 KUNCI EXCEL: Saring data rekap hanya rute yang harganya valid di ronde pilihan!
+                            prices_clean = prices_clean[(prices_clean['price'] > 0) & (prices_clean['validity'] == sel_val) & (prices_clean['round_int'] == int(sel_round))]
                             
                             v_names = df_u[df_u['role'] == 'vendor'][['email', 'vendor_name']]
                             prices_clean = pd.merge(prices_clean, v_names, left_on='vendor_email', right_on='email', how='left')
                             prices_clean['vendor_name'] = prices_clean['vendor_name'].fillna(prices_clean['vendor_email'])
 
-                        # Merge Left Join
+                        # Merge Left Join data kerangka rute dengan harga masuk ronde terpilih
                         if not prices_clean.empty:
                             summary_df = pd.merge(
                                 base_df, 
@@ -2218,10 +2233,10 @@ def admin_dashboard():
                             summary_df['vendor_name'] = '-'
                             summary_df['price'] = 0
                             summary_df['validity'] = sel_val
-                            summary_df['round'] = '-'
+                            summary_df['round'] = sel_round
                             summary_df['lead_time'] = '-'
 
-                        # Prioritas, Rapikan Kosong & Format
+                        # Hitung Urutan Prioritas Peringkat di Ronde Terpilih
                         summary_df['price_sort'] = summary_df['price'].replace(0, float('inf'))
                         summary_df = summary_df.sort_values(by=['origin', 'kota_asal', 'kota_tujuan', 'unit_type', 'price_sort'])
                         summary_df['Prioritas'] = summary_df.groupby(['origin', 'kota_asal', 'kota_tujuan', 'unit_type']).cumcount() + 1
@@ -2230,9 +2245,9 @@ def admin_dashboard():
                         summary_df['price'] = summary_df['price'].fillna(0)
                         summary_df['vendor_name'] = summary_df['vendor_name'].fillna('Belum Ada Penawaran')
                         summary_df['validity'] = summary_df['validity'].fillna(sel_val).replace('nan', sel_val)
-                        summary_df['round'] = summary_df['round'].fillna('-').replace('nan', '-')
+                        summary_df['round'] = summary_df['round'].fillna(sel_round).replace('nan', sel_round)
                         summary_df['lead_time'] = summary_df['lead_time'].fillna('-').replace('nan', '-')
-                        summary_df['Harga Penawaran'] = summary_df['price'].apply(lambda x: f"Rp {int(x):,}".replace(",", "."))
+                        summary_df['Harga Penawaran'] = summary_df['price'].apply(lambda x: f"Rp {int(x):,}".replace(",", ".") if x > 0 else "Rp 0")
                         
                         cols_to_keep = ['origin', 'kota_asal', 'kota_tujuan', 'route_group', 'load_type', 'unit_type', 'Prioritas', 'vendor_name', 'Harga Penawaran', 'lead_time', 'validity', 'round']
                         for c in cols_to_keep:
@@ -2240,7 +2255,7 @@ def admin_dashboard():
                         summary_df = summary_df[cols_to_keep]
                         summary_df.columns = ['Origin', 'Kota Asal', 'Kota Tujuan', 'Nama Grup Rute', 'Tipe Muatan', 'Unit', 'Prioritas', 'Nama Vendor', 'Harga Penawaran', 'Lead Time', 'Periode', 'Tahap']
                         
-                        # Bikin Excel
+                        # Render file object biner Excel
                         output = io.BytesIO()
                         with pd.ExcelWriter(output, engine='openpyxl') as writer:
                             summary_df.to_excel(writer, index=False, sheet_name='Master Summary')
@@ -2250,7 +2265,7 @@ def admin_dashboard():
                         st.download_button(
                             label="📊 Download Master Summary (.xlsx)",
                             data=excel_data,
-                            file_name=f"Master_Summary_{sel_load}_{safe_val_name}_{int(time.time())}.xlsx",
+                            file_name=f"Master_Summary_{sel_load}_Tahap{sel_round}_{safe_val_name}_{int(time.time())}.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             type="primary",
                             use_container_width=True
@@ -2258,9 +2273,8 @@ def admin_dashboard():
                     else:
                         st.warning("Data Master Rute, Group, atau Unit masih kosong. Tidak bisa mengunduh summary.")
                 
-                st.write("")
                 # ==========================================================
-                # ▼▼▼ TAMBAHAN FITUR: DOWNLOAD TARGET PRICE ▼▼▼
+                # 🎯 FITUR AMAN: DOWNLOAD TARGET PRICE (EXCEL) - TIDAK HILANG!
                 # ==========================================================
                 with st.expander("🎯 Download Target Price (Excel)", expanded=False):
                     st.write("Download estimasi Target Price untuk fase negosiasi selanjutnya.")
@@ -2306,7 +2320,7 @@ def admin_dashboard():
                                 
                                 df_tp_export = pd.DataFrame(tp_results)
                                 
-                                # 4. Bikin Excel
+                                # 4. Bikin Excel target price
                                 output_tp = io.BytesIO()
                                 with pd.ExcelWriter(output_tp, engine='openpyxl') as writer:
                                     df_tp_export.to_excel(writer, index=False, sheet_name='Target Price')
@@ -2324,23 +2338,8 @@ def admin_dashboard():
                                 )
                     else:
                         st.warning("Data Master masih kosong.")
-                # ==========================================================
-                # ▲▲▲ AKHIR TAMBAHAN FITUR TARGET PRICE ▲▲▲
-                # ==========================================================
 
-
-
-                # --- LANJUTAN FILTER TAMPILAN UI ---
-                if sel_asal != "Semua Kota Asal":
-                    df_view = df_view[df_view['kota_asal'] == sel_asal]
-                    
-                if search_keyword:
-                    match_org = df_view['origin'].fillna("").str.lower().str.contains(search_keyword)
-                    match_asal = df_view['kota_asal'].fillna("").str.lower().str.contains(search_keyword)
-                    match_tujuan = df_view['kota_tujuan'].fillna("").str.lower().str.contains(search_keyword)
-                    df_view = df_view[match_org | match_asal | match_tujuan]
-
-                # 4. Tampilkan Hasilnya ke Layar
+                # --- 4. TAMPILKAN DISPLAY TABEL SUMMARY DI LAYAR MONITOR ADMIN ---
                 if not df_view.empty:
                     unique_origins = sorted(df_view['origin'].unique())
                 
@@ -2349,17 +2348,16 @@ def admin_dashboard():
                         with st.expander(f"📍 Origin Area: {org}", expanded=True):
                             sub_df = df_view[df_view['origin'] == org].copy()
                         
-                            # Ranking Logic (Diperbarui: Tambah kota_asal agar Top 3 dihitung per rute spesifik)
+                            # Ranking Logic (Diperbarui: Hitung peringkat murni per rute spesifik di ronde pilihan)
                             sub_df = sub_df.sort_values(by=['kota_asal', 'kota_tujuan', 'unit_type', 'price'])
                             sub_df['Ranking'] = sub_df.groupby(['kota_asal', 'kota_tujuan', 'unit_type']).cumcount() + 1
                         
-                            # ▼▼▼ FILTER HANYA TOP 3 ▼▼▼
+                            # ▼▼▼ FILTER HANYA TOP 3 PEMENANG DI RONDE TERPILIH ▼▼▼
                             sub_df = sub_df[sub_df['Ranking'] <= 3]
-                            # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-                        
+                            
                             sub_df['price_fmt'] = sub_df['price'].apply(lambda x: f"Rp {int(x):,}".replace(",", "."))
                         
-                            # Menampilkan 'kota_asal' di dalam tabel
+                            # Menampilkan 'kota_asal' di dalam tabel layar monitor
                             st.dataframe(
                                 sub_df[['kota_asal', 'kota_tujuan', 'unit_type', 'Ranking', 'vendor_name', 'price_fmt', 'lead_time', 'top']],
                                 use_container_width=True,
@@ -2368,14 +2366,17 @@ def admin_dashboard():
                                     "kota_tujuan": "Kota Tujuan",
                                     "unit_type": "Unit",
                                     "price_fmt": "Harga",
-                                    "vendor_name": "Vendor"
+                                    "vendor_name": "Vendor",
+                                    "top": "TOP"
                                 },
                                 hide_index=True
                             )
                 else:
-                    st.warning("Data tidak ditemukan.")
+                    st.warning("Data tidak ditemukan untuk filter kriteria ini.")
                     
-        # --- TAB 8: PRINT FILE (SK & SPK TERPISAH) ---
+# ===================================================================================================
+        # 🚀 TIMPA UTUH ISI TABS[3] (PRINT DOKUMEN SK & SPK DINAMIS) DENGAN BLOK FULL SAKLEK INI, HONEY!
+        # ===================================================================================================
         with tabs[3]:
             st.subheader("🖨️ Print Dokumen")
         
@@ -2385,12 +2386,12 @@ def admin_dashboard():
                 avail_val = sorted(df_master['validity'].unique().tolist())
                 avail_load = sorted(df_master['load_type'].unique().tolist())
 
-               # ==========================================
+                # ==========================================================
                 # BAGIAN 1: SURAT KEPUTUSAN (SK) - LIVE RE-MAPPING GITHUB (DUAL ENTITAS)
-                # ==========================================
+                # ==========================================================
                 with st.container(border=True):
                     st.markdown("### 1. Surat Keputusan (SK)")
-                    st.caption("Dokumen rekapitulasi pemenang tender (Top 3) berdasarkan entitas PT otomatis dari server GitHub.")
+                    st.caption("Dokumen rekapitulasi pemenang tender berdasarkan entitas PT otomatis dari server GitHub.")
                 
                     # Baris filter dibagi menjadi 4 kolom agar sejajar dan muat dropdown PT nya
                     c1, c2, c3, c4 = st.columns(4)
@@ -2400,7 +2401,7 @@ def admin_dashboard():
                     avail_sk_rounds = sorted(df_master['round'].dropna().unique().tolist()) if not df_master.empty else ["1", "2"]
                     sel_sk_round = c3.selectbox("Pilih Tahap SK", avail_sk_rounds, key="sk_round_select", index=len(avail_sk_rounds)-1)
                     
-                    # 🔔 KUNCI SUCI: Dropdown pemilih Entitas PT untuk rujukan template SK di GitHub
+                    # Dropdown pemilih Entitas PT untuk rujukan template SK di GitHub
                     sel_pt_sk = c4.selectbox(
                         "Pilih Entitas Penerbit SK", 
                         ["PT Tangkas Cipta Optimal", "PT Taco Anugrah Corporindo"], 
@@ -2413,7 +2414,7 @@ def admin_dashboard():
                     df_master_norm['round_clean'] = pd.to_numeric(df_master_norm['round'], errors='coerce').fillna(1).astype(int)
                     clean_sk_val = str(sk_val).replace(" ", "").lower().strip()
                 
-                    # Saring basis data kompetisi global seluruh vendor untuk menghitung ranking asli Top 3
+                    # Saring basis data kompetisi global seluruh vendor untuk menghitung ranking asli patuh filter tahap
                     df_sk_global = df_master_norm[
                         (df_master_norm['validity_clean'] == clean_sk_val) & 
                         (df_master_norm['load_type'] == sk_load) & 
@@ -2422,19 +2423,31 @@ def admin_dashboard():
                     ].copy()
                 
                     if not df_sk_global.empty:
-                        # Hitung ranking kumulatif global
+                        # Hitung ranking kumulatif global lintas seluruh vendor di tahap terpilih
                         df_sk_global['price_sort_temp'] = df_sk_global['price']
                         df_sk_global = df_sk_global.sort_values(by=['origin', 'kota_asal', 'kota_tujuan', 'unit_type', 'price_sort_temp'])
                         df_sk_global['Ranking'] = df_sk_global.groupby(['origin', 'kota_asal', 'kota_tujuan', 'unit_type']).cumcount() + 1
                         
-                        # Saring HANYA pemenang peringkat 1, 2, dan 3 secara global
-                        df_sk_top3 = df_sk_global[df_sk_global['Ranking'] <= 3].copy()
+                        # 🔒 KUNCI UTAMA 1: Hitung batas prioritas dinamis untuk SK dari kompetisi database asli
+                        max_prio_sk_db = int(df_sk_global['Ranking'].max()) if not df_sk_global.empty else 3
+                        prio_options_sk = [i for i in range(1, max_prio_sk_db + 1)]
                         
-                        avail_org = sorted(df_sk_top3['origin'].unique())
+                        # Sisipkan dropdown sortir prioritas dinamis untuk SK
+                        limit_prio_sk = st.selectbox(
+                            "🏅 Batasan Urutan Pemenang SK (Sampai Prioritas Ke-X)",
+                            prio_options_sk,
+                            index=len(prio_options_sk)-1 if len(prio_options_sk) >= 3 else len(prio_options_sk)-1, # Default tampilkan semua
+                            key="sk_prio_limit_select_box"
+                        )
+                        
+                        # Saring data global SK berdasarkan batasan prioritas pilihan admin
+                        df_sk_top_filtered = df_sk_global[df_sk_global['Ranking'] <= limit_prio_sk].copy()
+                        
+                        avail_org = sorted(df_sk_top_filtered['origin'].unique())
                         sel_orgs = st.multiselect("Pilih Origin Area (SK):", avail_org, default=avail_org, key="sk_orgs")
                 
                         if sel_orgs:
-                            df_final_sk = df_sk_top3[df_sk_top3['origin'].isin(sel_orgs)].copy()
+                            df_final_sk = df_sk_top_filtered[df_sk_top_filtered['origin'].isin(sel_orgs)].copy()
                             no_sk = st.text_input("Nomor Surat SK:", value="", placeholder="Contoh: 001/SK-PROC/TACO/III/2026", key="no_sk")
                             
                             if st.button("📄 Generate File SK", type="primary", key="btn_execute_sk_gen"):
@@ -2450,13 +2463,11 @@ def admin_dashboard():
                                 
                                 with st.spinner(f"Mengunduh template SK {sel_pt_sk} dari GitHub..."):
                                     try:
-                                        # Tembak URL Raw GitHub
                                         response_sk = requests.get(template_url_sk)
                                         if response_sk.status_code != 200:
-                                            st.error(f"Gagal mendownload template SK dari GitHub. Status Code: {response_sk.status_code}. Pastikan file template tujuan sudah di-push ke GitHub repo Anda.")
+                                            st.error(f"Gagal mendownload template SK dari GitHub. Status Code: {response_sk.status_code}.")
                                             st.stop()
                                             
-                                        # Ubah hantaran internet menjadi format file object memory (BytesIO)
                                         tpl_sk_stream = io.BytesIO(response_sk.content)
                                         
                                         # --- RE-MAPPING LOGIKA MULTIDROP DAN BIAYA BURUH UNTUK SK ---
@@ -2465,23 +2476,20 @@ def admin_dashboard():
                                         df_sk_merged['outer_city_price'] = 0
                                         df_sk_merged['labor_cost'] = 0
                                         df_sk_merged['catatan_tambahan'] = '-'
-                
+                                
                                         if not df_md.empty:
                                             try:
                                                 df_md_clean = df_md.copy()
                                                 df_md_clean['vendor_email_clean'] = df_md_clean['vendor_email'].astype(str).str.strip().str.lower()
                                                 df_md_clean['validity_norm'] = df_md_clean['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
                                                 df_md_clean['group_id_clean'] = df_md_clean['group_id'].astype(str).str.upper().str.strip()
-                
+                                        
                                                 md_dict_sk = {}
                                                 for _, rmd in df_md_clean.iterrows():
                                                     id_md_raw = str(rmd.get('id_multidrop', '')).strip()
-                                                    
-                                                    # Ambil karakter terakhir penentu round secara aman
                                                     md_rnd_check = id_md_raw[-1] if id_md_raw else '1'
                                                     
                                                     if rmd['validity_norm'] == clean_sk_val and str(md_rnd_check) == str(sel_sk_round):
-                                                        # Key gabungan unik: vendor_email + group_id
                                                         k_key = f"{rmd['vendor_email_clean']}_{rmd['group_id_clean']}"
                                                         
                                                         ic_val = str(rmd.get('inner_city_price', '0')).replace(",", "")
@@ -2494,29 +2502,26 @@ def admin_dashboard():
                                                             'lab': pd.to_numeric(lc_val, errors='coerce') or 0,
                                                             'note': str(rmd.get('catatan_tambahan', '-'))
                                                         }
-                
+                                        
                                                 def merge_md_to_sk(row, kind):
                                                     v_email = str(row['vendor_email']).strip().lower()
                                                     r_gid = str(row['group_id']).strip().upper()
                                                     lookup_key = f"{v_email}_{r_gid}"
-                                                    
                                                     res = md_dict_sk.get(lookup_key, {'in': 0, 'out': 0, 'lab': 0, 'note': '-'})
                                                     return res[kind]
-                
+                                        
                                                 df_sk_merged['inner_city_price'] = df_sk_merged.apply(lambda x: merge_md_to_sk(x, 'in'), axis=1)
                                                 df_sk_merged['outer_city_price'] = df_sk_merged.apply(lambda x: merge_md_to_sk(x, 'out'), axis=1)
                                                 df_sk_merged['labor_cost'] = df_sk_merged.apply(lambda x: merge_md_to_sk(x, 'lab'), axis=1)
                                                 df_sk_merged['catatan_tambahan'] = df_sk_merged.apply(lambda x: merge_md_to_sk(x, 'note'), axis=1)
                                             except Exception as ex_md_sk:
                                                 pass
-                
-                                        # Generate File SK menggunakan fungsi docxtpl bawaan
+                                
                                         f_sk_out = create_docx_sk(tpl_sk_stream, no_sk, sk_val, sk_load, df_sk_merged)
                                         
-                                        # Formatting nama file download agar rapi
                                         safe_val_sk = str(sk_val).replace(" - ", "-").replace(" ", "_")
                                         safe_pt_name = "Tangkas" if sel_pt_sk == "PT Tangkas Cipta Optimal" else "TAC"
-                                        custom_filename_sk = f"SK_{safe_pt_name}_Tahap{sel_sk_round}_{sk_load}_{safe_val_sk}.docx"
+                                        custom_filename_sk = f"SK_{safe_pt_name}_Prio1-{limit_prio_sk}_Tahap{sel_sk_round}_{sk_load}_{safe_val_sk}.docx"
                                         
                                         with open(f_sk_out, "rb") as f:
                                             st.download_button("⬇️ Download File SK Word", f, file_name=custom_filename_sk, type="primary", use_container_width=True)
@@ -2529,10 +2534,9 @@ def admin_dashboard():
                         st.warning("Tidak ditemukan data penawaran harga kompetitor yang aktif untuk kriteria filter ini.")    
                 st.write("") # Jarak
 
-            # ==========================================
-            # BAGIAN 2: SURAT PERINTAH KERJA (SPK)
-            # ==========================================
-            # ==================== TIMPA KHUSUS AREA KOTAK SPK (DI DALAM TABS[3]) DENGAN BLOK INI ====================
+                # ==========================================================
+                # BAGIAN 2: SURAT PERINTAH KERJA (SPK)
+                # ==========================================================
                 with st.container(border=True):
                     st.markdown("### 2. Surat Perintah Kerja (SPK)")
                     st.caption("Dokumen perintah kerja spesifik untuk satu vendor berdasarkan entitas PT, tahap penawaran, and prioritas global yang valid.")
@@ -2545,20 +2549,20 @@ def admin_dashboard():
                     avail_spk_rounds = sorted(df_master['round'].dropna().unique().tolist()) if not df_master.empty else ["1", "2"]
                     sel_spk_round = c5.selectbox("Pilih Tahap SPK", avail_spk_rounds, key="spk_round_select", index=len(avail_spk_rounds)-1)
                     
-                    # 🔔 KUNCI SUCI 1: Tambah dropdown pemilih Entitas PT untuk rujukan template GitHub!
+                    # Dropdown pemilih Entitas PT untuk rujukan template GitHub
                     sel_pt_entitas = c6.selectbox(
                         "Pilih Entitas Penerbit SPK", 
                         ["PT Tangkas Cipta Optimal", "PT Taco Anugrah Corporindo"], 
                         key="spk_pt_entitas_select"
                     )
 
-                    # --- PROSES GENERATE LIVE RANKING GLOBAL UNTUK SPK (BIAR RANKINGNYA GA ZONK ANGKA 1) ---
+                    # --- PROSES GENERATE LIVE RANKING GLOBAL UNTUK SPK BERDASARKAN TAHAP ---
                     df_master_norm = df_master.copy()
                     df_master_norm['validity_clean'] = df_master_norm['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
                     df_master_norm['round_clean'] = pd.to_numeric(df_master_norm['round'], errors='coerce').fillna(1).astype(int)
                     clean_spk_val = str(spk_val).replace(" ", "").lower().strip()
                     
-                    # Saring basis data kompetisi global seluruh vendor untuk menghitung ranking asli
+                    # Saring basis data kompetisi global seluruh vendor murni patuh filter tahap pilihan lo honey
                     df_spk_global = df_master_norm[
                         (df_master_norm['validity_clean'] == clean_spk_val) & 
                         (df_master_norm['load_type'] == spk_load) & 
@@ -2567,27 +2571,45 @@ def admin_dashboard():
                     ].copy()
 
                     if not df_spk_global.empty:
-                        # Hitung ranking kumulatif global persis seperti rumus Tab Summary lo!
+                        # Hitung ranking kompetisi klasemen antar seluruh vendor (Klasemen Global)
                         df_spk_global['price_sort_temp'] = df_spk_global['price']
-                        df_spk_global = df_spk_global.sort_values(by=['kota_asal', 'kota_tujuan', 'unit_type', 'price_sort_temp'])
-                        df_spk_global['Ranking'] = df_spk_global.groupby(['kota_asal', 'kota_tujuan', 'unit_type']).cumcount() + 1
+                        df_spk_global = df_spk_global.sort_values(by=['origin', 'kota_asal', 'kota_tujuan', 'unit_type', 'price_sort_temp'])
+                        df_spk_global['Ranking'] = df_spk_global.groupby(['origin', 'kota_asal', 'kota_tujuan', 'unit_type']).cumcount() + 1
                         
-                        # Pilih Vendor yang ada datanya di tahap and periode terpilih
-                        avail_vens = sorted(df_spk_global['vendor_name'].unique().tolist())
-                        sel_ven = st.selectbox("Pilih Vendor (SPK):", avail_vens, key="spk_ven")
+                        # ⚙️ FILTER UTAMA KEDUA: VENDOR & BATASAN PRIORITAS DINAMIS SPK ALL VENDOR
+                        st.write("")
+                        col_spk_v, col_spk_p = st.columns(2)
                         
-                        # Potong filter visual murni rute milik vendor terpilih
-                        df_final_spk = df_spk_global[df_spk_global['vendor_name'] == sel_ven].copy()
+                        # Ambil daftar nama vendor yang masuk klasemen global tahap terpilih
+                        avail_vens = sorted(df_spk_global['vendor_name'].dropna().unique().tolist())
+                        sel_ven = col_spk_v.selectbox("Pilih Vendor (SPK):", avail_vens, key="spk_ven")
+                        
+                        # 🔒 KUNCI UTAMA 2: Hitung max prioritas dinamis di database saat itu (Bisa 6, 7, 8, dst)
+                        max_prio_spk_db = int(df_spk_global['Ranking'].max()) if not df_spk_global.empty else 3
+                        prio_options_spk = [i for i in range(1, max_prio_spk_db + 1)]
+                        
+                        # Munculkan dropdown prioritas dinamis untuk memotong data SPK
+                        limit_prio_value = col_spk_p.selectbox(
+                            "🏅 Batasan Urutan Prioritas Vendor (Sampai Prioritas Ke-X)", 
+                            prio_options_spk, 
+                            index=len(prio_options_spk)-1, # Default langsung ngebuka prioritas maksimal/buka semua
+                            key="print_spk_prio_limit_select_box"
+                        )
+                        
+                        # 🎯 STRATEGI SAKLEK: Saring global dulu berdasarkan batas prioritas DULU, baru cari nama vendornya!
+                        df_final_spk = df_spk_global[
+                            (df_spk_global['Ranking'] <= limit_prio_value) & 
+                            (df_spk_global['vendor_name'] == sel_ven)
+                        ].copy()
                         
                         if not df_final_spk.empty:
-                            st.info(f"Vendor **{sel_ven}** memiliki **{len(df_final_spk)} rute aktif** di {spk_load} {spk_val} (Tahap {sel_spk_round}).")
+                            st.success(f"🔥 Siap Cetak! Vendor **{sel_ven}** memiliki **{len(df_final_spk)} rute aktif** yang lolos saringan sampai Prioritas {limit_prio_value}.")
                         
                             no_spk = st.text_input("Nomor Surat SPK:", value="", placeholder="Contoh: 001/SPK/TACO/III/2026", key="no_spk")
                             
                             if st.button("📄 Generate File SPK", type="primary", key="btn_execute_spk_gen"):
                                 import requests
                                
-                                # 🔔 KUNCI SUCI 2: Mapping URL Raw GitHub lo di sini, sesuaikan nama repo and filenya ya !
                                 GITHUB_BASE = "https://raw.githubusercontent.com/phibipi/taco-rfq-system/main/templates/"
                                 
                                 if sel_pt_entitas == "PT Tangkas Cipta Optimal":
@@ -2597,13 +2619,11 @@ def admin_dashboard():
                                     
                                 with st.spinner(f"Mengunduh template {sel_pt_entitas} dari GitHub and memproses SPK..."):
                                     try:
-                                        # Tembak URL Raw GitHub secara rahasia
                                         response = requests.get(template_url)
                                         if response.status_code != 200:
-                                            st.error(f"Gagal mendownload template dari GitHub. Status Code: {response.status_code}. Cek apakah repository lo private atau link-nya salah, .")
+                                            st.error(f"Gagal mendownload template dari GitHub. Status Code: {response.status_code}.")
                                             st.stop()
                                             
-                                        # Ubah hantaran internet menjadi format file object memory (BytesIO)
                                         tpl_spk_stream = io.BytesIO(response.content)
                                         
                                         pic = df_final_spk.iloc[0].get('contact_person', 'Pimpinan Perusahaan')
@@ -2631,7 +2651,6 @@ def admin_dashboard():
                                         else: alamat_list.append("(Sheet Gudang Kosong)")
                                         alamat_str_combined = "\n".join(alamat_list)
 
-                                        
                                         # --- RE-MAPPING LOGIKA MULTIDROP DAN BIAYA BURUH UNTUK DOKUMEN WORD SPK ---
                                         df_spk_merged = df_final_spk.copy()
                                         df_spk_merged['inner_city_price'] = 0
@@ -2642,7 +2661,6 @@ def admin_dashboard():
                                             try:
                                                 df_md_clean = df_md.copy()
                                                 df_md_clean['vendor_email_clean'] = df_md_clean['vendor_email'].astype(str).str.strip().str.lower()
-                                                # Normalisasi karakter pemisah strip/spasi periode
                                                 df_md_clean['validity_norm'] = df_md_clean['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
                                                 df_md_clean['group_id_clean'] = df_md_clean['group_id'].astype(str).str.upper().str.strip()
                                         
@@ -2652,12 +2670,7 @@ def admin_dashboard():
                                                 md_dict = {}
                                                 for _, rmd in df_md_clean.iterrows():
                                                     id_md_raw = str(rmd.get('id_multidrop', '')).strip()
-                                                    
-                                                    # AMBIL KARAKTER TERAKHIR SECARA AMAN (Mengantisipasi email memiliki banyak underscore)
-                                                    if id_md_raw:
-                                                        md_rnd_check = id_md_raw[-1] 
-                                                    else:
-                                                        md_rnd_check = '1'
+                                                    md_rnd_check = id_md_raw[-1] if id_md_raw else '1'
                                                         
                                                     if (rmd['vendor_email_clean'] == clean_vendor_email and 
                                                         rmd['validity_norm'] == clean_validity_spk and 
@@ -2665,7 +2678,6 @@ def admin_dashboard():
                                                         
                                                         k_gid = rmd['group_id_clean']
                                                         
-                                                        # Bersihkan data uang dari string koma bawaan gspread
                                                         ic_val = str(rmd.get('inner_city_price', '0')).replace(",", "")
                                                         oc_val = str(rmd.get('outer_city_price', '0')).replace(",", "")
                                                         lc_val = str(rmd.get('labor_cost', '0')).replace(",", "")
@@ -2686,13 +2698,16 @@ def admin_dashboard():
                                                 df_spk_merged['labor_cost'] = df_spk_merged.apply(lambda x: get_md_val(x, 'lab'), axis=1)
                                             except Exception as ex_md:
                                                 st.error(f"Gagal memproses data biaya tambahan: {ex_md}")
-                                        # Generate File SPK Word via docxtpl
+
                                         f_spk = create_docx_spk(tpl_spk_stream, no_spk, spk_val, spk_load, sel_ven, pic, final_pass, origin_str_combined, alamat_str_combined, df_spk_merged)
                                         
                                         safe_val = str(spk_val).replace(" - ", "-").replace(" ", "_")
                                         safe_load = str(spk_load).replace(" ", "")
+                                        safe_pt_prefix = "TANGKAS" if "Tangkas" in sel_pt_entitas else "TACO"
                                         safe_ven_file = "".join(x for x in sel_ven if x.isalnum() or x in " -").replace(" ", "_")
-                                        custom_filename = f"SPK_Tahap{sel_spk_round}_{safe_load}_{safe_val}_{safe_ven_file}.docx"
+                                        
+                                        # Filename otomatis dinamis merepresentasikan filter prioritas global pilihan lo honey!
+                                        custom_filename = f"SPK_{safe_pt_prefix}_Prio1-{limit_prio_value}_Tahap{sel_spk_round}_{safe_load}_{safe_val}_{safe_ven_file}.docx"
                                         
                                         with open(f_spk, "rb") as f:
                                             st.download_button("⬇️ Download File SPK Word", f, file_name=custom_filename, type="primary", use_container_width=True)
@@ -2700,7 +2715,7 @@ def admin_dashboard():
                                     except Exception as e: 
                                         st.error(f"Gagal memproses file Word SPK: {e}")
                         else:
-                            st.warning("Vendor terpilih tidak memiliki data harga pada kombinasi filter ini.")
+                            st.warning(f"Vendor **{sel_ven}** tidak menjuarai peringkat rute yang masuk dalam batasan Prioritas {limit_prio_value} khusus di Tahap {sel_spk_round} ini.")
                     else:
                         st.warning("Tidak ditemukan data penawaran harga kompetitor yang aktif untuk kriteria filter ini.")
         # --- TAB 5: SPH UPLOADS (FITUR BARU) ---
