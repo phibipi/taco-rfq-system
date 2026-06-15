@@ -665,8 +665,7 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
         # Filter & Top 3 Logic
         df_sub = df_data[df_data['origin'] == org].copy()
         df_sub = df_sub.sort_values(by=['kota_asal', 'kota_tujuan', 'unit_type', 'price'])
-        df_sub['Ranking'] = df_sub.groupby(['kota_tujuan', 'unit_type']).cumcount() + 1
-        df_sub = df_sub[df_sub['Ranking'] <= 3].copy()
+               
         winning_vendors_data.append(df_sub)
         
         # Buat Tabel (8 Kolom)
@@ -1279,8 +1278,6 @@ def user_dashboard():
                         sub_df = sub_df.sort_values(by=['kota_tujuan', 'unit_type', 'price'])
                         sub_df['Ranking'] = sub_df.groupby(['kota_tujuan', 'unit_type']).cumcount() + 1
                         
-                        # Filter Top 3
-                        sub_df = sub_df[sub_df['Ranking'] <= 3]
                         
                         sub_df['price_fmt'] = sub_df['price'].apply(lambda x: f"Rp {int(x):,}".replace(",", "."))
                         
@@ -2352,8 +2349,7 @@ def admin_dashboard():
                             sub_df = sub_df.sort_values(by=['kota_asal', 'kota_tujuan', 'unit_type', 'price'])
                             sub_df['Ranking'] = sub_df.groupby(['kota_asal', 'kota_tujuan', 'unit_type']).cumcount() + 1
                         
-                            # ▼▼▼ FILTER HANYA TOP 3 PEMENANG DI RONDE TERPILIH ▼▼▼
-                            sub_df = sub_df[sub_df['Ranking'] <= 3]
+
                             
                             sub_df['price_fmt'] = sub_df['price'].apply(lambda x: f"Rp {int(x):,}".replace(",", "."))
                         
