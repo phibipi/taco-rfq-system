@@ -2746,12 +2746,14 @@ def admin_dashboard():
                         
                         no_spk = st.text_input("Nomor Surat SPK (Rujukan Awal):", value="", placeholder="Contoh: 001/SPK/TACO/III/2026", key="no_spk")
                         
-                        # --- TOMBOL EKSEKUSI BULK GENERATE SPK ---
+                        # --- TOMBOL EKSEKUSI BULK GENERATE SPK (WITH AUTO-INCREMENT NUMBER) ---
                         if st.button("📄 Generate Semua File SPK Vendor", type="primary", key="btn_execute_spk_gen"):
                             if not sel_origins:
                                 st.warning("Pilih minimal satu Origin rute dulu dong, gais!")
                             elif not sel_vendors:
                                 st.warning("Pilih minimal satu Vendor penerima SPK dulu dong, gais!")
+                            elif not no_spk.strip():
+                                st.warning("Nomor rujukan awal SPK jangan dikosongin ya!")
                             else:
                                 import requests
                                 import os
@@ -2761,10 +2763,21 @@ def admin_dashboard():
                                 output_folder = "output_spk"
                                 os.makedirs(output_folder, exist_ok=True)
                                 
+                                # --- 🎯 ENGINE AUTO-NUMBER SPK: EKSTRAK 3 ANGKA DEPAN ---
+                                nomor_mentah_spk = str(no_spk).strip()
+                                prefix_angka_spk = nomor_mentah_spk[:3]
+                                sisa_nomor_spk = nomor_mentah_spk[3:]
+                                
+                                try:
+                                    start_counter_spk = int(prefix_angka_spk)
+                                    is_numeric_prefix_spk = True
+                                Momong ValueError:
+                                    is_numeric_prefix_spk = False
+                                
                                 GITHUB_BASE = "https://raw.githubusercontent.com/phibipi/taco-rfq-system/main/templates/"
                                 template_url = GITHUB_BASE + ("template_spk_tangkas.docx" if sel_pt_entitas == "PT Tangkas Cipta Optimal" else "template_spk_tac.docx")
                                 
-                                with st.spinner("Mengunduh template dan memproses seluruh SPK sesuai filter..."):
+                                with st.spinner("Mengunduh template dan memproses seluruh SPK dengan auto-number..."):
                                     try:
                                         response = requests.get(template_url)
                                         if response.status_code != 200:
@@ -2774,7 +2787,7 @@ def admin_dashboard():
                                         success_count = 0
                                         
                                         # 🎯 LOOPING UTAMA: GENERATE 1 FILE PER VENDOR
-                                        for v_name in sel_vendors:
+                                        for idx_loop, v_name in enumerate(sel_vendors):
                                             # Saring data: harus masuk list Origin terpilih, masuk batas prioritas, dan milik Vendor ini
                                             df_final_spk = df_spk_global[
                                                 (df_spk_global['origin'].isin(sel_origins)) &
@@ -2786,6 +2799,13 @@ def admin_dashboard():
                                             if df_final_spk.empty:
                                                 st.warning(f"⚠️ Vendor **{v_name}** di-skip karena tidak memiliki rute aktif pada Origin terpilih dengan peringkat <= {limit_prio_value}")
                                                 continue
+                                                
+                                            # 🎯 FORMULA AUTO-INCREMENT NOMOR SURAT SPK PER VENDOR REAL TIME:
+                                            if is_numeric_prefix_spk:
+                                                current_num_spk = str(start_counter_spk + success_count).zfill(3)
+                                                custom_no_spk = f"{current_num_spk}{sisa_nomor_spk}"
+                                            else:
+                                                custom_no_spk = nomor_mentah_spk
                                                 
                                             tpl_spk_stream = io.BytesIO(response.content)
                                             
@@ -2867,18 +2887,20 @@ def admin_dashboard():
                                             safe_pt_prefix = "TANGKAS" if "Tangkas" in sel_pt_entitas else "TACO"
                                             safe_ven_file = "".join(x for x in v_name if x.isalnum() or x in " -").replace(" ", "_")
                                             
-                                            custom_filename = f"SPK_{safe_pt_prefix}_Prio1-{limit_prio_value}_Tahap{sel_spk_round}_{safe_load}_{safe_val}_{safe_ven_file}.docx"
+                                            # Suntikkan running number nomor surat ke penamaan file fisik .docx lo gais
+                                            num_file_prefix = current_num_spk if is_numeric_prefix_spk else prefix_angka_spk
+                                            custom_filename = f"SPK_{safe_pt_prefix}_{num_file_prefix}_Prio1-{limit_prio_value}_Tahap{sel_spk_round}_{safe_load}_{safe_val}_{safe_ven_file}.docx"
                                             final_local_path = os.path.join(output_folder, custom_filename)
                                             
-                                            # Panggil fungsi generator tabel utama lo
-                                            f_spk_result = create_docx_spk(tpl_spk_stream, no_spk, spk_val, spk_load, v_name, pic, final_pass, origin_str_combined, alamat_str_combined, df_spk_merged)
+                                            # Panggil fungsi generator tabel utama dengan nomor surat dinamis
+                                            f_spk_result = create_docx_spk(tpl_spk_stream, custom_no_spk, spk_val, spk_load, v_name, pic, final_pass, origin_str_combined, alamat_str_combined, df_spk_merged)
                                             
                                             # Simpan file permanen ke folder output lokal
                                             shutil.move(f_spk_result, final_local_path)
                                             success_count += 1
-                                            st.write(f"🔹 File sukses dibuat: `{custom_filename}`")
+                                            st.write(f"🔹 File sukses dibuat ({custom_no_spk}): `{custom_filename}`")
                                             
-                                        st.success(f"🎉 Selesai! Berhasil melahirkan {success_count} dokumen SPK di dalam folder `{output_folder}/`!")
+                                        st.success(f"🎉 Selesai! Berhasil melahirkan {success_count} dokumen SPK berurutan di dalam folder `{output_folder}/`!")
                                     except Exception as e: 
                                         st.error(f"Gagal memproses runtutan file Word SPK: {e}")
                     else:
