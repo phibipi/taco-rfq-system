@@ -2537,6 +2537,9 @@ def admin_dashboard():
                             if st.button("📄 Generate File SK (Otomatis Pisah Per Origin)", type="primary", key="btn_execute_sk_gen"):
                                 import requests
                                 import zipfile
+                                import os
+                                import io
+
                                 
                                 GITHUB_BASE = "https://raw.githubusercontent.com/phibipi/taco-rfq-system/main/templates/"
                                 if sel_pt_sk == "PT Tangkas Cipta Optimal":
