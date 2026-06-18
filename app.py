@@ -1104,10 +1104,7 @@ def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name
             'tabel_harga': sd
     }
     doc.render(context)
-    # Buntut dari fungsi create_docx_spk lo harusnya nge-save ke variabel nama_output
-    if nama_output:
-        doc.save(nama_output)
-        return nama_output
+    return doc
     
 
 # ▼ POINTER FIX SAKLEK: TIMPA SELURUH ISI FUNGSI get_target_price DENGAN BLOK INI ▼
@@ -2902,17 +2899,15 @@ def admin_dashboard():
                                             
                                             # 🎯 BALIKIN PEMANGGILAN ASLI LO BIAR TANGGAL, TABEL, USERNAME GA RUSAK:
                                             doc_obj = create_docx_spk(
-                                                tpl_spk_stream, custom_no_spk, spk_val, spk_load, 
-                                                v_name, pic, final_pass, origin_str_combined, 
+                                                tpl_spk_stream, custom_no_spk, spk_val, spk_load,
+                                                v_name, pic, final_pass, origin_str_combined,
                                                 alamat_str_combined, df_spk_merged
                                             )
                                             
-                                            # 🎯 KITA FORCE SAVE MANUALLY DI SINI KE FOLDER NYA:
                                             if doc_obj:
                                                 doc_obj.save(final_local_path)
-                                            
-                                            success_count += 1
-                                            st.write(f"🔹 File sukses dibuat ({custom_no_spk}): `{custom_filename}`")
+                                                success_count += 1
+                                                st.write(f"🔹 File sukses dibuat ({custom_no_spk}): `{custom_filename}`")
                                             
                                         # --- JALUR ZIP UTK DOWNLOAD DI LAPTOP ---
                                         if success_count > 0:
