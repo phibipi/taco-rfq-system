@@ -1091,17 +1091,21 @@ def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name
         set_col_widths(table, col_widths) 
         sd.add_paragraph("") 
 
-    # Render data ke template word asli dan save
+    bulan_indo = {1:'Januari',2:'Februari',3:'Maret',4:'April',5:'Mei',6:'Juni',
+                  7:'Juli',8:'Agustus',9:'September',10:'Oktober',11:'November',12:'Desember'}
+    today = datetime.now()
+    tgl_spk = f"{today.day} {bulan_indo[today.month]} {today.year}"
+    
     context = {
-            'nomor_surat': nomor_surat,
-            'validity': validity,
-            'load_type': load_type,
-            'vendor_name': vendor_name,
-            'contact_person': contact_person,
-            'password_last5': password_last5,
-            'origin_combined': origin_combined,
-            'alamat_combined': alamat_combined,
-            'tabel_harga': sd
+        'no_spk': nomor_surat,
+        'validity': validity,
+        'load_type': load_type,
+        'tanggal_spk': tgl_spk,
+        'vendor_name': vendor_name,
+        'contact_person': contact_person,
+        'password_vendor': password_last5,
+        'alamat_gudang': alamat_combined,
+        'tabel_harga_vendor': sd
     }
     doc.render(context)
     return doc
