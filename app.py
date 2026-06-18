@@ -2677,13 +2677,13 @@ def admin_dashboard():
 
                
                 # ==========================================================
-                # BAGIAN 2: SURAT PERINTAH KERJA (SPK) - UPDATED BULK LOOP MULTI VENDOR
+                # BAGIAN 2: SURAT PERINTAH KERJA (SPK) - MULTI ORIGIN & MULTI VENDOR
                 # ==========================================================
                 with st.container(border=True):
                     st.markdown("### 2. Surat Perintah Kerja (SPK)")
-                    st.caption("Dokumen perintah kerja spesifik untuk beberapa vendor berdasarkan entitas PT, tahap penawaran, dan prioritas global yang valid.")
+                    st.caption("Dokumen perintah kerja spesifik per vendor berdasarkan multi-origin, entitas PT, tahap penawaran, dan prioritas global.")
                     
-                    # Kita bagi baris filter menjadi 4 kolom biar muat dropdown PT nya 
+                    # Baris filter utama (Periode, Muatan, Tahap, Entitas PT)
                     c3, c4, c5, c6 = st.columns(4)
                     spk_val = c3.selectbox("Periode SPK", avail_val, key="spk_val")
                     spk_load = c4.selectbox("Muatan SPK", avail_load, key="spk_load")
@@ -2691,20 +2691,19 @@ def admin_dashboard():
                     avail_spk_rounds = sorted(df_master['round'].dropna().unique().tolist()) if not df_master.empty else ["1", "2"]
                     sel_spk_round = c5.selectbox("Pilih Tahap SPK", avail_spk_rounds, key="spk_round_select", index=len(avail_spk_rounds)-1)
                     
-                    # Dropdown pemilih Entitas PT untuk rujukan template GitHub
                     sel_pt_entitas = c6.selectbox(
                         "Pilih Entitas Penerbit SPK", 
                         ["PT Tangkas Cipta Optimal", "PT Taco Anugrah Corporindo"], 
                         key="spk_pt_entitas_select"
                     )
 
-                    # --- PROSES GENERATE LIVE RANKING GLOBAL UNTUK SPK BERDASARKAN TAHAP ---
+                    # --- PROSES GENERATE LIVE RANKING GLOBAL BERDASARKAN TAHAP ---
                     df_master_norm = df_master.copy()
                     df_master_norm['validity_clean'] = df_master_norm['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
                     df_master_norm['round_clean'] = pd.to_numeric(df_master_norm['round'], errors='coerce').fillna(1).astype(int)
                     clean_spk_val = str(spk_val).replace(" ", "").lower().strip()
                     
-                    # Saring basis data kompetisi global seluruh vendor murni patuh filter tahap pilihan
+                    # Filter awal berdasarkan Tahap, Periode, Muatan, dan Harga valid
                     df_spk_global = df_master_norm[
                         (df_master_norm['validity_clean'] == clean_spk_val) & 
                         (df_master_norm['load_type'] == spk_load) & 
@@ -2718,46 +2717,54 @@ def admin_dashboard():
                         df_spk_global = df_spk_global.sort_values(by=['origin', 'kota_asal', 'kota_tujuan', 'unit_type', 'price_sort_temp'])
                         df_spk_global['Ranking'] = df_spk_global.groupby(['origin', 'kota_asal', 'kota_tujuan', 'unit_type']).cumcount() + 1
                         
-                        # ⚙️ FILTER UTAMA KEDUA: VENDOR & BATASAN PRIORITAS DINAMIS SPK ALL VENDOR
                         st.write("")
-                        col_spk_v, col_spk_p = st.columns(2)
+                        st.markdown("##### ⚙️ Filter Wilayah & Vendor")
                         
-                        # Ambil daftar nama vendor yang masuk klasemen global tahap terpilih
-                        avail_vens = sorted(df_spk_global['vendor_name'].dropna().unique().tolist())
+                        # --- 🎯 REVISI UTAMA: BARIS FILTER MULTI-SELECT ORIGIN & VENDOR ---
+                        col_spk_o, col_spk_v, col_spk_p = st.columns([1.2, 1.5, 1.3])
                         
-                        # 🎯 REVISI UTAMA 1: Ubah jadi MULTISELECT agar bisa pilih banyak vendor sekaligus
-                        sel_vendors = col_spk_v.multiselect("Pilih Vendor Penerima SPK (Bisa Banyak):", avail_vens, key="spk_ven_multiselect")
+                        # 1. Multi-select untuk ORIGIN
+                        avail_origins = sorted(df_spk_global['origin'].dropna().unique().tolist())
+                        sel_origins = col_spk_o.multiselect("Pilih Rute Origin (Bisa Banyak):", avail_origins, default=avail_origins, key="spk_origin_multiselect")
                         
-                        # 🔒 KUNCI UTAMA 2: Hitung max prioritas dinamis di database saat itu
+                        # Filter temporary data berdasarkan Origin yang dipilih untuk memperbarui list Vendor yang tersedia
+                        df_spk_filtered_origin = df_spk_global[df_spk_global['origin'].isin(sel_origins)] if sel_origins else df_spk_global
+                        
+                        # 2. Multi-select untuk VENDOR
+                        avail_vens = sorted(df_spk_filtered_origin['vendor_name'].dropna().unique().tolist())
+                        sel_vendors = col_spk_v.multiselect("Pilih Vendor Penerima SPK:", avail_vens, key="spk_ven_multiselect")
+                        
+                        # 3. Dropdown Batasan Prioritas Dinamis
                         max_prio_spk_db = int(df_spk_global['Ranking'].max()) if not df_spk_global.empty else 3
                         prio_options_spk = [i for i in range(1, max_prio_spk_db + 1)]
-                        
-                        # Munculkan dropdown prioritas dinamis untuk memotong data SPK
                         limit_prio_value = col_spk_p.selectbox(
-                            "🏅 Batasan Urutan Prioritas Vendor (Sampai Prioritas Ke-X)", 
+                            "🏅 Batasan Urutan Prioritas Vendor", 
                             prio_options_spk, 
-                            index=len(prio_options_spk)-1, # Default langsung ngebuka prioritas maksimal/buka semua
+                            index=len(prio_options_spk)-1,
                             key="print_spk_prio_limit_select_box"
                         )
                         
                         no_spk = st.text_input("Nomor Surat SPK (Rujukan Awal):", value="", placeholder="Contoh: 001/SPK/TACO/III/2026", key="no_spk")
                         
-                        # 🎯 REVISI UTAMA 2: Tombol Eksekusi Bulk Loop per Vendor
+                        # --- TOMBOL EKSEKUSI BULK GENERATE SPK ---
                         if st.button("📄 Generate Semua File SPK Vendor", type="primary", key="btn_execute_spk_gen"):
-                            if not sel_vendors:
-                                st.warning("Waduh, pilih minimal satu Vendor dulu dong, gais!")
+                            if not sel_origins:
+                                st.warning("Pilih minimal satu Origin rute dulu dong, gais!")
+                            elif not sel_vendors:
+                                st.warning("Pilih minimal satu Vendor penerima SPK dulu dong, gais!")
                             else:
                                 import requests
                                 import os
+                                import shutil
                                 
-                                # Siapkan folder output lokal biar file gak saling timpa
+                                # Siapkan folder output lokal
                                 output_folder = "output_spk"
                                 os.makedirs(output_folder, exist_ok=True)
                                 
                                 GITHUB_BASE = "https://raw.githubusercontent.com/phibipi/taco-rfq-system/main/templates/"
                                 template_url = GITHUB_BASE + ("template_spk_tangkas.docx" if sel_pt_entitas == "PT Tangkas Cipta Optimal" else "template_spk_tac.docx")
                                 
-                                with st.spinner(f"Mengunduh template {sel_pt_entitas} dan memproses seluruh SPK..."):
+                                with st.spinner("Mengunduh template dan memproses seluruh SPK sesuai filter..."):
                                     try:
                                         response = requests.get(template_url)
                                         if response.status_code != 200:
@@ -2766,17 +2773,18 @@ def admin_dashboard():
                                         
                                         success_count = 0
                                         
-                                        # 🎯 LOOPING UTAMA: EKSEKUSI PER VENDOR YANG DICENTANG
+                                        # 🎯 LOOPING UTAMA: GENERATE 1 FILE PER VENDOR
                                         for v_name in sel_vendors:
-                                            # Filter data spesifik untuk vendor ini yang masuk batasan prioritas
+                                            # Saring data: harus masuk list Origin terpilih, masuk batas prioritas, dan milik Vendor ini
                                             df_final_spk = df_spk_global[
+                                                (df_spk_global['origin'].isin(sel_origins)) &
                                                 (df_spk_global['Ranking'] <= limit_prio_value) & 
                                                 (df_spk_global['vendor_name'] == v_name)
                                             ].copy()
                                             
-                                            # Kalau rutenya kosong karena gak masuk prioritas, skip ke vendor berikutnya
+                                            # Jika kosong (misal vendor ini gak punya rute di origin/prioritas terpilih), skip ke vendor selanjutnya
                                             if df_final_spk.empty:
-                                                st.warning(f"⚠️ Vendor **{v_name}** di-skip karena tidak menjuarai peringkat rute di Prioritas <= {limit_prio_value}")
+                                                st.warning(f"⚠️ Vendor **{v_name}** di-skip karena tidak memiliki rute aktif pada Origin terpilih dengan peringkat <= {limit_prio_value}")
                                                 continue
                                                 
                                             tpl_spk_stream = io.BytesIO(response.content)
@@ -2853,7 +2861,7 @@ def admin_dashboard():
                                                 except Exception as ex_md:
                                                     st.error(f"Gagal memproses data biaya tambahan vendor {v_name}: {ex_md}")
 
-                                            # Jalankan fungsi generator SPK (Menerima parameter nama output file baru)
+                                            # Tentukan nama file output unik per vendor
                                             safe_val = str(spk_val).replace(" - ", "-").replace(" ", "_")
                                             safe_load = str(spk_load).replace(" ", "")
                                             safe_pt_prefix = "TANGKAS" if "Tangkas" in sel_pt_entitas else "TACO"
@@ -2862,12 +2870,10 @@ def admin_dashboard():
                                             custom_filename = f"SPK_{safe_pt_prefix}_Prio1-{limit_prio_value}_Tahap{sel_spk_round}_{safe_load}_{safe_val}_{safe_ven_file}.docx"
                                             final_local_path = os.path.join(output_folder, custom_filename)
                                             
-                                            # PANGGUNG UTAMA: Kirim temp file stream ke fungsi draw tabel final lo
-                                            # Pastikan di dalam fungsi `create_docx_spk` lo, baris terakhirnya diubah menjadi doc.save(final_local_path)
+                                            # Panggil fungsi generator tabel utama lo
                                             f_spk_result = create_docx_spk(tpl_spk_stream, no_spk, spk_val, spk_load, v_name, pic, final_pass, origin_str_combined, alamat_str_combined, df_spk_merged)
                                             
-                                            # Move file dari temp ke folder output tetap kita
-                                            import shutil
+                                            # Simpan file permanen ke folder output lokal
                                             shutil.move(f_spk_result, final_local_path)
                                             success_count += 1
                                             st.write(f"🔹 File sukses dibuat: `{custom_filename}`")
@@ -2876,7 +2882,7 @@ def admin_dashboard():
                                     except Exception as e: 
                                         st.error(f"Gagal memproses runtutan file Word SPK: {e}")
                     else:
-                        st.warning("Tidak ditemukan data penawaran harga yang aktif untuk kriteria filter ini.")
+                        st.warning("Tidak ditemukan data penawaran harga kompetitor yang aktif untuk kriteria filter ini.")
         # --- TAB 5: SPH UPLOADS (FITUR BARU) ---
         with tabs[4]:
             st.subheader("📥 Dokumen SPH Vendor (Signed)")
