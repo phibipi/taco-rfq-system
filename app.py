@@ -922,20 +922,54 @@ def create_docx_sph(template_file, vendor_name, vendor_address, validity, load_t
     doc.save(fn)
     return fn
     
-# --- FUNGSI GENERATE SPK (UPDATE: MULTI ORIGIN & LEBAR KOLOM) ---
-def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic_vendor, vendor_pass, origin_name_str, alamat_gudang, df_data):
+# ==============================================================================
+# 🎯 FUNGSI UTAMA: LOOP BULK SPK PER VENDOR (PANGGIL DARI TOMBOL STREAMLIT)
+# ==============================================================================
+def generate_bulk_spk(template_file, nomor_surat, validity, load_type, df_filtered_origin, selected_vendors):
+    """
+    Fungsi ini dipanggil saat tombol di Streamlit diklik.
+    Akan nge-loop setiap vendor yang dipilih dan menghasilkan 1 file Word per vendor.
+    """
+    import os
+    output_folder = "output_spk"
+    os.makedirs(output_folder, exist_ok=True)
+    
+    success_count = 0
+    
+    # Looping per Vendor yang dipilih di UI Multi-select
+    for vendor in selected_vendors:
+        # Filter data: Ambil rute yang cuma dimiliki oleh vendor ini
+        df_vendor_data = df_filtered_origin[df_filtered_origin['vendor_name'] == vendor].copy()
+        
+        # Kalau vendor ini gak punya rute di origin yang dipilih, skip biar gak bikin dokumen kosong
+        if df_vendor_data.empty:
+            continue
+            
+        # Urutkan data rutenya biar rapi
+        df_vendor_data = df_vendor_data.sort_values(by=['kota_asal', 'kota_tujuan', 'unit_type', 'price'])
+        
+        # Bikin nama file output unik untuk vendor ini
+        clean_vendor_name = "".join([c for c in vendor if c.isalpha() or c.isdigit() or c in ' ']).rstrip()
+        nama_file_output = os.path.join(output_folder, f"SPK_{clean_vendor_name}_{nomor_surat.replace('/', '_')}.docx")
+        
+        try:
+            # Panggil fungsi generator untuk menggambar tabel ke Word
+            create_docx_spk_final(template_file, nomor_surat, validity, load_type, df_vendor_data, nama_file_output)
+            success_count += 1
+            st.success(f"✅ Berhasil generate SPK untuk Vendor: **{vendor}**")
+        except Exception as e:
+            st.error(f"❌ Gagal generate SPK Vendor {vendor}. Error: {str(e)}")
+            
+    st.info(f"🎉 Selesai! {success_count} dokumen SPK tersimpan di folder `{output_folder}/`")
+
+
+# ==============================================================================
+# 🎯 FUNGSI GENERATOR: DRAW TABEL SPK (9 KOLOM - TANPA RANKING)
+# ==============================================================================
+def create_docx_spk_final(template_file, nomor_surat, validity, load_type, df_data, nama_output):
     doc = DocxTemplate(template_file)
     
-    # Format Tanggal
-    bulan_indo = {1:'Januari', 2:'Februari', 3:'Maret', 4:'April', 5:'Mei', 6:'Juni', 7:'Juli', 8:'Agustus', 9:'September', 10:'Oktober', 11:'November', 12:'Desember'}
-    today = datetime.now()
-    tgl_spk = f"{today.day} {bulan_indo[today.month]} {today.year}"
-
-    # Helper Format Rupiah
-    def fmt_rp(x):
-        try: return f"Rp {int(x):,}".replace(",", ".")
-        except: return "Rp 0"
-
+    # --- HELPER 1: SET LEBAR KOLOM ---
     def set_col_widths(table, widths):
         table.autofit = False 
         table.allow_autofit = False
@@ -944,81 +978,128 @@ def create_docx_spk(template_file, no_spk, validity, load_type, vendor_name, pic
                 if idx < len(row.cells):
                     row.cells[idx].width = width
 
-    def format_cell(cell, text, align=WD_ALIGN_PARAGRAPH.CENTER, bold=False, size=7):
-        cell.text = str(text)
-        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-        p = cell.paragraphs[0]
-        p.alignment = align
-        p.paragraph_format.space_after = Pt(0)
-        run = p.runs[0] if p.runs else p.add_run()
+    # --- HELPER 2: WARNA BACKGROUND CELL ---
+    def set_cell_background(cell, color_hex):
+        shading_elm = parse_xml(r'<w:shd {} w:fill="{}"/>'.format(nsdecls('w'), color_hex))
+        cell._tc.get_or_add_tcPr().append(shading_elm)
+
+    # --- HELPER 3: FORMAT PARAGRAF ---
+    def format_paragraph(paragraph, size=6, bold=False, align=None):
+        paragraph_format = paragraph.paragraph_format
+        paragraph_format.space_after = Pt(0)
+        paragraph_format.space_before = Pt(0)
+        paragraph_format.line_spacing = 1
+        if align is not None: paragraph.alignment = align
+        run = paragraph.runs[0] if paragraph.runs else paragraph.add_run()
         run.font.size = Pt(size)
-        run.font.name = 'Calibri'
         run.font.bold = bold
+        run.font.name = 'Calibri'
 
-    # --- TABEL DATA ---
+    # --- HELPER 4: REPEAT HEADER ROW ---
+    def set_repeat_table_header(row):
+        tr = row._tr
+        trPr = tr.get_or_add_trPr()
+        tblHeader = OxmlElement('w:tblHeader')
+        tblHeader.set(qn('w:val'), "true")
+        trPr.append(tblHeader)
+
+    def fmt_val_rp(x):
+        try: return f"Rp {int(float(x)):,}".replace(",", ".") if float(x) > 0 else "-"
+        except: return "-"
+
+    # --- RENDER TABEL SPK ---
     sd = doc.new_subdoc()
-    headers = ['Asal', 'Tujuan', 'Unit', 'Rank', 'Biaya/Unit', 'Multidrop dalam Kota', 'Multidrop luar Kota', 'Biaya Buruh', 'Lead Time']
-    table = sd.add_table(rows=1, cols=len(headers))
-    table.style = 'Table Grid'
-    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    unique_origins = sorted(df_data['origin'].unique())
     
-    # Header Styling
-    hdr_cells = table.rows[0].cells
-    for i, h in enumerate(headers):
-        shading_elm = parse_xml(r'<w:shd {} w:fill="ED7D31"/>'.format(nsdecls('w')))
-        hdr_cells[i]._tc.get_or_add_tcPr().append(shading_elm)
-        format_cell(hdr_cells[i], h, bold=True, size=7)
-
-    # Isi Data
-    for idx, row in df_data.iterrows():
-        row_cells = table.add_row().cells
+    for org in unique_origins:
+        # Judul Area Origin
+        p = sd.add_paragraph(f"Origin: {org}")
+        p.paragraph_format.space_after = Pt(2)
+        run = p.runs[0]; run.bold = True; run.font.size = Pt(10)
         
-        lt_raw = str(row['lead_time'])
-        lt_fmt = f"{lt_raw} Hari" if (lt_raw.isdigit() or lt_raw.replace('.','',1).isdigit()) and lt_raw not in ["-","0",""] else "-"
-
-        vals = [
-            row.get('kota_asal','-'), 
-            row['kota_tujuan'], 
-            row['unit_type'], 
-            str(row['Ranking']), 
-            fmt_rp(row['price']),
-            fmt_rp(row.get('inner_city_price', 0)),
-            fmt_rp(row.get('outer_city_price', 0)),
-            fmt_rp(row.get('labor_cost', 0)),
-            lt_fmt
+        df_sub = df_data[df_data['origin'] == org].copy()
+        
+        # 🎯 HEADERS PAS 9 KOLOM (RANKING REZIMNYA SUDAH TUMBANG/DIHAPUS)
+        headers = ['Asal', 'Tujuan', 'Unit', 'Vendor', 'Biaya/Unit', 'Multidrop Dalam', 'Multidrop Luar', 'B.Buruh', 'Lead Time', 'TOP']
+        # Sori gais, kolom 'TOP' itu indeks terakhir. Yuk mari di-draw:
+        headers = ['Asal', 'Tujuan', 'Unit', 'Vendor', 'Biaya/Unit', 'Multidrop Dalam', 'Multidrop Luar', 'B.Buruh', 'Lead Time', 'TOP']
+        
+        table = sd.add_table(rows=1, cols=len(headers))
+        table.style = 'Table Grid'
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER 
+        
+        # Render Table Header
+        hdr_row = table.rows[0]; set_repeat_table_header(hdr_row)
+        hdr_cells = hdr_row.cells
+        for i, h in enumerate(headers):
+            hdr_cells[i].text = h
+            set_cell_background(hdr_cells[i], "ED7D31")
+            hdr_cells[i].vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER 
+            format_paragraph(hdr_cells[i].paragraphs[0], size=7.5, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
+            
+        # Render Data Rows
+        for _, row in df_sub.iterrows():
+            row_obj = table.add_row()
+            row_obj.height = Cm(0.32)  # 🎯 SAKLEK TINGGI CELL 0.32 CM
+            row_cells = row_obj.cells
+            
+            try: harga = f"Rp {int(row['price']):,}".replace(",", ".")
+            except: harga = "Rp 0"
+              
+            lt_raw = str(row['lead_time'])
+            lt_fmt = f"{lt_raw} Hari" if lt_raw.isdigit() else "-"
+            
+            # 🎯 DATA MAP 9 KOLOM (TANPA RANKING)
+            data_map = [
+                str(row.get('kota_asal', '-')), 
+                str(row['kota_tujuan']), 
+                str(row['unit_type']),
+                str(row['vendor_name']), 
+                harga,
+                fmt_val_rp(row.get('inner_city_price', 0)),
+                fmt_val_rp(row.get('outer_city_price', 0)),
+                fmt_val_rp(row.get('labor_cost', 0)),
+                lt_fmt,
+                str(row['top'])
+            ]
+            
+            for idx, val in enumerate(data_map):
+                cell = row_cells[idx]; cell.text = val
+                cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+                
+                # 🎯 PENYESUAIAN ALIGNMENT BARU KARENA RANK HILANG
+                if idx in [4, 5, 6, 7]: align = WD_ALIGN_PARAGRAPH.RIGHT  # Komponen Harga
+                elif idx in [8, 9]: align = WD_ALIGN_PARAGRAPH.CENTER     # Lead Time & TOP
+                else: align = WD_ALIGN_PARAGRAPH.LEFT                     # Teks Rute & Vendor
+                
+                # 🎯 SAKLEK FONT TABEL ISI 6 PT
+                format_paragraph(cell.paragraphs[0], size=6, bold=False, align=align)
+        
+        # 🎯 SAKLEK LEBAR 10 KOLOM BARU SESUAI SELERA REQ LO (TOTAL PAS 18.00 CM)
+        col_widths = [
+            Cm(1.49),  # Asal
+            Cm(2.0),   # Tujuan
+            Cm(2.0),   # Unit
+            Cm(3.0),   # Vendor
+            Cm(1.75),  # Biaya/Unit
+            Cm(1.56),  # MD Dalam
+            Cm(1.7),   # MD Luar
+            Cm(1.75),  # Biaya Buruh
+            Cm(1.0),   # Lead Time
+            Cm(0.75)   # TOP
         ]
-        
-        for i, v in enumerate(vals):
-            align = WD_ALIGN_PARAGRAPH.LEFT if i in [0,1] else WD_ALIGN_PARAGRAPH.CENTER
-            if i in [4, 5, 6, 7]: align = WD_ALIGN_PARAGRAPH.RIGHT
-            format_cell(row_cells[i], v, align, size=6.5)
+        set_col_widths(table, col_widths) 
+        sd.add_paragraph("") 
 
-    # --- UPDATE LEBAR KOLOM (Tujuan dikecilkan, Unit dilebarkan) ---
-    # Lama: Tujuan(3.0), Unit(1.8)
-    # Baru: Tujuan(2.5), Unit(2.3)
-    # Asal(2.0), Tujuan(2.5), Unit(2.3), Rank(0.8), Biaya(2.2), MD_In(2.0), MD_Out(2.0), Buruh(1.5), LT(1.5)
-    col_widths = [Cm(2.0), Cm(2.5), Cm(2.3), Cm(0.8), Cm(2.2), Cm(2.0), Cm(2.0), Cm(1.5), Cm(1.5)]
-    set_col_widths(table, col_widths)
-
-    # Context Mapping
+    # Render data ke template word asli dan save
     context = {
-        'no_spk': no_spk, 
-        'tanggal_spk': tgl_spk, 
+        'nomor_surat': nomor_surat,
         'validity': validity,
-        'load_type': load_type, 
-        'vendor_name': vendor_name, 
-        'contact_person': pic_vendor, 
-        'password_vendor': vendor_pass,
-        'origin_name': origin_name_str, 
-        'alamat_gudang': alamat_gudang,
-        'tabel_harga_vendor': sd
+        'load_type': load_type,
+        'tabel_harga': sd
     }
     doc.render(context)
-    
-    safe_ven = "".join(x for x in vendor_name if x.isalnum())
-    fn = f"temp_spk_{safe_ven}_{int(time.time())}.docx"
-    doc.save(fn)
-    return fn
+    doc.save(nama_output)
 
 # ▼ POINTER FIX SAKLEK: TIMPA SELURUH ISI FUNGSI get_target_price DENGAN BLOK INI ▼
 def get_target_price(df_all, route_id, unit_type, cur_validity):
@@ -2596,11 +2677,11 @@ def admin_dashboard():
 
                
                 # ==========================================================
-                # BAGIAN 2: SURAT PERINTAH KERJA (SPK)
+                # BAGIAN 2: SURAT PERINTAH KERJA (SPK) - UPDATED BULK LOOP MULTI VENDOR
                 # ==========================================================
                 with st.container(border=True):
                     st.markdown("### 2. Surat Perintah Kerja (SPK)")
-                    st.caption("Dokumen perintah kerja spesifik untuk satu vendor berdasarkan entitas PT, tahap penawaran, and prioritas global yang valid.")
+                    st.caption("Dokumen perintah kerja spesifik untuk beberapa vendor berdasarkan entitas PT, tahap penawaran, dan prioritas global yang valid.")
                     
                     # Kita bagi baris filter menjadi 4 kolom biar muat dropdown PT nya 
                     c3, c4, c5, c6 = st.columns(4)
@@ -2623,7 +2704,7 @@ def admin_dashboard():
                     df_master_norm['round_clean'] = pd.to_numeric(df_master_norm['round'], errors='coerce').fillna(1).astype(int)
                     clean_spk_val = str(spk_val).replace(" ", "").lower().strip()
                     
-                    # Saring basis data kompetisi global seluruh vendor murni patuh filter tahap pilihan lo honey
+                    # Saring basis data kompetisi global seluruh vendor murni patuh filter tahap pilihan
                     df_spk_global = df_master_norm[
                         (df_master_norm['validity_clean'] == clean_spk_val) & 
                         (df_master_norm['load_type'] == spk_load) & 
@@ -2643,9 +2724,11 @@ def admin_dashboard():
                         
                         # Ambil daftar nama vendor yang masuk klasemen global tahap terpilih
                         avail_vens = sorted(df_spk_global['vendor_name'].dropna().unique().tolist())
-                        sel_ven = col_spk_v.selectbox("Pilih Vendor (SPK):", avail_vens, key="spk_ven")
                         
-                        # 🔒 KUNCI UTAMA 2: Hitung max prioritas dinamis di database saat itu (Bisa 6, 7, 8, dst)
+                        # 🎯 REVISI UTAMA 1: Ubah jadi MULTISELECT agar bisa pilih banyak vendor sekaligus
+                        sel_vendors = col_spk_v.multiselect("Pilih Vendor Penerima SPK (Bisa Banyak):", avail_vens, key="spk_ven_multiselect")
+                        
+                        # 🔒 KUNCI UTAMA 2: Hitung max prioritas dinamis di database saat itu
                         max_prio_spk_db = int(df_spk_global['Ranking'].max()) if not df_spk_global.empty else 3
                         prio_options_spk = [i for i in range(1, max_prio_spk_db + 1)]
                         
@@ -2657,128 +2740,143 @@ def admin_dashboard():
                             key="print_spk_prio_limit_select_box"
                         )
                         
+                        no_spk = st.text_input("Nomor Surat SPK (Rujukan Awal):", value="", placeholder="Contoh: 001/SPK/TACO/III/2026", key="no_spk")
                         
-                        df_final_spk = df_spk_global[
-                            (df_spk_global['Ranking'] <= limit_prio_value) & 
-                            (df_spk_global['vendor_name'] == sel_ven)
-                        ].copy()
-                        
-                        if not df_final_spk.empty:
-                            st.success(f"🔥 Siap Cetak! Vendor **{sel_ven}** memiliki **{len(df_final_spk)} rute aktif** yang lolos saringan sampai Prioritas {limit_prio_value}.")
-                        
-                            no_spk = st.text_input("Nomor Surat SPK:", value="", placeholder="Contoh: 001/SPK/TACO/III/2026", key="no_spk")
-                            
-                            if st.button("📄 Generate File SPK", type="primary", key="btn_execute_spk_gen"):
+                        # 🎯 REVISI UTAMA 2: Tombol Eksekusi Bulk Loop per Vendor
+                        if st.button("📄 Generate Semua File SPK Vendor", type="primary", key="btn_execute_spk_gen"):
+                            if not sel_vendors:
+                                st.warning("Waduh, pilih minimal satu Vendor dulu dong, gais!")
+                            else:
                                 import requests
-                               
-                                GITHUB_BASE = "https://raw.githubusercontent.com/phibipi/taco-rfq-system/main/templates/"
+                                import os
                                 
-                                if sel_pt_entitas == "PT Tangkas Cipta Optimal":
-                                    template_url = GITHUB_BASE + "template_spk_tangkas.docx" 
-                                else:
-                                    template_url = GITHUB_BASE + "template_spk_tac.docx" 
-                                    
-                                with st.spinner(f"Mengunduh template {sel_pt_entitas} dari GitHub and memproses SPK..."):
+                                # Siapkan folder output lokal biar file gak saling timpa
+                                output_folder = "output_spk"
+                                os.makedirs(output_folder, exist_ok=True)
+                                
+                                GITHUB_BASE = "https://raw.githubusercontent.com/phibipi/taco-rfq-system/main/templates/"
+                                template_url = GITHUB_BASE + ("template_spk_tangkas.docx" if sel_pt_entitas == "PT Tangkas Cipta Optimal" else "template_spk_tac.docx")
+                                
+                                with st.spinner(f"Mengunduh template {sel_pt_entitas} dan memproses seluruh SPK..."):
                                     try:
                                         response = requests.get(template_url)
                                         if response.status_code != 200:
                                             st.error(f"Gagal mendownload template dari GitHub. Status Code: {response.status_code}.")
                                             st.stop()
+                                        
+                                        success_count = 0
+                                        
+                                        # 🎯 LOOPING UTAMA: EKSEKUSI PER VENDOR YANG DICENTANG
+                                        for v_name in sel_vendors:
+                                            # Filter data spesifik untuk vendor ini yang masuk batasan prioritas
+                                            df_final_spk = df_spk_global[
+                                                (df_spk_global['Ranking'] <= limit_prio_value) & 
+                                                (df_spk_global['vendor_name'] == v_name)
+                                            ].copy()
                                             
-                                        tpl_spk_stream = io.BytesIO(response.content)
-                                        
-                                        pic = df_final_spk.iloc[0].get('contact_person', 'Pimpinan Perusahaan')
-                                        if pd.isna(pic) or pic == "-": pic = "Pimpinan Perusahaan"
-                                        
-                                        try:
-                                            user_row = df_u[df_u['vendor_name'] == sel_ven]
-                                            if not user_row.empty:
-                                                raw_pass = str(user_row.iloc[0]['password'])
-                                                final_pass = raw_pass[-5:] if len(raw_pass) >= 5 else raw_pass
-                                            else: final_pass = "XXXXX"
-                                        except: final_pass = "XXXXX"
-
-                                        list_origin = sorted(df_final_spk['origin'].unique().tolist())
-                                        origin_str_combined = ", ".join(list_origin)
-                                        
-                                        alamat_list = []
-                                        if not df_gudang.empty:
-                                            for org in list_origin:
-                                                res_addr = df_gudang[df_gudang['origin'].astype(str).str.lower() == str(org).lower()]
-                                                if not res_addr.empty:
-                                                    alamat_found = res_addr.iloc[0]['alamat']
-                                                    alamat_list.append(f"{org}: {alamat_found}" if len(list_origin) > 1 else alamat_found)
-                                                else: alamat_list.append(f"{org}: -")
-                                        else: alamat_list.append("(Sheet Gudang Kosong)")
-                                        alamat_str_combined = "\n".join(alamat_list)
-
-                                        # --- RE-MAPPING LOGIKA MULTIDROP DAN BIAYA BURUH UNTUK DOKUMEN WORD SPK ---
-                                        df_spk_merged = df_final_spk.copy()
-                                        df_spk_merged['inner_city_price'] = 0
-                                        df_spk_merged['outer_city_price'] = 0
-                                        df_spk_merged['labor_cost'] = 0
-                                        
-                                        if not df_md.empty:
+                                            # Kalau rutenya kosong karena gak masuk prioritas, skip ke vendor berikutnya
+                                            if df_final_spk.empty:
+                                                st.warning(f"⚠️ Vendor **{v_name}** di-skip karena tidak menjuarai peringkat rute di Prioritas <= {limit_prio_value}")
+                                                continue
+                                                
+                                            tpl_spk_stream = io.BytesIO(response.content)
+                                            
+                                            pic = df_final_spk.iloc[0].get('contact_person', 'Pimpinan Perusahaan')
+                                            if pd.isna(pic) or pic == "-": pic = "Pimpinan Perusahaan"
+                                            
                                             try:
-                                                df_md_clean = df_md.copy()
-                                                df_md_clean['vendor_email_clean'] = df_md_clean['vendor_email'].astype(str).str.strip().str.lower()
-                                                df_md_clean['validity_norm'] = df_md_clean['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
-                                                df_md_clean['group_id_clean'] = df_md_clean['group_id'].astype(str).str.upper().str.strip()
-                                        
-                                                clean_vendor_email = str(df_final_spk.iloc[0]['vendor_email']).strip().lower()
-                                                clean_validity_spk = str(spk_val).replace(" ", "").replace("-","").lower().strip()
-                                        
-                                                md_dict = {}
-                                                for _, rmd in df_md_clean.iterrows():
-                                                    id_md_raw = str(rmd.get('id_multidrop', '')).strip()
-                                                    md_rnd_check = id_md_raw[-1] if id_md_raw else '1'
-                                                        
-                                                    if (rmd['vendor_email_clean'] == clean_vendor_email and 
-                                                        rmd['validity_norm'] == clean_validity_spk and 
-                                                        str(md_rnd_check) == str(sel_spk_round)):
-                                                        
-                                                        k_gid = rmd['group_id_clean']
-                                                        
-                                                        ic_val = str(rmd.get('inner_city_price', '0')).replace(",", "")
-                                                        oc_val = str(rmd.get('outer_city_price', '0')).replace(",", "")
-                                                        lc_val = str(rmd.get('labor_cost', '0')).replace(",", "")
-                                                        
-                                                        md_dict[k_gid] = {
-                                                            'in': pd.to_numeric(ic_val, errors='coerce') or 0,
-                                                            'out': pd.to_numeric(oc_val, errors='coerce') or 0,
-                                                            'lab': pd.to_numeric(lc_val, errors='coerce') or 0
-                                                        }
-                                        
-                                                def get_md_val(row, kind):
-                                                    r_gid = str(row['group_id']).strip().upper()
-                                                    res = md_dict.get(r_gid, {'in': 0, 'out': 0, 'lab': 0})
-                                                    return res[kind]
-                                        
-                                                df_spk_merged['inner_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'in'), axis=1)
-                                                df_spk_merged['outer_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'out'), axis=1)
-                                                df_spk_merged['labor_cost'] = df_spk_merged.apply(lambda x: get_md_val(x, 'lab'), axis=1)
-                                            except Exception as ex_md:
-                                                st.error(f"Gagal memproses data biaya tambahan: {ex_md}")
+                                                user_row = df_u[df_u['vendor_name'] == v_name]
+                                                if not user_row.empty:
+                                                    raw_pass = str(user_row.iloc[0]['password'])
+                                                    final_pass = raw_pass[-5:] if len(raw_pass) >= 5 else raw_pass
+                                                else: final_pass = "XXXXX"
+                                            except: final_pass = "XXXXX"
 
-                                        f_spk = create_docx_spk(tpl_spk_stream, no_spk, spk_val, spk_load, sel_ven, pic, final_pass, origin_str_combined, alamat_str_combined, df_spk_merged)
-                                        
-                                        safe_val = str(spk_val).replace(" - ", "-").replace(" ", "_")
-                                        safe_load = str(spk_load).replace(" ", "")
-                                        safe_pt_prefix = "TANGKAS" if "Tangkas" in sel_pt_entitas else "TACO"
-                                        safe_ven_file = "".join(x for x in sel_ven if x.isalnum() or x in " -").replace(" ", "_")
-                                        
-                                        # Filename otomatis dinamis merepresentasikan filter prioritas global
-                                        custom_filename = f"SPK_{safe_pt_prefix}_Prio1-{limit_prio_value}_Tahap{sel_spk_round}_{safe_load}_{safe_val}_{safe_ven_file}.docx"
-                                        
-                                        with open(f_spk, "rb") as f:
-                                            st.download_button("⬇️ Download File SPK Word", f, file_name=custom_filename, type="primary", use_container_width=True)
-                                        os.remove(f_spk)
+                                            list_origin = sorted(df_final_spk['origin'].unique().tolist())
+                                            origin_str_combined = ", ".join(list_origin)
+                                            
+                                            alamat_list = []
+                                            if not df_gudang.empty:
+                                                for org in list_origin:
+                                                    res_addr = df_gudang[df_gudang['origin'].astype(str).str.lower() == str(org).lower()]
+                                                    if not res_addr.empty:
+                                                        alamat_found = res_addr.iloc[0]['alamat']
+                                                        alamat_list.append(f"{org}: {alamat_found}" if len(list_origin) > 1 else alamat_found)
+                                                    else: alamat_list.append(f"{org}: -")
+                                            else: alamat_list.append("(Sheet Gudang Kosong)")
+                                            alamat_str_combined = "\n".join(alamat_list)
+
+                                            # --- RE-MAPPING LOGIKA MULTIDROP DAN BIAYA BURUH ---
+                                            df_spk_merged = df_final_spk.copy()
+                                            df_spk_merged['inner_city_price'] = 0
+                                            df_spk_merged['outer_city_price'] = 0
+                                            df_spk_merged['labor_cost'] = 0
+                                            
+                                            if not df_md.empty:
+                                                try:
+                                                    df_md_clean = df_md.copy()
+                                                    df_md_clean['vendor_email_clean'] = df_md_clean['vendor_email'].astype(str).str.strip().str.lower()
+                                                    df_md_clean['validity_norm'] = df_md_clean['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
+                                                    df_md_clean['group_id_clean'] = df_md_clean['group_id'].astype(str).str.upper().str.strip()
+                                            
+                                                    clean_vendor_email = str(df_final_spk.iloc[0]['vendor_email']).strip().lower()
+                                                    clean_validity_spk = str(spk_val).replace(" ", "").replace("-","").lower().strip()
+                                            
+                                                    md_dict = {}
+                                                    for _, rmd in df_md_clean.iterrows():
+                                                        id_md_raw = str(rmd.get('id_multidrop', '')).strip()
+                                                        md_rnd_check = id_md_raw[-1] if id_md_raw else '1'
+                                                            
+                                                        if (rmd['vendor_email_clean'] == clean_vendor_email and 
+                                                            rmd['validity_norm'] == clean_validity_spk and 
+                                                            str(md_rnd_check) == str(sel_spk_round)):
+                                                            
+                                                            k_gid = rmd['group_id_clean']
+                                                            ic_val = str(rmd.get('inner_city_price', '0')).replace(",", "")
+                                                            oc_val = str(rmd.get('outer_city_price', '0')).replace(",", "")
+                                                            lc_val = str(rmd.get('labor_cost', '0')).replace(",", "")
+                                                            
+                                                            md_dict[k_gid] = {
+                                                                'in': pd.to_numeric(ic_val, errors='coerce') or 0,
+                                                                'out': pd.to_numeric(oc_val, errors='coerce') or 0,
+                                                                'lab': pd.to_numeric(lc_val, errors='coerce') or 0
+                                                            }
+                                                    
+                                                    def get_md_val(row, kind):
+                                                        r_gid = str(row['group_id']).strip().upper()
+                                                        res = md_dict.get(r_gid, {'in': 0, 'out': 0, 'lab': 0})
+                                                        return res[kind]
+                                            
+                                                    df_spk_merged['inner_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'in'), axis=1)
+                                                    df_spk_merged['outer_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'out'), axis=1)
+                                                    df_spk_merged['labor_cost'] = df_spk_merged.apply(lambda x: get_md_val(x, 'lab'), axis=1)
+                                                except Exception as ex_md:
+                                                    st.error(f"Gagal memproses data biaya tambahan vendor {v_name}: {ex_md}")
+
+                                            # Jalankan fungsi generator SPK (Menerima parameter nama output file baru)
+                                            safe_val = str(spk_val).replace(" - ", "-").replace(" ", "_")
+                                            safe_load = str(spk_load).replace(" ", "")
+                                            safe_pt_prefix = "TANGKAS" if "Tangkas" in sel_pt_entitas else "TACO"
+                                            safe_ven_file = "".join(x for x in v_name if x.isalnum() or x in " -").replace(" ", "_")
+                                            
+                                            custom_filename = f"SPK_{safe_pt_prefix}_Prio1-{limit_prio_value}_Tahap{sel_spk_round}_{safe_load}_{safe_val}_{safe_ven_file}.docx"
+                                            final_local_path = os.path.join(output_folder, custom_filename)
+                                            
+                                            # PANGGUNG UTAMA: Kirim temp file stream ke fungsi draw tabel final lo
+                                            # Pastikan di dalam fungsi `create_docx_spk` lo, baris terakhirnya diubah menjadi doc.save(final_local_path)
+                                            f_spk_result = create_docx_spk(tpl_spk_stream, no_spk, spk_val, spk_load, v_name, pic, final_pass, origin_str_combined, alamat_str_combined, df_spk_merged)
+                                            
+                                            # Move file dari temp ke folder output tetap kita
+                                            import shutil
+                                            shutil.move(f_spk_result, final_local_path)
+                                            success_count += 1
+                                            st.write(f"🔹 File sukses dibuat: `{custom_filename}`")
+                                            
+                                        st.success(f"🎉 Selesai! Berhasil melahirkan {success_count} dokumen SPK di dalam folder `{output_folder}/`!")
                                     except Exception as e: 
-                                        st.error(f"Gagal memproses file Word SPK: {e}")
-                        else:
-                            st.warning(f"Vendor **{sel_ven}** tidak menjuarai peringkat rute yang masuk dalam batasan Prioritas {limit_prio_value} khusus di Tahap {sel_spk_round} ini.")
+                                        st.error(f"Gagal memproses runtutan file Word SPK: {e}")
                     else:
-                        st.warning("Tidak ditemukan data penawaran harga kompetitor yang aktif untuk kriteria filter ini.")
+                        st.warning("Tidak ditemukan data penawaran harga yang aktif untuk kriteria filter ini.")
         # --- TAB 5: SPH UPLOADS (FITUR BARU) ---
         with tabs[4]:
             st.subheader("📥 Dokumen SPH Vendor (Signed)")
