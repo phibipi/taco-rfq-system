@@ -954,7 +954,7 @@ def generate_bulk_spk(template_file, nomor_surat, validity, load_type, df_filter
         
         try:
             # Panggil fungsi generator untuk menggambar tabel ke Word
-            create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name, contact_person, password_last5, origin_combined, alamat_combined, df_data, nama_output=None)
+            create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name, contact_person, password_last5, origin_combined, alamat_combined, df_data)
             success_count += 1
             st.success(f"✅ Berhasil generate SPK untuk Vendor: **{vendor}**")
         except Exception as e:
@@ -966,7 +966,7 @@ def generate_bulk_spk(template_file, nomor_surat, validity, load_type, df_filter
 # ==============================================================================
 # 🎯 FUNGSI GENERATOR: DRAW TABEL SPK (9 KOLOM - TANPA RANKING)
 # ==============================================================================
-def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name, contact_person, password_last5, origin_combined, alamat_combined, df_data, nama_output=None):
+def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name, contact_person, password_last5, origin_combined, alamat_combined, df_data):
     doc = DocxTemplate(template_file)
     
     # --- HELPER 1: SET LEBAR KOLOM ---
@@ -2896,29 +2896,31 @@ def admin_dashboard():
                                             safe_pt_prefix = "TANGKAS" if "Tangkas" in sel_pt_entitas else "TACO"
                                             safe_ven_file = "".join(x for x in v_name if x.isalnum() or x in " -").replace(" ", "_")
                                             
-                                            # Suntikkan running number nomor surat ke penamaan file fisik .docx lo gais
                                             num_file_prefix = current_num_spk if is_numeric_prefix_spk else prefix_angka_spk
                                             custom_filename = f"SPK_{safe_pt_prefix}_{num_file_prefix}_{safe_load}_{safe_val}_{safe_ven_file}.docx"
                                             final_local_path = os.path.join(output_folder, custom_filename)
                                             
-                                            # ✅ REVISI 1: Berikan parameter nama_output=final_local_path di paling buntut
-                                            create_docx_spk(
+                                            # 🎯 BALIKIN PEMANGGILAN ASLI LO BIAR TANGGAL, TABEL, USERNAME GA RUSAK:
+                                            doc_obj = create_docx_spk(
                                                 tpl_spk_stream, custom_no_spk, spk_val, spk_load, 
                                                 v_name, pic, final_pass, origin_str_combined, 
-                                                alamat_str_combined, df_spk_merged, nama_output=final_local_path
+                                                alamat_str_combined, df_spk_merged
                                             )
+                                            
+                                            # 🎯 KITA FORCE SAVE MANUALLY DI SINI KE FOLDER NYA:
+                                            if doc_obj:
+                                                doc_obj.save(final_local_path)
                                             
                                             success_count += 1
                                             st.write(f"🔹 File sukses dibuat ({custom_no_spk}): `{custom_filename}`")
                                             
-                                        # --- 🎯 REVISI 2: PINDAHKAN PENENTUAN ZIP PATH DI LUAR LOOP AGAR TIDAK ERROR ---
+                                        # --- JALUR ZIP UTK DOWNLOAD DI LAPTOP ---
                                         if success_count > 0:
                                             import zipfile
                                             
                                             zip_filename = f"ALL_SPK_{safe_load}_{safe_val}.zip"
                                             zip_path = os.path.join(output_folder, zip_filename)
                                             
-                                            # Proses packing semua file .docx ke dalam satu zip
                                             with zipfile.ZipFile(zip_path, 'w') as zipf:
                                                 for root, dirs, files in os.walk(output_folder):
                                                     for file in files:
@@ -2927,7 +2929,6 @@ def admin_dashboard():
                                             
                                             st.success(f"🎉 Selesai! Berhasil memproses {success_count} dokumen SPK berurutan di dalam folder `{output_folder}/`!")
                                             
-                                            # Sediakan file zip untuk didownload user lewat browser
                                             with open(zip_path, "rb") as f_zip:
                                                 st.download_button(
                                                     label="📥 DOWNLOAD SEMUA FILE SPK (.ZIP)",
