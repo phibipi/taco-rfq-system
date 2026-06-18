@@ -954,7 +954,7 @@ def generate_bulk_spk(template_file, nomor_surat, validity, load_type, df_filter
         
         try:
             # Panggil fungsi generator untuk menggambar tabel ke Word
-            create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name, contact_person, password_last5, origin_combined, alamat_combined, df_data, nama_output=final_local_path)
+            create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name, contact_person, password_last5, origin_combined, alamat_combined, df_data, nama_output=none)
             success_count += 1
             st.success(f"✅ Berhasil generate SPK untuk Vendor: **{vendor}**")
         except Exception as e:
@@ -966,7 +966,7 @@ def generate_bulk_spk(template_file, nomor_surat, validity, load_type, df_filter
 # ==============================================================================
 # 🎯 FUNGSI GENERATOR: DRAW TABEL SPK (9 KOLOM - TANPA RANKING)
 # ==============================================================================
-def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name, contact_person, password_last5, origin_combined, alamat_combined, df_data, nama_output=final_local_path):
+def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name, contact_person, password_last5, origin_combined, alamat_combined, df_data, nama_output=none):
     doc = DocxTemplate(template_file)
     
     # --- HELPER 1: SET LEBAR KOLOM ---
@@ -1104,7 +1104,11 @@ def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name
             'tabel_harga': sd
     }
     doc.render(context)
-    doc.save(nama_output)
+    # Buntut dari fungsi create_docx_spk lo harusnya nge-save ke variabel nama_output
+    if nama_output:
+        doc.save(nama_output)
+        return nama_output
+    
 
 # ▼ POINTER FIX SAKLEK: TIMPA SELURUH ISI FUNGSI get_target_price DENGAN BLOK INI ▼
 def get_target_price(df_all, route_id, unit_type, cur_validity):
