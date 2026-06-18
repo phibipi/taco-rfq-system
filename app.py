@@ -2771,7 +2771,7 @@ def admin_dashboard():
                                 try:
                                     start_counter_spk = int(prefix_angka_spk)
                                     is_numeric_prefix_spk = True
-                                Momong ValueError:
+                                except ValueError:
                                     is_numeric_prefix_spk = False
                                 
                                 GITHUB_BASE = "https://raw.githubusercontent.com/phibipi/taco-rfq-system/main/templates/"
