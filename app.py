@@ -954,7 +954,7 @@ def generate_bulk_spk(template_file, nomor_surat, validity, load_type, df_filter
         
         try:
             # Panggil fungsi generator untuk menggambar tabel ke Word
-            create_docx_spk(template_file, nomor_surat, validity, load_type, df_vendor_data, nama_file_output)
+            create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name, contact_person, password_last5, origin_combined, alamat_combined, df_data, nama_output)
             success_count += 1
             st.success(f"✅ Berhasil generate SPK untuk Vendor: **{vendor}**")
         except Exception as e:
@@ -966,7 +966,7 @@ def generate_bulk_spk(template_file, nomor_surat, validity, load_type, df_filter
 # ==============================================================================
 # 🎯 FUNGSI GENERATOR: DRAW TABEL SPK (9 KOLOM - TANPA RANKING)
 # ==============================================================================
-def create_docx_spk(template_file, nomor_surat, validity, load_type, df_data, nama_output):
+def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name, contact_person, password_last5, origin_combined, alamat_combined, df_data, nama_output):
     doc = DocxTemplate(template_file)
     
     # --- HELPER 1: SET LEBAR KOLOM ---
@@ -1093,10 +1093,15 @@ def create_docx_spk(template_file, nomor_surat, validity, load_type, df_data, na
 
     # Render data ke template word asli dan save
     context = {
-        'nomor_surat': nomor_surat,
-        'validity': validity,
-        'load_type': load_type,
-        'tabel_harga': sd
+            'nomor_surat': nomor_surat,
+            'validity': validity,
+            'load_type': load_type,
+            'vendor_name': vendor_name,
+            'contact_person': contact_person,
+            'password_last5': password_last5,
+            'origin_combined': origin_combined,
+            'alamat_combined': alamat_combined,
+            'tabel_harga': sd
     }
     doc.render(context)
     doc.save(nama_output)
