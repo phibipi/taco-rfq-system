@@ -2895,7 +2895,7 @@ def admin_dashboard():
                                             # Tentukan nama file output unik per vendor
                                             safe_val = str(spk_val).replace(" - ", "-").replace(" ", "_")
                                             safe_load = str(spk_load).replace(" ", "")
-                                            safe_pt_prefix = "TANGKAS" if "Tangkas" in sel_pt_entitas else "TACO"
+                                            safe_pt_prefix = "TANGKAS" if "Tangkas" in sel_pt_entitas else "TAC"
                                             safe_ven_file = "".join(x for x in v_name if x.isalnum() or x in " -").replace(" ", "_")
                                             
                                             num_file_prefix = current_num_spk if is_numeric_prefix_spk else prefix_angka_spk
