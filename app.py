@@ -669,7 +669,7 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
         winning_vendors_data.append(df_sub)
         
         # Buat Tabel Baru (Melar Jadi 11 Kolom untuk memuat biaya tambahan)
-        headers = ['Asal', 'Tujuan', 'Unit', 'Rank', 'Vendor', 'Biaya/Unit', 'Multidrop Dalam', 'Multidrop Luar', 'B.Buruh', 'Lead Time', 'TOP']
+        headers = ['Asal', 'Tujuan', 'Unit', 'Rank', 'Vendor', 'Biaya/Unit', 'Multidrop Dalam', 'Multidrop Luar', 'Biaya Buruh', 'Lead Time', 'TOP']
         table = sd.add_table(rows=1, cols=len(headers))
         table.style = 'Table Grid'
         table.alignment = WD_TABLE_ALIGNMENT.CENTER 
@@ -722,7 +722,7 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
                 format_paragraph(cell.paragraphs[0], size=6, bold=False, align=align)
         
         # Set Lebar Kolom 11 Kolom secara presisi (Total margin kertas muat rapi)
-        col_widths = [Cm(1.49), Cm(2.0), Cm(2.0), Cm(1.0), Cm(3.0), Cm(1.75), Cm(1.56), Cm(1.7), Cm(1.75), Cm(1.0), Cm(0.75)]
+        col_widths = [Cm(1.49), Cm(2.0), Cm(2.0), Cm(1.0), Cm(2.75), Cm(1.75), Cm(1.56), Cm(1.7), Cm(1.75), Cm(1.0), Cm(1.0)]
         set_col_widths(table, col_widths) 
         sd.add_paragraph("") 
 
