@@ -2898,18 +2898,45 @@ def admin_dashboard():
                                             
                                             # Suntikkan running number nomor surat ke penamaan file fisik .docx lo gais
                                             num_file_prefix = current_num_spk if is_numeric_prefix_spk else prefix_angka_spk
-                                            custom_filename = f"SPK_{safe_pt_prefix}_{num_file_prefix}_Prio1-{limit_prio_value}_Tahap{sel_spk_round}_{safe_load}_{safe_val}_{safe_ven_file}.docx"
+                                            custom_filename = f"SPK_{safe_pt_prefix}_{num_file_prefix}_{safe_load}_{safe_val}_{safe_ven_file}.docx"
                                             final_local_path = os.path.join(output_folder, custom_filename)
                                             
-                                            # Panggil fungsi generator tabel utama dengan nomor surat dinamis
-                                            f_spk_result = create_docx_spk(tpl_spk_stream, custom_no_spk, spk_val, spk_load, v_name, pic, final_pass, origin_str_combined, alamat_str_combined, df_spk_merged)
-                                            
-                                            # Simpan file permanen ke folder output lokal
+                                            # ✅ REVISI 1: Berikan parameter nama_output=final_local_path di paling buntut
+                                            create_docx_spk(
+                                                tpl_spk_stream, custom_no_spk, spk_val, spk_load, 
+                                                v_name, pic, final_pass, origin_str_combined, 
+                                                alamat_str_combined, df_spk_merged, nama_output=final_local_path
+                                            )
                                             
                                             success_count += 1
                                             st.write(f"🔹 File sukses dibuat ({custom_no_spk}): `{custom_filename}`")
                                             
-                                        st.success(f"🎉 Selesai! Berhasil melahirkan {success_count} dokumen SPK berurutan di dalam folder `{output_folder}/`!")
+                                        # --- 🎯 REVISI 2: PINDAHKAN PENENTUAN ZIP PATH DI LUAR LOOP AGAR TIDAK ERROR ---
+                                        if success_count > 0:
+                                            import zipfile
+                                            
+                                            zip_filename = f"ALL_SPK_{safe_load}_{safe_val}.zip"
+                                            zip_path = os.path.join(output_folder, zip_filename)
+                                            
+                                            # Proses packing semua file .docx ke dalam satu zip
+                                            with zipfile.ZipFile(zip_path, 'w') as zipf:
+                                                for root, dirs, files in os.walk(output_folder):
+                                                    for file in files:
+                                                        if file.endswith('.docx') and not file.startswith('~$'):
+                                                            zipf.write(os.path.join(root, file), file)
+                                            
+                                            st.success(f"🎉 Selesai! Berhasil memproses {success_count} dokumen SPK berurutan di dalam folder `{output_folder}/`!")
+                                            
+                                            # Sediakan file zip untuk didownload user lewat browser
+                                            with open(zip_path, "rb") as f_zip:
+                                                st.download_button(
+                                                    label="📥 DOWNLOAD SEMUA FILE SPK (.ZIP)",
+                                                    data=f_zip,
+                                                    file_name=zip_filename,
+                                                    mime="application/zip",
+                                                    type="secondary",
+                                                    use_container_width=True
+                                                )
                                     except Exception as e: 
                                         st.error(f"Gagal memproses runtutan file Word SPK: {e}")
                     else:
