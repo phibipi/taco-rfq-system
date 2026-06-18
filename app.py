@@ -158,7 +158,7 @@ def init_style():
         </style>
     """, unsafe_allow_html=True)
 
-# --- KONEKSI & CACHE ---
+
 # --- KONEKSI & CACHE (SMART DETECTION) ---
 @st.cache_resource
 def connect_to_gsheet():
@@ -167,7 +167,7 @@ def connect_to_gsheet():
     try:
         # 1. CEK APAKAH DI STREAMLIT CLOUD (SECRETS)
         if "gcp_service_account" in st.secrets:
-            # st.write("Mendeteksi environment Cloud...") # Debugging (Boleh dihapus)
+            
             creds_dict = st.secrets["gcp_service_account"]
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
             client = gspread.authorize(creds)
@@ -175,7 +175,7 @@ def connect_to_gsheet():
 
         # 2. CEK APAKAH DI LAPTOP (FILE JSON)
         elif os.path.exists("kunci_rahasia.json"):
-            # st.write("Mendeteksi environment Lokal...") # Debugging (Boleh dihapus)
+            
             creds = ServiceAccountCredentials.from_json_keyfile_name("kunci_rahasia.json", scope)
             client = gspread.authorize(creds)
             return client.open_by_key(SPREADSHEET_ID)
@@ -289,7 +289,7 @@ def save_data(sheet_name, new_data_list):
         # 3. Buat DataFrame dari data baru yang di-submit vendor
         df_new = pd.DataFrame(new_data_list, columns=headers)
 
-        # 4. Gabungkan data lama dan data baru (Sama persis kayak logika Portal Evaluasi lo!)
+        # 4. Gabungkan data lama dan data baru
         # Kolom pertama headers[0] adalah 'id_transaksi' atau 'id_multidrop'
         key_column = headers[0]
         df_final = pd.concat([df_old, df_new], ignore_index=True)
@@ -388,7 +388,7 @@ def clean_numeric(val):
     if pd.isna(val) or str(val).strip() == "": return 0
     try:
         s = str(val).strip()
-        # Kalau teksnya berakhiran .0 atau ,0 (desimal gaib Streamlit), potong dulu buntutnya
+        # Kalau teksnya berakhiran .0 atau ,0 (desimal gaib Streamlit), potong
         if s.endswith(".0") or s.endswith(",0"):
             s = s[:-2]
             
@@ -461,7 +461,7 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
     months_id = {1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni", 7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"}
     due_date_str = f"{due_date.day} {months_id[due_date.month]} {due_date.year}"
 
-    # Update Subject agar terlihat Tahap keberapa
+    # Update Subject 
     subject = f"Undangan Tender {load_type} - {validity} (Tahap Penawaran {round_num}) - TACO Group"
     origins_str = ", ".join(origins)
     
@@ -518,7 +518,7 @@ def send_reminder_email(to_email, vendor_name, load_type, validity, round_num, p
     
     subject = f"REMINDER: Pengisian Penawaran Harga Tender {load_type} - {validity} (Tahap {round_num})"
     
-    # PENGAMAN: Ubah semua item ke string sebelum di-join agar tidak TypeError
+    # PENGAMAN: Ubah semua item ke string 
     pending_groups_str = ", ".join([str(g) for g in pending_groups])
     
     body = f"""
@@ -685,14 +685,17 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
             
         # Render Data Rows
         for _, row in df_sub.iterrows():
-            row_cells = table.add_row().cells
+            row_obj = table.add_row()         
+            row_obj.height = Cm(0.32)         
+            row_cells = row_obj.cells
+            
             try: harga = f"Rp {int(row['price']):,}".replace(",", ".")
             except: harga = "Rp 0"
               
             lt_raw = str(row['lead_time'])
             lt_fmt = f"{lt_raw} Hari" if lt_raw.isdigit() else "-"
             
-            # Suntik data multidrop and buruh ke dalam matriks rute Word
+            # data multidrop and buruh ke dalam matriks rute Word
             data_map = [
                 str(row.get('kota_asal', '-')), 
                 str(row['kota_tujuan']), 
@@ -716,10 +719,10 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
                 elif idx in [3, 9, 10]: align = WD_ALIGN_PARAGRAPH.CENTER
                 else: align = WD_ALIGN_PARAGRAPH.LEFT
                 
-                format_paragraph(cell.paragraphs[0], size=6.5, bold=False, align=align)
+                format_paragraph(cell.paragraphs[0], size=6, bold=False, align=align)
         
         # Set Lebar Kolom 11 Kolom secara presisi (Total margin kertas muat rapi)
-        col_widths = [Cm(1.8), Cm(2.4), Cm(1.8), Cm(0.7), Cm(2.6), Cm(2.0), Cm(1.5), Cm(1.5), Cm(1.3), Cm(1.2), Cm(1.2)]
+        col_widths = [Cm(1.49), Cm(2.0), Cm(2.0), Cm(1.0), Cm(3.0), Cm(1.75), Cm(1.56), Cm(1.7), Cm(1.75), Cm(1.0), Cm(0.75)]
         set_col_widths(table, col_widths) 
         sd.add_paragraph("") 
 
@@ -1323,7 +1326,7 @@ def user_dashboard():
                     df_search_clean = df_search.drop_duplicates(subset=['vendor_email', 'route_id', 'unit_type'], keep='first').copy()
                     df_search_clean['group_id_match'] = df_search_clean['route_id'].str[:5].str.upper().str.strip()
     
-                    # === PROSES LOOKUP MULTIDROP PERBAIKAN SAKLEK ===
+                    # === PROSES LOOKUP MULTIDROP PERBAIKAN  ===
                     if not df_md.empty:
                         df_md_copy = df_md.copy()
                         df_md_copy['vendor_email_clean'] = df_md_copy['vendor_email'].astype(str).str.strip().str.lower()
@@ -1975,7 +1978,7 @@ def admin_dashboard():
                     merged_pr['vendor_name'] = merged_pr['vendor_email']
 
                 # ==========================================
-                # ▼▼▼ FILTER UI LOCK DATA ▼▼▼
+                #  FILTER UI LOCK DATA 
                 # ==========================================
                 c1, c2, c3 = st.columns(3)
                 
@@ -2132,7 +2135,7 @@ def admin_dashboard():
             
                 sel_val = c1.selectbox("Filter Periode", avail_val, key="es_val")
                 sel_load = c2.selectbox("Filter Tipe Muatan", avail_load, key="es_load")
-                # Dropdown filter tahap dilahirkan kembali secara resmi biar disembah oleh database bawah!
+                # Dropdown filter tahap
                 sel_round = c3.selectbox("Filter Tahap", avail_round, key="es_round")
                 
                 # Saring data kota asal secara dinamis berdasarkan periode and muatan
@@ -2142,14 +2145,14 @@ def admin_dashboard():
                 
                 search_keyword = c4.text_input("🔍 Cari Lokasi", placeholder="Ketik Asal/Tujuan...", key="es_dest").strip().lower()
                 
-                # --- ENGINE FILTER SAKLEK BERDASARKAN TAHAP PILIHAN MONITOR ---
+                # --- ENGINE FILTER ---
                 df_master_norm = df_master.copy()
                 df_master_norm['validity_clean'] = df_master_norm['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
                 df_master_norm['round_clean'] = pd.to_numeric(df_master_norm['round'], errors='coerce').fillna(1).astype(int)
                 
                 clean_sel_val = str(sel_val).replace(" ", "").lower().strip()
                 
-                # Saring data murni hanya yang sesuai ronde and periode di dropdown pilihan admin!
+                # Saring data murni hanya yang sesuai ronde and periode di dropdown pilihan
                 df_view = df_master_norm[
                     (df_master_norm['validity_clean'] == clean_sel_val) & 
                     (df_master_norm['load_type'] == sel_load) & 
@@ -2169,10 +2172,10 @@ def admin_dashboard():
                     df_view = df_view[match_org | match_asal | match_tujuan]
 
                 # ==========================================================
-                # 📥 TAB TABEL EXCEL MASTER SUMMARY (PATUH FILTER TAHAP)
+                # 📥 TAB TABEL EXCEL MASTER SUMMARY (FILTER TAHAP)
                 # ==========================================================
                 with st.expander("📥 Download Master Summary (Excel)", expanded=False):
-                    st.write("Unduh rekap seluruh rute sesuai filter periode, muatan, and tahap di atas. Rute yang belum diisi vendor akan tetap muncul dengan harga Rp 0.")
+                    st.write("Download rekap seluruh rute sesuai filter periode, muatan, and tahap di atas. Rute yang belum diisi vendor akan tetap muncul dengan harga Rp 0.")
                     
                     if not df_r.empty and not df_g.empty and not df_units.empty:
                         # Bersihkan ID
@@ -2205,7 +2208,7 @@ def admin_dashboard():
                             prices_clean['price'] = pd.to_numeric(prices_clean['price'], errors='coerce').fillna(0)
                             prices_clean['round_int'] = pd.to_numeric(prices_clean['round'], errors='coerce').fillna(1).astype(int)
                             
-                            # 🎯 KUNCI EXCEL: Saring data rekap hanya rute yang harganya valid di ronde pilihan!
+                            # 🎯 KUNCI EXCEL: Saring data rekap hanya rute yang harganya valid di ronde pilihan
                             prices_clean = prices_clean[(prices_clean['price'] > 0) & (prices_clean['validity'] == sel_val) & (prices_clean['round_int'] == int(sel_round))]
                             
                             v_names = df_u[df_u['role'] == 'vendor'][['email', 'vendor_name']]
@@ -2266,7 +2269,7 @@ def admin_dashboard():
                         st.warning("Data Master Rute, Group, atau Unit masih kosong. Tidak bisa mengunduh summary.")
                 
                 # ==========================================================
-                # 🎯 FITUR AMAN: DOWNLOAD TARGET PRICE (EXCEL) - TIDAK HILANG!
+                # 🎯 DOWNLOAD TARGET PRICE (EXCEL) 
                 # ==========================================================
                 with st.expander("🎯 Download Target Price (Excel)", expanded=False):
                     st.write("Download estimasi Target Price untuk fase negosiasi selanjutnya.")
@@ -2296,7 +2299,7 @@ def admin_dashboard():
                                     rid = row['route_id']
                                     unit = row['unit_type']
                                     
-                                    # Panggil fungsi ajaib get_target_price
+                                    # Panggil fungsi get_target_price
                                     kalkulasi_tp = get_target_price(prices_for_tp, rid, unit, sel_val)
                                     
                                     tp_results.append({
@@ -2366,11 +2369,7 @@ def admin_dashboard():
                     st.warning("Data tidak ditemukan untuk filter kriteria ini.")
                     
 # ===================================================================================================
-        # 🚀 TIMPA UTUH ISI TABS[3] (PRINT DOKUMEN SK & SPK DINAMIS) DENGAN BLOK FULL SAKLEK INI, HONEY!
-        # ===================================================================================================
-        # ===================================================================================================
-        # 🚀 TIMPA UTUH ISI TABS[3] (PRINT DOKUMEN DENGAN RANGE MAX PRIORITAS REAL) - ANTI-MENTOK ANGKA 3!
-        # ===================================================================================================
+
         with tabs[3]:
             st.subheader("🖨️ Print Dokumen")
         
@@ -2408,7 +2407,7 @@ def admin_dashboard():
                     df_master_norm['round_clean'] = pd.to_numeric(df_master_norm['round'], errors='coerce').fillna(1).astype(int)
                     clean_sk_val = str(sk_val).replace(" ", "").lower().strip()
                 
-                    # Saring basis data kompetisi global seluruh vendor untuk menghitung ranking asli patuh filter tahap
+                    # Saring basis data kompetisi global seluruh vendor untuk menghitung ranking asli filter tahap
                     df_sk_global = df_master_norm[
                         (df_master_norm['validity_clean'] == clean_sk_val) & 
                         (df_master_norm['load_type'] == sk_load) & 
@@ -2422,19 +2421,19 @@ def admin_dashboard():
                         df_sk_global = df_sk_global.sort_values(by=['origin', 'kota_asal', 'kota_tujuan', 'unit_type', 'price_sort_temp'])
                         df_sk_global['Ranking'] = df_sk_global.groupby(['origin', 'kota_asal', 'kota_tujuan', 'unit_type']).cumcount() + 1
                         
-                        # 🔒 JELOBOL BATASAN KUNO: Hitung batas prioritas dinamis murni berdasarkan angka tertinggi di database (bisa 6,7,8 dst!)
+                        # 🔒 Hitung batas prioritas dinamis berdasarkan angka tertinggi di database (bisa 6,7,8 dst!)
                         max_prio_sk_db = int(df_sk_global['Ranking'].max()) if not df_sk_global.empty else 3
                         prio_options_sk = [i for i in range(1, max_prio_sk_db + 1)]
                         
                         # Sisipkan dropdown sortir prioritas dinamis untuk SK
                         limit_prio_sk = st.selectbox(
-                            "🏅 Batasan Urutan Pemenang SK (Sampai Prioritas Ke-X)",
+                            "🏅 Batasan Urutan Pemenang SK (Sampai Ranking Ke-X)",
                             prio_options_sk,
                             index=len(prio_options_sk)-1, # Default tampilkan semua sampai maksimal peringkat
                             key="sk_prio_limit_select_box"
                         )
                         
-                        # Saring data global SK berdasarkan batasan prioritas pilihan admin (Sifatnya dinamis, bukan <=3 lagi!)
+                        # Saring data global SK berdasarkan batasan prioritas pilihan
                         df_sk_top_filtered = df_sk_global[df_sk_global['Ranking'] <= limit_prio_sk].copy()
                         
                         avail_org = sorted(df_sk_top_filtered['origin'].unique())
@@ -2492,7 +2491,7 @@ def admin_dashboard():
                                                     
                                                 tpl_sk_stream = io.BytesIO(response_sk.content)
                                                 
-                                                # --- 💎 ENGINE RE-MAPPING MULTIDROP REAL UNTUK 11 KOLOM SK (FIXED PERMANEN) ---
+                                                # --- ENGINE RE-MAPPING MULTIDROP REAL UNTUK 11 KOLOM SK (FIXED PERMANEN) ---
                                                 df_sk_merged = df_single_org.copy()
                                                 
                                                 if not df_md.empty:
@@ -2658,7 +2657,7 @@ def admin_dashboard():
                             key="print_spk_prio_limit_select_box"
                         )
                         
-                        # 🎯 STRATEGI SAKLEK: Saring global dulu berdasarkan batas prioritas DULU, baru cari nama vendornya!
+                        
                         df_final_spk = df_spk_global[
                             (df_spk_global['Ranking'] <= limit_prio_value) & 
                             (df_spk_global['vendor_name'] == sel_ven)
@@ -2768,7 +2767,7 @@ def admin_dashboard():
                                         safe_pt_prefix = "TANGKAS" if "Tangkas" in sel_pt_entitas else "TACO"
                                         safe_ven_file = "".join(x for x in sel_ven if x.isalnum() or x in " -").replace(" ", "_")
                                         
-                                        # Filename otomatis dinamis merepresentasikan filter prioritas global pilihan lo honey!
+                                        # Filename otomatis dinamis merepresentasikan filter prioritas global
                                         custom_filename = f"SPK_{safe_pt_prefix}_Prio1-{limit_prio_value}_Tahap{sel_spk_round}_{safe_load}_{safe_val}_{safe_ven_file}.docx"
                                         
                                         with open(f_spk, "rb") as f:
@@ -2809,7 +2808,7 @@ def admin_dashboard():
                             else:
                                 st.error("❌ Link Error")               
 
-        # ==================== TIMPA TOTAL BAGIAN ATAS TAB TEMPLATE (TABS[5]) DENGAN BLOK INI ====================
+        # ==================== TAB TEMPLATE (TABS[5]) ====================
         with tabs[5]:
             st.subheader("📄 Template Generator & Pre-populate Horizontal Excel")
             st.caption("Membuat file Excel penawaran harga berjejer ke samping per jenis unit dengan auto-format Currency Rupiah.")
@@ -2875,7 +2874,7 @@ def admin_dashboard():
                                 })
                                 fmt_locked = workbook.add_format({'bg_color': '#F3F4F6', 'border': 1, 'align': 'left'})
                                 
-                                # Format Angka Mata uang: Rp 1,250,000 (Gak ngerusak rumus matematika Excel)
+                                # Format Angka Mata uang: Rp 
                                 fmt_currency_locked = workbook.add_format({'num_format': '"Rp "#,##0', 'bg_color': '#F3F4F6', 'border': 1, 'align': 'right'})
                                 fmt_currency_input = workbook.add_format({'num_format': '"Rp "#,##0', 'bg_color': '#FFFFFF', 'border': 1, 'align': 'right'})
                                 fmt_normal_input = workbook.add_format({'bg_color': '#FFFFFF', 'border': 1, 'align': 'left'})
@@ -2981,7 +2980,7 @@ def admin_dashboard():
                                         worksheet.set_column(current_col_idx, current_col_idx, 16, fmt_normal_input) # Lead time
                                         worksheet.set_column(current_col_idx + 1, current_col_idx + 1, 30, fmt_normal_input) # Keterangan
                                         
-                                        # Timpa baris paling atas (Header) dengan warna orange mentereng
+                                        # Timpa baris paling atas (Header) dengan warna orange
                                         for col_idx, col_name in enumerate(df_sheet_final.columns):
                                             worksheet.write(0, col_idx, col_name, fmt_header)
                                             
@@ -3284,7 +3283,7 @@ def vendor_dashboard(email):
                                     status_ui = '<span class="status-pending">❌ Belum Ada Data</span>'
                                     is_locked_btn = False
                                     
-                                    # ▼ POTONGAN FIX SAKLEK: SINKRONISASI STATUS DASHBOARD VENDOR (ANTI-BLANK / ANTI-ZONK STATUS) ▼
+                                    
                                     if not df_price.empty and not r_data.empty:
                                         # Buat dataframe normalisasi sementara khusus buat ngecek status doang
                                         df_p_status = df_price.copy()
@@ -3297,7 +3296,7 @@ def vendor_dashboard(email):
                                         clean_sel_val = str(sel_val).replace(" ", "").lower().strip()
                                         clean_email = str(email).lower().strip()
                                         
-                                        # Jalankan query penyaringan status yang kebal spasi & kebal tipe data!
+                                        
                                         sub_p = df_p_status[
                                             (df_p_status['vendor_email_clean'] == clean_email) & 
                                             (df_p_status['validity_clean'] == clean_sel_val) & 
