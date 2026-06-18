@@ -1486,6 +1486,8 @@ def user_dashboard():
                 
 # ================= ADMIN =================
 def admin_dashboard():
+    import io
+    import os
     step = st.session_state.get('admin_step', 'home')
     
     # --- HALAMAN UTAMA (HOME) ---
