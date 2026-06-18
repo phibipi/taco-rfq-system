@@ -1020,9 +1020,9 @@ def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name
         df_sub = df_data[df_data['origin'] == org].copy()
         
         # 🎯 HEADERS PAS 9 KOLOM (RANKING REZIMNYA SUDAH TUMBANG/DIHAPUS)
-        headers = ['Asal', 'Tujuan', 'Unit', 'Vendor', 'Biaya/Unit', 'Multidrop Dalam', 'Multidrop Luar', 'B.Buruh', 'Lead Time', 'TOP']
+        headers = ['Asal', 'Tujuan', 'Unit', 'Biaya/Unit', 'Multidrop Dalam', 'Multidrop Luar', 'Biaya Buruh', 'Lead Time', 'TOP']
         # Sori gais, kolom 'TOP' itu indeks terakhir. Yuk mari di-draw:
-        headers = ['Asal', 'Tujuan', 'Unit', 'Vendor', 'Biaya/Unit', 'Multidrop Dalam', 'Multidrop Luar', 'B.Buruh', 'Lead Time', 'TOP']
+        headers = ['Asal', 'Tujuan', 'Unit', 'Biaya/Unit', 'Multidrop Dalam', 'Multidrop Luar', 'Biaya Buruh', 'Lead Time', 'TOP']
         
         table = sd.add_table(rows=1, cols=len(headers))
         table.style = 'Table Grid'
@@ -1054,7 +1054,7 @@ def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name
                 str(row.get('kota_asal', '-')), 
                 str(row['kota_tujuan']), 
                 str(row['unit_type']),
-                str(row['vendor_name']), 
+                
                 harga,
                 fmt_val_rp(row.get('inner_city_price', 0)),
                 fmt_val_rp(row.get('outer_city_price', 0)),
@@ -1068,8 +1068,8 @@ def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name
                 cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
                 
                 # 🎯 PENYESUAIAN ALIGNMENT BARU KARENA RANK HILANG
-                if idx in [4, 5, 6, 7]: align = WD_ALIGN_PARAGRAPH.RIGHT  # Komponen Harga
-                elif idx in [8, 9]: align = WD_ALIGN_PARAGRAPH.CENTER     # Lead Time & TOP
+                if idx in [3, 4, 5, 6]: align = WD_ALIGN_PARAGRAPH.RIGHT  # Komponen Harga
+                elif idx in [7, 8]: align = WD_ALIGN_PARAGRAPH.CENTER     # Lead Time & TOP
                 else: align = WD_ALIGN_PARAGRAPH.LEFT                     # Teks Rute & Vendor
                 
                 # 🎯 SAKLEK FONT TABEL ISI 6 PT
@@ -1080,13 +1080,13 @@ def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name
             Cm(1.49),  # Asal
             Cm(2.0),   # Tujuan
             Cm(2.0),   # Unit
-            Cm(3.0),   # Vendor
+            
             Cm(1.75),  # Biaya/Unit
             Cm(1.56),  # MD Dalam
             Cm(1.7),   # MD Luar
             Cm(1.75),  # Biaya Buruh
             Cm(1.0),   # Lead Time
-            Cm(0.75)   # TOP
+            Cm(1.0)   # TOP
         ]
         set_col_widths(table, col_widths) 
         sd.add_paragraph("") 
