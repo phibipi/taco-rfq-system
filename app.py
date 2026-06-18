@@ -2795,6 +2795,7 @@ def admin_dashboard():
                                             st.stop()
                                         
                                         success_count = 0
+                                        generated_file_paths = []
                                         
                                         # 🎯 LOOPING UTAMA: GENERATE 1 FILE PER VENDOR
                                         for idx_loop, v_name in enumerate(sel_vendors):
@@ -2911,32 +2912,31 @@ def admin_dashboard():
                                             if doc_obj:
                                                 doc_obj.save(final_local_path)
                                                 success_count += 1
+                                                generated_file_paths.append(final_local_path)
                                                 st.write(f"🔹 File sukses dibuat ({custom_no_spk}): `{custom_filename}`")
                                             
                                         # --- JALUR ZIP UTK DOWNLOAD DI LAPTOP ---
                                         if success_count > 0:
                                             import zipfile
                                             
+                                            zip_buffer = io.BytesIO()
                                             zip_filename = f"ALL_SPK_{safe_load}_{safe_val}.zip"
-                                            zip_path = os.path.join(output_folder, zip_filename)
                                             
-                                            with zipfile.ZipFile(zip_path, 'w') as zipf:
-                                                for root, dirs, files in os.walk(output_folder):
-                                                    for file in files:
-                                                        if file.endswith('.docx') and not file.startswith('~$'):
-                                                            zipf.write(os.path.join(root, file), file)
+                                            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                                                for fpath in generated_file_paths:
+                                                    if os.path.exists(fpath):
+                                                        zipf.write(fpath, os.path.basename(fpath))
                                             
-                                            st.success(f"🎉 Selesai! Berhasil memproses {success_count} dokumen SPK berurutan di dalam folder `{output_folder}/`!")
+                                            st.success(f"🎉 Selesai! Berhasil memproses {success_count} dokumen SPK!")
                                             
-                                            with open(zip_path, "rb") as f_zip:
-                                                st.download_button(
-                                                    label="📥 DOWNLOAD SEMUA FILE SPK (.ZIP)",
-                                                    data=f_zip,
-                                                    file_name=zip_filename,
-                                                    mime="application/zip",
-                                                    type="secondary",
-                                                    use_container_width=True
-                                                )
+                                            st.download_button(
+                                                label="📥 DOWNLOAD SEMUA FILE SPK (.ZIP)",
+                                                data=zip_buffer.getvalue(),
+                                                file_name=zip_filename,
+                                                mime="application/zip",
+                                                type="secondary",
+                                                use_container_width=True
+                                            )
                                     except Exception as e: 
                                         st.error(f"Gagal memproses runtutan file Word SPK: {e}")
                     else:
