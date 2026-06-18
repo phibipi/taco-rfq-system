@@ -2905,7 +2905,7 @@ def admin_dashboard():
                                             f_spk_result = create_docx_spk(tpl_spk_stream, custom_no_spk, spk_val, spk_load, v_name, pic, final_pass, origin_str_combined, alamat_str_combined, df_spk_merged)
                                             
                                             # Simpan file permanen ke folder output lokal
-                                            shutil.move(f_spk_result, final_local_path)
+                                            
                                             success_count += 1
                                             st.write(f"🔹 File sukses dibuat ({custom_no_spk}): `{custom_filename}`")
                                             
