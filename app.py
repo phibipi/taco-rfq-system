@@ -2675,6 +2675,8 @@ def admin_dashboard():
                                                     nomor_urut_file = prefix_angka_str
                                                     
                                                 safe_val_sk = str(sk_val).replace(" - ", "-").replace(" ", "_")
+                                                if safe_val_sk.replace(" ", "") == "Januari-Desember2026":
+                                                    safe_val_sk = "1 Juli 2026 - 31 Juni 2027"
                                                 safe_pt_name = "Tangkas" if sel_pt_sk == "PT Tangkas Cipta Optimal" else "TAC"
                                                 safe_org_name = str(org_tunggal).replace(" ", "")
                                                 
@@ -2952,6 +2954,12 @@ def admin_dashboard():
                                                 df_md_clean['vendor_email_clean'] = df_md_clean['vendor_email'].astype(str).str.strip().str.lower()
                                                 df_md_clean['validity_norm'] = df_md_clean['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
                                                 df_md_clean['group_id_clean'] = df_md_clean['group_id'].astype(str).str.strip().str.upper()
+                                                df_md_clean['unit_clean'] = (df_md_clean['unit']
+                                                                             .astype(str)
+                                                                             .str.replace('\n', '', regex=False)  # Sikat enter (line break)
+                                                                             .str.replace('\r', '', regex=False)  # Sikat carriage return
+                                                                             .str.strip()                         # Sikat spasi di awal & akhir teks
+                                                                             .str.upper())
                                             zip_buffer = io.BytesIO()
                                             zip_filename = f"ALL_SPK_{safe_load}_{safe_val}.zip"
                                             
