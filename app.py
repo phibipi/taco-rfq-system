@@ -2579,10 +2579,10 @@ def admin_dashboard():
                                             is_numeric_prefix = False
                                             
                                         # Siapkan penampung file sebelum masuk looping rute area
+                                        # Siapkan penampung file sebelum masuk looping rute area
                                         zip_buffer = io.BytesIO()
                                         generated_files_count = 0
                                         
-                                                                                
                                         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
                                             # 🎯 LOOPING UTAMA: Pecah berkas terpisah murni per nama origin area
                                             for idx_loop, org_tunggal in enumerate(sorted(sel_orgs)):
@@ -2598,45 +2598,31 @@ def admin_dashboard():
                                                 else:
                                                     custom_no_sk = nomor_mentah
 
-                                                md_dict_sk = {}
-                                                if not df_md.empty:
-                                                    for _, rmd in df_md_clean.iterrows():
-                                                        id_md_raw = str(rmd.get('id_multidrop', '')).strip()
-                                                        md_rnd_check = id_md_raw.split("_")[-1] if "_" in id_md_raw else '1'
-                                                        if (rmd['validity_norm'] == string_sk_val_target and str(md_rnd_check) == string_sk_round_target):
-                                                            k_key = f"{rmd['vendor_email_clean']}_{rmd['group_id_clean']}"
-                                                            md_dict_sk[k_key] = {
-                                                                'in': rmd.get('inner_city_price', 0),
-                                                                'out': rmd.get('outer_city_price', 0),
-                                                                'lab': rmd.get('labor_cost', 0)
-                                                            }
                                                 tpl_sk_stream = io.BytesIO(response_sk.content)
                                                 
-                                                # --- ENGINE RE-MAPPING MULTIDROP BANTUAN LOOKUP ---
                                                 # --- ENGINE RE-MAPPING MULTIDROP BANTUAN LOOKUP ---
                                                 df_sk_merged = df_single_org.copy()
                                                 
                                                 if not df_md.empty:
                                                     try:
-                                                        # 🎯 SAKLEK: Pake nama variabel baru biar gak tabrakan atau kebalik urutan bacanya
-                                                        df_bumbu_md = df_md.copy()
-                                                        df_bumbu_md['vendor_email_clean'] = df_bumbu_md['vendor_email'].astype(str).str.strip().str.lower()
-                                                        df_bumbu_md['validity_norm'] = df_bumbu_md['validity'].astype(str).str.replace(" ", "").str.replace("-", "").str.lower().str.strip()
-                                                        df_bumbu_md['group_id_clean'] = df_bumbu_md['group_id'].astype(str).str.strip().str.upper()
+                                                        # 🎯 DI SINI TEMPAT LAHIRNYA: Bumbu ditaruh di dalam try biar urutan bacanya bener!
+                                                        df_md_clean = df_md.copy()
+                                                        df_md_clean['vendor_email_clean'] = df_md_clean['vendor_email'].astype(str).str.strip().str.lower()
+                                                        df_md_clean['validity_norm'] = df_md_clean['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
+                                                        df_md_clean['group_id_clean'] = df_md_clean['group_id'].astype(str).str.strip().str.upper()
                                                         
                                                         for col_num in ['inner_city_price', 'outer_city_price', 'labor_cost']:
-                                                            if col_num in df_bumbu_md.columns:
-                                                                df_bumbu_md[col_num] = df_bumbu_md[col_num].astype(str).str.replace("Rp", "").str.replace(".", "").str.replace(",", "").str.replace(" ", "").str.strip()
-                                                                df_bumbu_md[col_num] = pd.to_numeric(df_bumbu_md[col_num], errors='coerce').fillna(0)
+                                                            if col_num in df_md_clean.columns:
+                                                                df_md_clean[col_num] = df_md_clean[col_num].astype(str).str.replace("Rp", "").str.replace(".", "").str.replace(",", "").str.replace(" ", "").str.strip()
+                                                                df_md_clean[col_num] = pd.to_numeric(df_md_clean[col_num], errors='coerce').fillna(0)
                                                         
                                                         string_sk_val_target = str(sk_val).replace(" ", "").replace("-", "").lower().strip()
                                                         string_sk_round_target = str(sel_sk_round).strip()
                                                         
                                                         md_dict_sk = {}
-                                                        for _, rmd in df_bumbu_md.iterrows():
+                                                        for _, rmd in df_md_clean.iterrows():
                                                             id_md_raw = str(rmd.get('id_multidrop', '')).strip()
                                                             md_rnd_check = id_md_raw.split("_")[-1] if "_" in id_md_raw else '1'
-                                                            
                                                             if (rmd['validity_norm'] == string_sk_val_target and str(md_rnd_check) == string_sk_round_target):
                                                                 k_key = f"{rmd['vendor_email_clean']}_{rmd['group_id_clean']}"
                                                                 md_dict_sk[k_key] = {
@@ -2656,6 +2642,7 @@ def admin_dashboard():
                                                         df_sk_merged['outer_city_price'] = df_sk_merged.apply(lambda x: lookup_md_to_sk(x)['out'], axis=1)
                                                         df_sk_merged['labor_cost'] = df_sk_merged.apply(lambda x: lookup_md_to_sk(x)['lab'], axis=1)
                                                         
+                                                        # 🎯 INTERUPSI SHEET "add" SECARA REAL-TIME SEBELUM DICETAK
                                                         if not df_add.empty:
                                                             def override_sk_add(row_add, price_col):
                                                                 v_email = str(row_add['vendor_email']).strip().lower()
@@ -2675,15 +2662,13 @@ def admin_dashboard():
                                                         df_sk_merged['inner_city_price'] = 0
                                                         df_sk_merged['outer_city_price'] = 0
                                                         df_sk_merged['labor_cost'] = 0
-                                                        f_sk_out = create_docx_sk(tpl_sk_stream, custom_no_sk, sk_val, sk_load, df_sk_merged)                                                        
+                                                        f_sk_out = create_docx_sk(tpl_sk_stream, custom_no_sk, sk_val, sk_load, df_sk_merged)
                                                 else:
-                                                    # 🎯 KOREKSI SAKLEK: Sekarang else sejajar 48 spasi dengan "if not df_md.empty:"
                                                     df_sk_merged['inner_city_price'] = 0
                                                     df_sk_merged['outer_city_price'] = 0
                                                     df_sk_merged['labor_cost'] = 0
                                                     f_sk_out = create_docx_sk(tpl_sk_stream, custom_no_sk, sk_val, sk_load, df_sk_merged)
                                                     
-                                                # 🎯 KOREKSI PENUTUP: Seluruh proses zip masuk ke dalam loop rute origin (48 spasi)
                                                 if is_numeric_prefix:
                                                     nomor_urut_file = str(start_counter + idx_loop).zfill(3)
                                                 else:
@@ -2695,7 +2680,6 @@ def admin_dashboard():
                                                 
                                                 filename_word = f"SK_{safe_pt_name}_{safe_org_name}_{sk_load}_{nomor_urut_file}_{safe_val_sk}.docx"
                                                 
-                                                # Masukkan ke berkas ZIP lokal
                                                 zip_file.write(f_sk_out, arcname=filename_word)
                                                 os.remove(f_sk_out)
                                                 generated_files_count += 1
