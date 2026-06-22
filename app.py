@@ -2614,31 +2614,78 @@ def admin_dashboard():
                                                 
                                                 # --- ENGINE RE-MAPPING MULTIDROP BANTUAN LOOKUP ---
                                                 df_sk_merged = df_single_org.copy()
-
-                                                def lookup_md_to_sk(row_sk):
-                                                    v_email = str(row_sk['vendor_email']).strip().lower()
-                                                    g_id_raw = row_sk.get('group_id', row_sk['route_id'][:5])
-                                                    g_id = str(g_id_raw).strip().upper()
-                                                    lookup_key = f"{v_email}_{g_id}"
-                                                    return md_dict_sk.get(lookup_key, {'in': 0, 'out': 0, 'lab': 0})
-                                                df_sk_merged['inner_city_price'] = df_sk_merged.apply(lambda x: lookup_md_to_sk(x)['in'], axis=1)
-                                                df_sk_merged['outer_city_price'] = df_sk_merged.apply(lambda x: lookup_md_to_sk(x)['out'], axis=1)
-                                                df_sk_merged['labor_cost'] = df_sk_merged.apply(lambda x: lookup_md_to_sk(x)['lab'], axis=1)
-                                                if not df_add.empty:
-                                                    def override_sk_add(row_add, price_col):
-                                                        v_email = str(row_add['vendor_email']).strip().lower()
-                                                        u_type = str(row_add['unit_type']).strip().upper()
-                                                        match = df_add[(df_add['vendor_email_clean'] == v_email) & (df_add['unit_clean'] == u_type)]
-                                                        if not match.empty and price_col in match.columns:
-                                                            return clean_numeric(match.iloc[0][price_col])
-                                                        return row_add[price_col]
-                                                # 🎯 🚨 EKSEKUSI PENIMPAAN HARGA DARI SHEET "add" SECARA REAL-TIME:
-                                                df_sk_merged['inner_city_price'] = df_sk_merged.apply(lambda x: override_sk_add(x, 'inner_city_price'), axis=1)
-                                                df_sk_merged['outer_city_price'] = df_sk_merged.apply(lambda x: override_sk_add(x, 'outer_city_price'), axis=1)
                                                 
+                                                if not df_md.empty:
+                                                    try:
+                                                        df_md_clean = df_md.copy()
+                                                        
+                                                        # Pastikan semua kolom krusial dikonversi ke string murni sebelum di-strip!
+                                                        df_md_clean['vendor_email_clean'] = df_md_clean['vendor_email'].astype(str).str.strip().str.lower()
+                                                        df_md_clean['validity_norm'] = df_md_clean['validity'].astype(str).str.replace(" ", "").str.replace("-", "").str.lower().str.strip()
+                                                        df_md_clean['group_id_clean'] = df_md_clean['group_id'].astype(str).str.strip().str.upper()
+                                                        
+                                                        # Normalisasi nominal angka (Buang Rp, titik, koma bawaan Google Sheets)
+                                                        for col_num in ['inner_city_price', 'outer_city_price', 'labor_cost']:
+                                                            if col_num in df_md_clean.columns:
+                                                                df_md_clean[col_num] = df_md_clean[col_num].astype(str).str.replace("Rp", "").str.replace(".", "").str.replace(",", "").str.replace(" ", "").str.strip()
+                                                                df_md_clean[col_num] = pd.to_numeric(df_md_clean[col_num], errors='coerce').fillna(0)
+                                                        
+                                                        # Amankan variabel string filter dari UI Admin (Gunakan str() murni)
+                                                        string_sk_val_target = str(sk_val).replace(" ", "").replace("-", "").lower().strip()
+                                                        string_sk_round_target = str(sel_sk_round).strip()
+                                                        
+                                                        # Buat dictionary lookup super cepat
+                                                        md_dict_sk = {}
+                                                        for _, rmd in df_md_clean.iterrows():
+                                                            id_md_raw = str(rmd.get('id_multidrop', '')).strip()
+                                                            md_rnd_check = id_md_raw.split("_")[-1] if "_" in id_md_raw else '1'
+                                                            
+                                                            # Filter validasi kecocokan data multidrop vendor dengan filter pilihan Admin
+                                                            if (rmd['validity_norm'] == string_sk_val_target and str(md_rnd_check) == string_sk_round_target):
+                                                                k_key = f"{rmd['vendor_email_clean']}_{rmd['group_id_clean']}"
+                                                                md_dict_sk[k_key] = {
+                                                                    'in': rmd.get('inner_city_price', 0),
+                                                                    'out': rmd.get('outer_city_price', 0),
+                                                                    'lab': rmd.get('labor_cost', 0)
+                                                                }
+                                                        
+                                                        # Rumus Mapping balik ke matriks data SK
+                                                        def lookup_md_to_sk(row_sk):
+                                                            v_email = str(row_sk['vendor_email']).strip().lower()
+                                                            g_id_raw = row_sk.get('group_id', row_sk['route_id'][:5])
+                                                            g_id = str(g_id_raw).strip().upper()
+                                                            
+                                                            lookup_key = f"{v_email}_{g_id}"
+                                                            return md_dict_sk.get(lookup_key, {'in': 0, 'out': 0, 'lab': 0})
+                                                        
+                                                        # Suntikkan data harga multidrop ke DataFrame final SK
+                                                        df_sk_merged['inner_city_price'] = df_sk_merged.apply(lambda x: lookup_md_to_sk(x)['in'], axis=1)
+                                                        df_sk_merged['outer_city_price'] = df_sk_merged.apply(lambda x: lookup_md_to_sk(x)['out'], axis=1)
+                                                        df_sk_merged['labor_cost'] = df_sk_merged.apply(lambda x: lookup_md_to_sk(x)['lab'], axis=1)
+                                                        
+                                                        if not df_add.empty:
+                                                            def override_sk_add(row_add, price_col):
+                                                                v_email = str(row_add['vendor_email']).strip().lower()
+                                                                u_type = str(row_add['unit_type']).strip().upper()
+                                                                match = df_add[(df_add['vendor_email_clean'] == v_email) & (df_add['unit_clean'] == u_type)]
+                                                                if not match.empty and price_col in match.columns:
+                                                                    return clean_numeric(match.iloc[0][price_col])
+                                                                return row_add[price_col]
+                                                            
+                                                            df_sk_merged['inner_city_price'] = df_sk_merged.apply(lambda x: override_sk_add(x, 'inner_city_price'), axis=1)
+                                                            df_sk_merged['outer_city_price'] = df_sk_merged.apply(lambda x: override_sk_add(x, 'outer_city_price'), axis=1)
                                                 # Lempar ke fungsi cetak 11 kolom
                                                 f_sk_out = create_docx_sk(tpl_sk_stream, custom_no_sk, sk_val, sk_load, df_sk_merged)
-                                                
+                                            except Exception as ex_sk_md:
+                                                    st.error(f"Gagal memproses hitungan biaya tambahan SK: {ex_sk_md}")
+                                                    df_sk_merged['inner_city_price'] = 0
+                                                    df_sk_merged['outer_city_price'] = 0
+                                                    df_sk_merged['labor_cost'] = 0
+                                            else:
+                                                df_sk_merged['inner_city_price'] = 0
+                                                df_sk_merged['outer_city_price'] = 0
+                                                df_sk_merged['labor_cost'] = 0
+                                                f_sk_out = create_docx_sk(tpl_sk_stream, custom_no_sk, sk_val, sk_load, df_sk_merged)
                                                 # Inject 3 angka running number ke dalam penamaan file .docx di dalam ZIP
                                                 if is_numeric_prefix:
                                                     nomor_urut_file = str(start_counter + idx_loop).zfill(3)
