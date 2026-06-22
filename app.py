@@ -2597,7 +2597,18 @@ def admin_dashboard():
                                                     custom_no_sk = f"{current_num_str}{sisa_nomor_surat}"
                                                 else:
                                                     custom_no_sk = nomor_mentah
-                                                    
+
+                                                md_dict_sk = {}
+                                                if not df_md.empty:
+                                                    for _, rmd in df_md_clean.iterrows():
+                                                        id_md_raw = str(rmd.get('id_multidrop', '')).strip()
+                                                        md_rnd_check = id_md_raw.split("_")[-1] if "_" in id_md_raw else '1'
+                                                        if (rmd['validity_norm'] == string_sk_val_target and str(md_rnd_check) == string_sk_round_target):
+                                                            k_key = f"{rmd['vendor_email_clean']}_{rmd['group_id_clean']}"
+                                                            md_dict_sk[k_key] = {
+                                                                'in': rmd.get('inner_city_price', 0),
+                                                                'out': rmd.get('outer_city_price', 0),
+                                                                'lab': rmd.get('labor_cost', 0)    
                                                 tpl_sk_stream = io.BytesIO(response_sk.content)
                                                 
                                                 # --- ENGINE RE-MAPPING MULTIDROP BANTUAN LOOKUP ---
