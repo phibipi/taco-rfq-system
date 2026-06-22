@@ -2608,7 +2608,8 @@ def admin_dashboard():
                                                             md_dict_sk[k_key] = {
                                                                 'in': rmd.get('inner_city_price', 0),
                                                                 'out': rmd.get('outer_city_price', 0),
-                                                                'lab': rmd.get('labor_cost', 0)    
+                                                                'lab': rmd.get('labor_cost', 0)
+                                                            }
                                                 tpl_sk_stream = io.BytesIO(response_sk.content)
                                                 
                                                 # --- ENGINE RE-MAPPING MULTIDROP BANTUAN LOOKUP ---
