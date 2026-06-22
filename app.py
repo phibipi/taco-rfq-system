@@ -2582,17 +2582,7 @@ def admin_dashboard():
                                         zip_buffer = io.BytesIO()
                                         generated_files_count = 0
                                         
-                                        # 🎯 LOGIKA OVERRIDE: Kita deklarasikan fungsinya di sini (di luar loop) biar aplikasi gak boros memori
-                                        def override_sk_add(row_add, price_col):
-                                            if df_add.empty:
-                                                return row_add[price_col]
-                                            v_email = str(row_add['vendor_email']).strip().lower()
-                                            u_type = str(row_add['unit_type']).strip().upper()
-                                            match = df_add[(df_add['vendor_email_clean'] == v_email) & (df_add['unit_clean'] == u_type)]
-                                            if not match.empty and price_col in match.columns:
-                                                return clean_numeric(match.iloc[0][price_col])
-                                            return row_add[price_col]
-                                        
+                                                                                
                                         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
                                             # 🎯 LOOPING UTAMA: Pecah berkas terpisah murni per nama origin area
                                             for idx_loop, org_tunggal in enumerate(sorted(sel_orgs)):
@@ -2612,11 +2602,24 @@ def admin_dashboard():
                                                 
                                                 # --- ENGINE RE-MAPPING MULTIDROP BANTUAN LOOKUP ---
                                                 df_sk_merged = df_single_org.copy()
-                                                
+
+                                                def lookup_md_to_sk(row_sk):
+                                                    v_email = str(row_sk['vendor_email']).strip().lower()
+                                                    g_id_raw = row_sk.get('group_id', row_sk['route_id'][:5])
+                                                    g_id = str(g_id_raw).strip().upper()
+                                                    lookup_key = f"{v_email}_{g_id}"
+                                                    return md_dict_sk.get(lookup_key, {'in': 0, 'out': 0, 'lab': 0})
                                                 df_sk_merged['inner_city_price'] = df_sk_merged.apply(lambda x: lookup_md_to_sk(x)['in'], axis=1)
                                                 df_sk_merged['outer_city_price'] = df_sk_merged.apply(lambda x: lookup_md_to_sk(x)['out'], axis=1)
                                                 df_sk_merged['labor_cost'] = df_sk_merged.apply(lambda x: lookup_md_to_sk(x)['lab'], axis=1)
-                                                
+                                                if not df_add.empty:
+                                                    def override_sk_add(row_add, price_col):
+                                                        v_email = str(row_add['vendor_email']).strip().lower()
+                                                        u_type = str(row_add['unit_type']).strip().upper()
+                                                        match = df_add[(df_add['vendor_email_clean'] == v_email) & (df_add['unit_clean'] == u_type)]
+                                                        if not match.empty and price_col in match.columns:
+                                                            return clean_numeric(match.iloc[0][price_col])
+                                                        return row_add[price_col]
                                                 # 🎯 🚨 EKSEKUSI PENIMPAAN HARGA DARI SHEET "add" SECARA REAL-TIME:
                                                 df_sk_merged['inner_city_price'] = df_sk_merged.apply(lambda x: override_sk_add(x, 'inner_city_price'), axis=1)
                                                 df_sk_merged['outer_city_price'] = df_sk_merged.apply(lambda x: override_sk_add(x, 'outer_city_price'), axis=1)
