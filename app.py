@@ -2618,22 +2618,22 @@ def admin_dashboard():
                                                 
                                                 if not df_md.empty:
                                                     try:
-                                                        # 🎯 FIX AMAN: Kita bikin dan bersihkan df_md_clean DI SINI, tepat sebelum dipake looping bawahnya
-                                                        df_md_clean = df_md.copy()
-                                                        df_md_clean['vendor_email_clean'] = df_md_clean['vendor_email'].astype(str).str.strip().str.lower()
-                                                        df_md_clean['validity_norm'] = df_md_clean['validity'].astype(str).str.replace(" ", "").str.replace("-", "").str.lower().str.strip()
-                                                        df_md_clean['group_id_clean'] = df_md_clean['group_id'].astype(str).str.strip().str.upper()
+                                                        # 🎯 SAKLEK: Pake nama variabel baru biar gak tabrakan atau kebalik urutan bacanya
+                                                        df_bumbu_md = df_md.copy()
+                                                        df_bumbu_md['vendor_email_clean'] = df_bumbu_md['vendor_email'].astype(str).str.strip().str.lower()
+                                                        df_bumbu_md['validity_norm'] = df_bumbu_md['validity'].astype(str).str.replace(" ", "").str.replace("-", "").str.lower().str.strip()
+                                                        df_bumbu_md['group_id_clean'] = df_bumbu_md['group_id'].astype(str).str.strip().str.upper()
                                                         
                                                         for col_num in ['inner_city_price', 'outer_city_price', 'labor_cost']:
-                                                            if col_num in df_md_clean.columns:
-                                                                df_md_clean[col_num] = df_md_clean[col_num].astype(str).str.replace("Rp", "").str.replace(".", "").str.replace(",", "").str.replace(" ", "").str.strip()
-                                                                df_md_clean[col_num] = pd.to_numeric(df_md_clean[col_num], errors='coerce').fillna(0)
+                                                            if col_num in df_bumbu_md.columns:
+                                                                df_bumbu_md[col_num] = df_bumbu_md[col_num].astype(str).str.replace("Rp", "").str.replace(".", "").str.replace(",", "").str.replace(" ", "").str.strip()
+                                                                df_bumbu_md[col_num] = pd.to_numeric(df_bumbu_md[col_num], errors='coerce').fillna(0)
                                                         
                                                         string_sk_val_target = str(sk_val).replace(" ", "").replace("-", "").lower().strip()
                                                         string_sk_round_target = str(sel_sk_round).strip()
                                                         
                                                         md_dict_sk = {}
-                                                        for _, rmd in df_md_clean.iterrows():
+                                                        for _, rmd in df_bumbu_md.iterrows():
                                                             id_md_raw = str(rmd.get('id_multidrop', '')).strip()
                                                             md_rnd_check = id_md_raw.split("_")[-1] if "_" in id_md_raw else '1'
                                                             
