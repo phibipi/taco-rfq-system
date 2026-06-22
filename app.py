@@ -2701,6 +2701,7 @@ def admin_dashboard():
                     # Baris filter utama (Periode, Muatan, Tahap, Entitas PT)
                     c3, c4, c5, c6 = st.columns(4)
                     spk_val = c3.selectbox("Periode SPK", avail_val, key="spk_val")
+                    avail_load = sorted(df_master['load_type'].dropna().astype(str).unique().tolist())
                     spk_load = c4.selectbox("Muatan SPK", avail_load, key="spk_load")
                     
                     avail_spk_rounds = sorted(df_master['round'].dropna().unique().tolist()) if not df_master.empty else ["1", "2"]
