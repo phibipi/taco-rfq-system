@@ -2972,7 +2972,11 @@ def admin_dashboard():
                                         # --- JALUR ZIP UTK DOWNLOAD DI LAPTOP ---
                                         if success_count > 0:
                                             import zipfile
-                                            
+                                            df_md_clean = df_md.copy() if not df_md.empty else pd.DataFrame()
+                                            if not df_md_clean.empty:
+                                                df_md_clean['vendor_email_clean'] = df_md_clean['vendor_email'].astype(str).str.strip().str.lower()
+                                                df_md_clean['validity_norm'] = df_md_clean['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
+                                                df_md_clean['group_id_clean'] = df_md_clean['group_id'].astype(str).str.strip().str.upper()
                                             zip_buffer = io.BytesIO()
                                             zip_filename = f"ALL_SPK_{safe_load}_{safe_val}.zip"
                                             
