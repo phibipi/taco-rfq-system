@@ -2675,61 +2675,61 @@ def admin_dashboard():
                                                             df_sk_merged['inner_city_price'] = df_sk_merged.apply(lambda x: override_sk_add(x, 'inner_city_price'), axis=1)
                                                             df_sk_merged['outer_city_price'] = df_sk_merged.apply(lambda x: override_sk_add(x, 'outer_city_price'), axis=1)
                                                             
-                                                # Lempar ke fungsi cetak 11 kolom (Sejajar di dalam try induk)
-                                                f_sk_out = create_docx_sk(tpl_sk_stream, custom_no_sk, sk_val, sk_load, df_sk_merged)
+                                                        # Lempar ke fungsi cetak 11 kolom (Sejajar di dalam try induk)
+                                                        f_sk_out = create_docx_sk(tpl_sk_stream, custom_no_sk, sk_val, sk_load, df_sk_merged)
                                                 
-                                            except Exception as ex_sk_md:
-                                                st.error(f"Gagal memproses hitungan biaya tambahan SK: {ex_sk_md}")
-                                                df_sk_merged['inner_city_price'] = 0
-                                                df_sk_merged['outer_city_price'] = 0
-                                                df_sk_merged['labor_cost'] = 0
-                                                f_sk_out = create_docx_sk(tpl_sk_stream, custom_no_sk, sk_val, sk_load, df_sk_merged)
+                                                    except Exception as ex_sk_md:
+                                                        st.error(f"Gagal memproses hitungan biaya tambahan SK: {ex_sk_md}")
+                                                        df_sk_merged['inner_city_price'] = 0
+                                                        df_sk_merged['outer_city_price'] = 0
+                                                        df_sk_merged['labor_cost'] = 0
+                                                        f_sk_out = create_docx_sk(tpl_sk_stream, custom_no_sk, sk_val, sk_load, df_sk_merged)
+                                                        
+                                                else:
+                                                    # 🎯 KOREKSI SAKLEK: Sekarang else sejajar 48 spasi dengan "if not df_md.empty:"
+                                                    df_sk_merged['inner_city_price'] = 0
+                                                    df_sk_merged['outer_city_price'] = 0
+                                                    df_sk_merged['labor_cost'] = 0
+                                                    f_sk_out = create_docx_sk(tpl_sk_stream, custom_no_sk, sk_val, sk_load, df_sk_merged)
+                                                    
+                                                # 🎯 KOREKSI PENUTUP: Seluruh proses zip masuk ke dalam loop rute origin (48 spasi)
+                                                if is_numeric_prefix:
+                                                    nomor_urut_file = str(start_counter + idx_loop).zfill(3)
+                                                else:
+                                                    nomor_urut_file = prefix_angka_str
+                                                    
+                                                safe_val_sk = str(sk_val).replace(" - ", "-").replace(" ", "_")
+                                                safe_pt_name = "Tangkas" if sel_pt_sk == "PT Tangkas Cipta Optimal" else "TAC"
+                                                safe_org_name = str(org_tunggal).replace(" ", "")
                                                 
+                                                filename_word = f"SK_{safe_pt_name}_{safe_org_name}_{sk_load}_{nomor_urut_file}_{safe_val_sk}.docx"
+                                                
+                                                # Masukkan ke berkas ZIP lokal
+                                                zip_file.write(f_sk_out, arcname=filename_word)
+                                                os.remove(f_sk_out)
+                                                generated_files_count += 1
+                                                
+                                        if generated_files_count > 0:
+                                            safe_val_sk = str(sk_val).replace(" - ", "-").replace(" ", "_")
+                                            st.success(f"🎉 Sukses Membelah Data! Berhasil memproduksi {generated_files_count} berkas SK terpisah per origin area.")
+                                            st.download_button(
+                                                label="⬇️ Download Semua Berkas SK Per Origin (.ZIP)", 
+                                                data=zip_buffer.getvalue(), 
+                                                file_name=f"SK_{safe_pt_name}_{sk_load}_{safe_val_sk}.zip", 
+                                                mime="application/zip",
+                                                type="primary",
+                                                use_container_width=True
+                                            )
                                         else:
-                                            # 🎯 KOREKSI SAKLEK: Sekarang else sejajar 48 spasi dengan "if not df_md.empty:"
-                                            df_sk_merged['inner_city_price'] = 0
-                                            df_sk_merged['outer_city_price'] = 0
-                                            df_sk_merged['labor_cost'] = 0
-                                            f_sk_out = create_docx_sk(tpl_sk_stream, custom_no_sk, sk_val, sk_load, df_sk_merged)
+                                            st.warning("Tidak ada rute valid yang bisa di-generate.")
                                             
-                                        # 🎯 KOREKSI PENUTUP: Seluruh proses zip masuk ke dalam loop rute origin (48 spasi)
-                                        if is_numeric_prefix:
-                                            nomor_urut_file = str(start_counter + idx_loop).zfill(3)
-                                        else:
-                                            nomor_urut_file = prefix_angka_str
-                                            
-                                        safe_val_sk = str(sk_val).replace(" - ", "-").replace(" ", "_")
-                                        safe_pt_name = "Tangkas" if sel_pt_sk == "PT Tangkas Cipta Optimal" else "TAC"
-                                        safe_org_name = str(org_tunggal).replace(" ", "")
-                                        
-                                        filename_word = f"SK_{safe_pt_name}_{safe_org_name}_{sk_load}_{nomor_urut_file}_{safe_val_sk}.docx"
-                                        
-                                        # Masukkan ke berkas ZIP lokal
-                                        zip_file.write(f_sk_out, arcname=filename_word)
-                                        os.remove(f_sk_out)
-                                        generated_files_count += 1
-                                        
-                                if generated_files_count > 0:
-                                    safe_val_sk = str(sk_val).replace(" - ", "-").replace(" ", "_")
-                                    st.success(f"🎉 Sukses Membelah Data! Berhasil memproduksi {generated_files_count} berkas SK terpisah per origin area.")
-                                    st.download_button(
-                                        label="⬇️ Download Semua Berkas SK Per Origin (.ZIP)", 
-                                        data=zip_buffer.getvalue(), 
-                                        file_name=f"SK_{safe_pt_name}_{sk_load}_{safe_val_sk}.zip", 
-                                        mime="application/zip",
-                                        type="primary",
-                                        use_container_width=True
-                                    )
-                                else:
-                                    st.warning("Tidak ada rute valid yang bisa di-generate.")
-                                    
-                            except Exception as e_batch:
-                                st.error(f"Gagal memproses batch split SK: {str(e_batch)}")
-                else:
-                    st.warning("Pilih minimal 1 origin area.")
-            else:
-                st.warning("Tidak ditemukan data penawaran harga kompetitor yang aktif untuk kriteria filter ini.")    
-        st.write("") # Jarak
+                                    except Exception as e_batch:
+                                        st.error(f"Gagal memproses batch split SK: {str(e_batch)}")
+                        else:
+                            st.warning("Pilih minimal 1 origin area.")
+                    else:
+                        st.warning("Tidak ditemukan data penawaran harga kompetitor yang aktif untuk kriteria filter ini.")    
+                st.write("") # Jarak
                
                 # ==========================================================
                 # BAGIAN 2: SURAT PERINTAH KERJA (SPK) - MULTI ORIGIN & MULTI VENDOR
