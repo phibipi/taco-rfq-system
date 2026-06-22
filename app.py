@@ -2646,10 +2646,18 @@ def admin_dashboard():
                                                         if not df_add.empty:
                                                             def override_sk_add(row_add, price_col):
                                                                 v_email = str(row_add['vendor_email']).strip().lower()
-                                                                u_type = str(row_add['unit_type']).strip().upper()
-                                                                match = df_add[(df_add['vendor_email_clean'] == v_email) & (df_add['unit_clean'] == u_type)]
-                                                                if not match.empty and price_col in match.columns:
-                                                                    return clean_numeric(match.iloc[0][price_col])
+                                                                u_type = str(row_add.get('unit_type', '')).replace(" ", "").replace("\n", "").replace("\r", "").strip().upper()
+                                                                match = df_add[
+                                                                    (df_add['vendor_email_clean'] == v_email) & 
+                                                                    (df_add['unit_type'].astype(str).str.replace(" ", "").str.replace("\n", "").str.replace("\r", "").str.strip().str.upper() == u_type)
+                                                                ]
+                                                                if not match.empty:
+                                                                    # Cek apakah kolom harganya ada di sheet "add" lo
+                                                                    if price_col in match.columns:
+                                                                        nilai_baru = clean_numeric(match.iloc[0][price_col])
+                                                                        # Kalau harganya valid di atas 0, timpa!
+                                                                        if nilai_baru > 0:
+                                                                            return nilai_baru
                                                                 return row_add[price_col]
                                                             
                                                             df_sk_merged['inner_city_price'] = df_sk_merged.apply(lambda x: override_sk_add(x, 'inner_city_price'), axis=1)
