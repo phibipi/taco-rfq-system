@@ -2643,21 +2643,30 @@ def admin_dashboard():
                                                         df_sk_merged['outer_city_price'] = df_sk_merged.apply(lambda x: lookup_md_to_sk(x)['out'], axis=1)
                                                         df_sk_merged['labor_cost'] = df_sk_merged.apply(lambda x: lookup_md_to_sk(x)['lab'], axis=1)
                                                         
-                                                        # 🎯 INTERUPSI SHEET "add" SECARA REAL-TIME SEBELUM DICETAK
+                                                        # 🎯 🚨 FIX SAKLEK ORIGIN & UNIT UNTUK SK:
                                                         if not df_add.empty:
                                                             def override_sk_add(row_add, price_col):
-                                                                v_email = str(row_add['vendor_email']).strip().lower()
-                                                                u_type = str(row_add.get('unit_type', '')).replace(" ", "").replace("\n", "").replace("\r", "").strip().upper()
-                                                                ori_raw = str(row_add.get('origin', '')).strip().upper()
+                                                                v_email = str(row_add.get('vendor_email', '')).strip().lower()
+                                                                
+                                                                # 1. Gundulin total data rute berjalan (SK)
+                                                                u_type = str(row_add.get('unit_type', '')).replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "").strip().upper()
+                                                                ori_raw = str(row_add.get('origin', '')).replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "").strip().upper()
+                                                                
+                                                                # Helper lokal untuk gundulin isi sheet "add" (Buang space, enter, tab)
+                                                                def clean_string_total(val):
+                                                                    return str(val).replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "").strip().upper()
+
+                                                                # 2. Saring df_add: Email pas, Unit gundul pas, and (Origin gundul pas OR berbunyi ALL)
                                                                 match = df_add[
                                                                     (df_add['vendor_email_clean'] == v_email) & 
-                                                                    (df_add['unit_type'].astype(str).str.replace(" ", "").str.replace("\n", "").str.replace("\r", "").str.strip().str.upper() == u_type) &
-                                                                    ((df_add['origin_clean'] == ori_raw) | (df_add['origin_clean'] == 'ALL') | (df_add['origin_clean'].str.contains(ori_raw, na=False)))
+                                                                    (df_add['unit_type'].apply(clean_string_total) == u_type) & 
+                                                                    ((df_add['origin'].apply(clean_string_total) == ori_raw) | (df_add['origin'].apply(clean_string_total) == 'ALL'))
                                                                 ].copy()
+                                                                
                                                                 if not match.empty:
-                                                                    # 🎯 FIX SAKLEK: Urutkan pake cara natural biar yang spesifik naik ke atas, bukan ALL
                                                                     if len(match) > 1:
-                                                                        match['is_all'] = match['origin_clean'] == 'ALL'
+                                                                        # Bikin penanda, prioritaskan rute spesifik (Krian) dibanding "ALL"
+                                                                        match['is_all'] = match['origin'].apply(clean_string_total) == 'ALL'
                                                                         match = match.sort_values(by='is_all', ascending=True)
                                                                     
                                                                     if price_col in match.columns:
@@ -2926,23 +2935,35 @@ def admin_dashboard():
                                                     df_spk_merged['inner_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'in'), axis=1)
                                                     df_spk_merged['outer_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'out'), axis=1)
                                                     df_spk_merged['labor_cost'] = df_spk_merged.apply(lambda x: get_md_val(x, 'lab'), axis=1)
+                                                    # 🎯 🚨 FIX SAKLEK ORIGIN & UNIT UNTUK SPK:
                                                     if not df_add.empty:
                                                         def override_spk_add(row_add, price_col):
-                                                            v_email = str(row_add['vendor_email']).strip().lower()
-                                                            u_type = str(row_add['unit_type']).strip().upper()
-                                                            ori_raw = str(row_add.get('origin', '')).strip().upper()
-                                                            match = df_add[(df_add['vendor_email_clean'] == v_email) & (df_add['unit_clean'] == u_type) & ((df_add['origin_clean'] == ori_raw) | (df_add['origin_clean'] == 'ALL') | (df_add['origin_clean'].str.contains(ori_raw, na=False)))
+                                                            v_email = str(row_add.get('vendor_email', '')).strip().lower()
+                                                            
+                                                            # 1. Gundulin total data rute berjalan (SPK)
+                                                            u_type = str(row_add.get('unit_type', '')).replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "").strip().upper()
+                                                            ori_raw = str(row_add.get('origin', '')).replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "").strip().upper()
+                                                            
+                                                            # Helper lokal untuk gundulin isi sheet "add" (Buang space, enter, tab)
+                                                            def clean_string_total(val):
+                                                                return str(val).replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "").strip().upper()
+
+                                                            # 2. Saring df_add: Email pas, Unit gundul pas, and (Origin gundul pas OR berbunyi ALL)
+                                                            match = df_add[
+                                                                (df_add['vendor_email_clean'] == v_email) & 
+                                                                (df_add['unit_type'].apply(clean_string_total) == u_type) & 
+                                                                ((df_add['origin'].apply(clean_string_total) == ori_raw) | (df_add['origin'].apply(clean_string_total) == 'ALL'))
                                                             ].copy()
+                                                            
                                                             if not match.empty:
-                                                                    # 🎯 FIX SAKLEK: Urutkan pake cara natural biar yang spesifik naik ke atas, bukan ALL
-                                                                    if len(match) > 1:
-                                                                        match['is_all'] = match['origin_clean'] == 'ALL'
-                                                                        match = match.sort_values(by='is_all', ascending=True)
-                                                                    
-                                                                    if price_col in match.columns:
-                                                                        nilai_baru = clean_numeric(match.iloc[0][price_col])
-                                                                        if nilai_baru > 0:
-                                                                            return nilai_baru
+                                                                if len(match) > 1:
+                                                                    match['is_all'] = match['origin'].apply(clean_string_total) == 'ALL'
+                                                                    match = match.sort_values(by='is_all', ascending=True)
+                                                                
+                                                                if price_col in match.columns:
+                                                                    nilai_baru = clean_numeric(match.iloc[0][price_col])
+                                                                    if nilai_baru > 0:
+                                                                        return nilai_baru
                                                             return row_add[price_col]
                                                         
                                                         df_spk_merged['inner_city_price'] = df_spk_merged.apply(lambda x: override_spk_add(x, 'inner_city_price'), axis=1)
