@@ -1691,7 +1691,7 @@ def admin_dashboard():
                         st.divider()
                         c_val1, c_val2 = st.columns([2, 1])
                         
-                        opt_validity = ["Januari - Juni", "Juli - Desember"] if sel_lt == "FCL" else ["Januari - Desember"]
+                        opt_validity = ["Januari - Juni", "Juli - Desember"] if sel_lt == "FCL" else ["Januari - Desember", "Juli 2026 - Juni"]
                         val_period = c_val1.selectbox("Periode", opt_validity)
                         val_year = c_val2.text_input("Tahun", value=str(datetime.now().year))
                         
