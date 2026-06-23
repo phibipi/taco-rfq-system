@@ -2478,6 +2478,7 @@ def admin_dashboard():
                 if not df_add.empty:
                     df_add['vendor_email_clean'] = df_add['vendor_email'].astype(str).str.strip().str.lower()
                     df_add['unit_clean'] = df_add['unit_type'].astype(str).str.strip().str.upper()
+                    df_add['origin_clean'] = df_add['origin'].astype(str).str.replace(" ", "").str.strip().str.upper()
                 # ---------------------------------------------
                 
                 avail_val = sorted(df_master['validity'].unique().tolist())
@@ -2647,12 +2648,15 @@ def admin_dashboard():
                                                             def override_sk_add(row_add, price_col):
                                                                 v_email = str(row_add['vendor_email']).strip().lower()
                                                                 u_type = str(row_add.get('unit_type', '')).replace(" ", "").replace("\n", "").replace("\r", "").strip().upper()
+                                                                current_origin = str(row_add.get('origin', '')).replace(" ", "").strip().upper()
                                                                 match = df_add[
                                                                     (df_add['vendor_email_clean'] == v_email) & 
-                                                                    (df_add['unit_type'].astype(str).str.replace(" ", "").str.replace("\n", "").str.replace("\r", "").str.strip().str.upper() == u_type)
+                                                                    (df_add['unit_type'].astype(str).str.replace(" ", "").str.replace("\n", "").str.replace("\r", "").str.strip().str.upper() == u_type) &
+                                                                    ((df_add['origin_clean'] == current_origin) | (df_add['origin_clean'] == 'ALL'))
                                                                 ]
                                                                 if not match.empty:
-                                                                    # Cek apakah kolom harganya ada di sheet "add" lo
+                                                                    if len(match) > 1
+                                                                        match = match.sort_values(by='origin_clean', ascending=(df_add['origin_clean'] != 'ALL'))
                                                                     if price_col in match.columns:
                                                                         nilai_baru = clean_numeric(match.iloc[0][price_col])
                                                                         # Kalau harganya valid di atas 0, timpa!
@@ -2924,10 +2928,21 @@ def admin_dashboard():
                                                         def override_spk_add(row_add, price_col):
                                                             v_email = str(row_add['vendor_email']).strip().lower()
                                                             u_type = str(row_add['unit_type']).strip().upper()
-                                                            match = df_add[(df_add['vendor_email_clean'] == v_email) & (df_add['unit_clean'] == u_type)]
-                                                            if not match.empty and price_col in match.columns:
-                                                                return clean_numeric(match.iloc[0][price_col])
+                                                            current_origin = str(row_add.get('origin', '')).replace(" ", "").strip().upper()
+                                                            match = df_add[(df_add['vendor_email_clean'] == v_email) & (df_add['unit_clean'] == u_type) & ((df_add['origin_clean'] == current_origin) | (df_add['origin_clean'] == 'ALL'))]
+                                                            if not match.empty:
+                                                                # Prioritaskan yang origin-nya spesifik daripada yang tulisan "ALL"
+                                                                if len(match) > 1:
+                                                                    match = match.sort_values(by='origin_clean', ascending=(df_add['origin_clean'] != 'ALL'))
+                                                                
+                                                                if price_col in match.columns:
+                                                                    nilai_baru = clean_numeric(match.iloc[0][price_col])
+                                                                    if nilai_baru > 0:
+                                                                        return nilai_baru
                                                             return row_add[price_col]
+                                                        
+                                                        df_spk_merged['inner_city_price'] = df_spk_merged.apply(lambda x: override_spk_add(x, 'inner_city_price'), axis=1)
+                                                        df_spk_merged['outer_city_price'] = df_spk_merged.apply(lambda x: override_spk_add(x, 'outer_city_price'), axis=1)
                                                 except Exception as ex_md:
                                                     st.error(f"Gagal memproses data biaya tambahan vendor {v_name}: {ex_md}")
 
