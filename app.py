@@ -2648,12 +2648,12 @@ def admin_dashboard():
                                                             def override_sk_add(row_add, price_col):
                                                                 v_email = str(row_add['vendor_email']).strip().lower()
                                                                 u_type = str(row_add.get('unit_type', '')).replace(" ", "").replace("\n", "").replace("\r", "").strip().upper()
-                                                                current_origin = str(row_add.get('origin', '')).replace(" ", "").strip().upper()
+                                                                ori_raw = str(row_add.get('origin', '')).strip().upper()
                                                                 match = df_add[
                                                                     (df_add['vendor_email_clean'] == v_email) & 
                                                                     (df_add['unit_type'].astype(str).str.replace(" ", "").str.replace("\n", "").str.replace("\r", "").str.strip().str.upper() == u_type) &
-                                                                    ((df_add['origin_clean'] == current_origin) | (df_add['origin_clean'] == 'ALL'))
-                                                                ]
+                                                                    ((df_add['origin_clean'] == ori_raw) | (df_add['origin_clean'] == 'ALL') | (df_add['origin_clean'].str.contains(ori_raw, na=False)))
+                                                                ].copy()
                                                                 if not match.empty:
                                                                     # 🎯 FIX SAKLEK: Urutkan pake cara natural biar yang spesifik naik ke atas, bukan ALL
                                                                     if len(match) > 1:
@@ -2930,8 +2930,9 @@ def admin_dashboard():
                                                         def override_spk_add(row_add, price_col):
                                                             v_email = str(row_add['vendor_email']).strip().lower()
                                                             u_type = str(row_add['unit_type']).strip().upper()
-                                                            current_origin = str(row_add.get('origin', '')).replace(" ", "").strip().upper()
-                                                            match = df_add[(df_add['vendor_email_clean'] == v_email) & (df_add['unit_clean'] == u_type) & ((df_add['origin_clean'] == current_origin) | (df_add['origin_clean'] == 'ALL'))]
+                                                            ori_raw = str(row_add.get('origin', '')).strip().upper()
+                                                            match = df_add[(df_add['vendor_email_clean'] == v_email) & (df_add['unit_clean'] == u_type) & ((df_add['origin_clean'] == ori_raw) | (df_add['origin_clean'] == 'ALL') | (df_add['origin_clean'].str.contains(ori_raw, na=False)))
+                                                            ].copy()
                                                             if not match.empty:
                                                                     # 🎯 FIX SAKLEK: Urutkan pake cara natural biar yang spesifik naik ke atas, bukan ALL
                                                                     if len(match) > 1:
