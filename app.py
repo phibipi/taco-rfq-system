@@ -2967,6 +2967,8 @@ def admin_dashboard():
 
                                             # Tentukan nama file output unik per vendor
                                             safe_val = str(spk_val).replace(" - ", "-").replace(" ", "_")
+                                            if safe_val.replace(" ", "") == "Januari-Desember2026":
+                                                    safe_val = "1 Juli 2026 - 31 Juni 2027"
                                             safe_load = str(spk_load).replace(" ", "")
                                             safe_pt_prefix = "TANGKAS" if "Tangkas" in sel_pt_entitas else "TAC"
                                             safe_ven_file = "".join(x for x in v_name if x.isalnum() or x in " -").replace(" ", "_")
