@@ -2643,20 +2643,17 @@ def admin_dashboard():
                                                         df_sk_merged['outer_city_price'] = df_sk_merged.apply(lambda x: lookup_md_to_sk(x)['out'], axis=1)
                                                         df_sk_merged['labor_cost'] = df_sk_merged.apply(lambda x: lookup_md_to_sk(x)['lab'], axis=1)
                                                         
-                                                        # 🎯 🚨 FIX SAKLEK ORIGIN & UNIT UNTUK SK:
+                                                        # 🎯 🚨 KOREKSI SAKLEK SK: BIAR GAK BOCOR KE ORIGIN LAIN!
                                                         if not df_add.empty:
                                                             def override_sk_add(row_add, price_col):
                                                                 v_email = str(row_add.get('vendor_email', '')).strip().lower()
-                                                                
-                                                                # 1. Gundulin total data rute berjalan (SK)
                                                                 u_type = str(row_add.get('unit_type', '')).replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "").strip().upper()
                                                                 ori_raw = str(row_add.get('origin', '')).replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "").strip().upper()
                                                                 
-                                                                # Helper lokal untuk gundulin isi sheet "add" (Buang space, enter, tab)
                                                                 def clean_string_total(val):
                                                                     return str(val).replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "").strip().upper()
 
-                                                                # 2. Saring df_add: Email pas, Unit gundul pas, and (Origin gundul pas OR berbunyi ALL)
+                                                                # 🔒 PERUBAHAN: Pakai == (Sama Dengan) secara mutlak, HAPUS str.contains!
                                                                 match = df_add[
                                                                     (df_add['vendor_email_clean'] == v_email) & 
                                                                     (df_add['unit_type'].apply(clean_string_total) == u_type) & 
@@ -2664,8 +2661,8 @@ def admin_dashboard():
                                                                 ].copy()
                                                                 
                                                                 if not match.empty:
+                                                                    # 🥇 PRIORITAS UTAMA: Kalau ada Krian dan ada ALL, dahulukan Krian!
                                                                     if len(match) > 1:
-                                                                        # Bikin penanda, prioritaskan rute spesifik (Krian) dibanding "ALL"
                                                                         match['is_all'] = match['origin'].apply(clean_string_total) == 'ALL'
                                                                         match = match.sort_values(by='is_all', ascending=True)
                                                                     
@@ -2935,20 +2932,17 @@ def admin_dashboard():
                                                     df_spk_merged['inner_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'in'), axis=1)
                                                     df_spk_merged['outer_city_price'] = df_spk_merged.apply(lambda x: get_md_val(x, 'out'), axis=1)
                                                     df_spk_merged['labor_cost'] = df_spk_merged.apply(lambda x: get_md_val(x, 'lab'), axis=1)
-                                                    # 🎯 🚨 FIX SAKLEK ORIGIN & UNIT UNTUK SPK:
+                                                    # 🎯 🚨 KOREKSI SAKLEK SPK: BIAR GAK BOCOR KE ORIGIN LAIN!
                                                     if not df_add.empty:
                                                         def override_spk_add(row_add, price_col):
                                                             v_email = str(row_add.get('vendor_email', '')).strip().lower()
-                                                            
-                                                            # 1. Gundulin total data rute berjalan (SPK)
                                                             u_type = str(row_add.get('unit_type', '')).replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "").strip().upper()
                                                             ori_raw = str(row_add.get('origin', '')).replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "").strip().upper()
                                                             
-                                                            # Helper lokal untuk gundulin isi sheet "add" (Buang space, enter, tab)
                                                             def clean_string_total(val):
                                                                 return str(val).replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "").strip().upper()
 
-                                                            # 2. Saring df_add: Email pas, Unit gundul pas, and (Origin gundul pas OR berbunyi ALL)
+                                                            # 🔒 PERUBAHAN: Pakai == (Sama Dengan) secara mutlak, HAPUS str.contains!
                                                             match = df_add[
                                                                 (df_add['vendor_email_clean'] == v_email) & 
                                                                 (df_add['unit_type'].apply(clean_string_total) == u_type) & 
@@ -3002,12 +2996,7 @@ def admin_dashboard():
                                                 df_md_clean['vendor_email_clean'] = df_md_clean['vendor_email'].astype(str).str.strip().str.lower()
                                                 df_md_clean['validity_norm'] = df_md_clean['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
                                                 df_md_clean['group_id_clean'] = df_md_clean['group_id'].astype(str).str.strip().str.upper()
-                                                df_md_clean['unit_clean'] = (df_md_clean['unit']
-                                                                             .astype(str)
-                                                                             .str.replace('\n', '', regex=False)  # Sikat enter (line break)
-                                                                             .str.replace('\r', '', regex=False)  # Sikat carriage return
-                                                                             .str.strip()                         # Sikat spasi di awal & akhir teks
-                                                                             .str.upper())
+                                                
                                             zip_buffer = io.BytesIO()
                                             zip_filename = f"ALL_SPK_{safe_load}_{safe_val}.zip"
                                             
