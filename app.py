@@ -2655,7 +2655,7 @@ def admin_dashboard():
                                                                     ((df_add['origin_clean'] == current_origin) | (df_add['origin_clean'] == 'ALL'))
                                                                 ]
                                                                 if not match.empty:
-                                                                    if len(match) > 1
+                                                                    if len(match) > 1:
                                                                         match = match.sort_values(by='origin_clean', ascending=(df_add['origin_clean'] != 'ALL'))
                                                                     if price_col in match.columns:
                                                                         nilai_baru = clean_numeric(match.iloc[0][price_col])
