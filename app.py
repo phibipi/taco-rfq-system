@@ -2740,7 +2740,8 @@ def admin_dashboard():
                                                     worksheet.column_dimensions[col_letter].width = max(max_len + 3, 12)
                                                     
                                             excel_data = output_excel.getvalue()
-                                            
+                                            clean_load_sk = str(sk_load).replace(" ", "")
+                                            clean_val_sk = str(sk_val).replace(" - ", "-").replace(" ", "_")
                                             st.download_button(
                                                 label="📥 Download Excel Multidrop per Rute",
                                                 data=excel_data,
