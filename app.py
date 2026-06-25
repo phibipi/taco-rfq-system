@@ -3024,28 +3024,108 @@ def admin_dashboard():
                     else:
                         st.warning("Tidak ditemukan data penawaran harga kompetitor yang aktif untuk kriteria filter ini.")
 # ==============================================================================
-                # 🎯 🚨 ULTIMATE FIX: TOMBOL DOWNLOAD EXCEL MULTIDROP STANDALONE (LANGSUNG AKTIF)
+               # ==============================================================================
+                # 🎯 🚨 ULTIMATE FIX: TOMBOL DOWNLOAD EXCEL MULTIDROP STANDALONE + HARGA TERWAKILI
                 # ==============================================================================
                 if not df_sk_global.empty:
                     st.markdown("---") 
                     st.markdown("### 📊 Download Master Data Multidrop per Rute")
                     st.info("Anda bisa langsung mendownload data multidrop yang sudah ter-mapping per rute di bawah ini tanpa perlu memproses file Word terlebih dahulu.")
                     
-                    # 1. Ambil basis data klasemen global yang sudah ready dari awal di memori
+                    # 1. Ambil basis data klasemen rute berjalan
                     df_excel_md = df_sk_global.copy()
                     
-                    # 2. Ambil kolom-kolom penting rute master
+                    # 2. SUNTIK LOGIC MULTIDROP DATABASE RESMI (Biar harganya gak Rp 0)
+                    if not df_md.empty:
+                        try:
+                            df_md_clean = df_md.copy()
+                            df_md_clean['vendor_email_clean'] = df_md_clean['vendor_email'].astype(str).str.strip().str.lower()
+                            df_md_clean['validity_norm'] = df_md_clean['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
+                            df_md_clean['group_id_clean'] = df_md_clean['group_id'].astype(str).str.strip().str.upper()
+                            
+                            for col_num in ['inner_city_price', 'outer_city_price', 'labor_cost']:
+                                if col_num in df_md_clean.columns:
+                                    df_md_clean[col_num] = df_md_clean[col_num].astype(str).str.replace("Rp", "").str.replace(".", "").str.replace(",", "").str.replace(" ", "").str.strip()
+                                    df_md_clean[col_num] = pd.to_numeric(df_md_clean[col_num], errors='coerce').fillna(0)
+                            
+                            string_sk_val_target = str(sk_val).replace(" ", "").replace("-", "").lower().strip()
+                            string_sk_round_target = str(sel_sk_round).strip()
+                            
+                            md_dict_sk = {}
+                            for _, rmd in df_md_clean.iterrows():
+                                id_md_raw = str(rmd.get('id_multidrop', '')).strip()
+                                md_rnd_check = id_md_raw.split("_")[-1] if "_" in id_md_raw else '1'
+                                if (rmd['validity_norm'] == string_sk_val_target and str(md_rnd_check) == string_sk_round_target):
+                                    k_key = f"{rmd['vendor_email_clean']}_{rmd['group_id_clean']}"
+                                    md_dict_sk[k_key] = {
+                                        'in': rmd.get('inner_city_price', 0),
+                                        'out': rmd.get('outer_city_price', 0),
+                                        'lab': rmd.get('labor_cost', 0)
+                                    }
+                            
+                            def lookup_md_standalone(row_sk):
+                                v_email = str(row_sk['vendor_email']).strip().lower()
+                                g_id_raw = row_sk.get('group_id', row_sk['route_id'][:5])
+                                g_id = str(g_id_raw).strip().upper()
+                                lookup_key = f"{v_email}_{g_id}"
+                                return md_dict_sk.get(lookup_key, {'in': 0, 'out': 0, 'lab': 0})
+                            
+                            df_excel_md['inner_city_price'] = df_excel_md.apply(lambda x: lookup_md_standalone(x)['in'], axis=1)
+                            df_excel_md['outer_city_price'] = df_excel_md.apply(lambda x: lookup_md_standalone(x)['out'], axis=1)
+                            df_excel_md['labor_cost'] = df_excel_md.apply(lambda x: lookup_md_standalone(x)['lab'], axis=1)
+                        except:
+                            df_excel_md['inner_city_price'] = 0
+                            df_excel_md['outer_city_price'] = 0
+                            df_excel_md['labor_cost'] = 0
+                    else:
+                        df_excel_md['inner_city_price'] = 0
+                        df_excel_md['outer_city_price'] = 0
+                        df_excel_md['labor_cost'] = 0
+
+                    # 3. SUNTIK INTERUPSI HARGA OVERRIDE SHEET "add" 
+                    if not df_add.empty:
+                        def override_standalone(row_add, price_col):
+                            v_email = str(row_add.get('vendor_email', '')).strip().lower()
+                            u_type = str(row_add.get('unit_type', '')).replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "").strip().upper()
+                            ori_raw = str(row_add.get('origin', '')).replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "").strip().upper()
+                            
+                            def clean_string_total(val):
+                                return str(val).replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "").strip().upper()
+
+                            match = df_add[
+                                (df_add['vendor_email_clean'] == v_email) & 
+                                (df_add['unit_type'].apply(clean_string_total) == u_type) & 
+                                ((df_add['origin'].apply(clean_string_total) == ori_raw) | (df_add['origin'].apply(clean_string_total) == 'ALL'))
+                            ].copy()
+                            
+                            if not match.empty:
+                                if len(match) > 1:
+                                    match['is_all'] = match['origin'].apply(clean_string_total) == 'ALL'
+                                    match = match.sort_values(by='is_all', ascending=True)
+                                if price_col in match.columns:
+                                    nilai_baru = clean_numeric(match.iloc[0][price_col])
+                                    if nilai_baru > 0:
+                                        return nilai_baru
+                            return row_add[price_col]
+                        
+                        df_excel_md['inner_city_price'] = df_excel_md.apply(lambda x: override_standalone(x, 'inner_city_price'), axis=1)
+                        df_excel_md['outer_city_price'] = df_excel_md.apply(lambda x: override_standalone(x, 'outer_city_price'), axis=1)
+
+                    # 4. Filter kolom yang mau dikeluarkan ke Excel (Urutan Cantik)
                     kolom_excel_md = ['route_id', 'origin', 'kota_asal', 'kota_tujuan', 'unit_type', 'vendor_name', 'vendor_email', 'inner_city_price', 'outer_city_price', 'labor_cost']
                     kolom_tersedia = [col for col in kolom_excel_md if col in df_excel_md.columns]
                     df_excel_md = df_excel_md[kolom_tersedia]
                     
-                    # 3. Proses Convert ke Excel menggunakan BytesIO
+                    # Rename Header Excel biar formal and rapi pas dibaca bos besar
+                    df_excel_md.columns = ['Route ID', 'Origin Area', 'Kota Asal', 'Kota Tujuan', 'Jenis Unit', 'Nama Vendor', 'Email Vendor', 'Multidrop Dalam Kota', 'Multidrop Luar Kota', 'Biaya Buruh']
+
+                    # 5. Bungkus ke Excel biner menggunakan BytesIO
                     import io
                     output_excel = io.BytesIO()
                     with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
                         df_excel_md.to_excel(writer, index=False, sheet_name='Multidrop_Per_Rute')
                         
-                        # Auto-fit lebar kolom Excel biar cakep
+                        # Auto-fit lebar kolom Excel biar gak kepotong
                         worksheet = writer.sheets['Multidrop_Per_Rute']
                         for col in worksheet.columns:
                             max_len = max(len(str(cell.value or '')) for cell in col)
@@ -3054,16 +3134,16 @@ def admin_dashboard():
                             
                     excel_data = output_excel.getvalue()
                     
-                    # 4. Ambil penamaan file aman dari input dropdown atas
+                    # 6. Set nama file and render tombol
                     load_name = str(sk_load).replace(" ", "")
                     val_name = str(sk_val).replace(" - ", "-").replace(" ", "_")
                     
                     st.download_button(
-                        label="📥 Download Excel Multidrop per Rute (Langsung)",
+                        label="📥 Download Excel Master Multidrop per Rute (Langsung)",
                         data=excel_data,
-                        file_name=f"Multidrop_Per_Rute_SK_{load_name}_{val_name}.xlsx",
+                        file_name=f"Multidrop_Per_Rute_Master_{load_name}_{val_name}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="btn_download_excel_md_sk_standalone_ultimate_v5",
+                        key="btn_download_excel_md_sk_standalone_perfect_v6",
                         use_container_width=True
                     )
                 # ==============================================================================
