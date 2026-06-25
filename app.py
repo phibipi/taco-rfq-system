@@ -2717,6 +2717,37 @@ def admin_dashboard():
                                                 type="primary",
                                                 use_container_width=True
                                             )
+                                            # ==============================================================================
+                                            # 🎯 🚨 PLUG & PLAY: TARUH KODE BARU INI TEPAT DI BAWAH TOMBOL ZIP LO!
+                                            # ==============================================================================
+                                            st.markdown("---") # Bikin garis pembatas biar rapi
+                                            st.markdown("### 📊 Export Data Multidrop per Rute")
+                                            
+                                            # Pilih kolom penting biar rapi di Excel
+                                            kolom_excel_md = ['route_id', 'origin', 'destination', 'unit_type', 'vendor_email', 'inner_city_price', 'outer_city_price', 'labor_cost']
+                                            kolom_tersedia = [col for col in kolom_excel_md if col in df_sk_merged.columns] # kalau di SPK ganti df_spk_merged
+                                            df_excel_md = df_sk_merged[kolom_tersedia].copy() # kalau di SPK ganti df_spk_merged
+                                            
+                                            import io
+                                            output_excel = io.BytesIO()
+                                            with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
+                                                df_excel_md.to_excel(writer, index=False, sheet_name='Multidrop_Per_Rute')
+                                                # Auto-fit lebar kolom Excel
+                                                worksheet = writer.sheets['Multidrop_Per_Rute']
+                                                for col in worksheet.columns:
+                                                    max_len = max(len(str(cell.value or '')) for cell in col)
+                                                    col_letter = col[0].column_letter
+                                                    worksheet.column_dimensions[col_letter].width = max(max_len + 3, 12)
+                                                    
+                                            excel_data = output_excel.getvalue()
+                                            
+                                            st.download_button(
+                                                label="📥 Download Excel Multidrop per Rute",
+                                                data=excel_data,
+                                                file_name=f"Multidrop_Per_Rute_{safe_load}_{safe_val}.xlsx",
+                                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                                key="btn_download_excel_md_sk" # kalau pasang di SPK juga, bedain key-nya misal: md_spk
+                                            )
                                         else:
                                             st.warning("Tidak ada rute valid yang bisa di-generate.")
                                             
@@ -3017,41 +3048,12 @@ def admin_dashboard():
                                                 type="secondary",
                                                 use_container_width=True
                                             )
+                                            
                                     except Exception as e: 
                                         st.error(f"Gagal memproses runtutan file Word SPK: {e}")
                     else:
                         st.warning("Tidak ditemukan data penawaran harga kompetitor yang aktif untuk kriteria filter ini.")
-                # ==============================================================================
-                # 🎯 🚨 PLUG & PLAY: TARUH KODE BARU INI TEPAT DI BAWAH TOMBOL ZIP LO!
-                # ==============================================================================
-                st.markdown("---") # Bikin garis pembatas biar rapi
-                st.markdown("### 📊 Export Data Multidrop per Rute")
                 
-                # Pilih kolom penting biar rapi di Excel
-                kolom_excel_md = ['route_id', 'origin', 'destination', 'unit_type', 'vendor_email', 'inner_city_price', 'outer_city_price', 'labor_cost']
-                kolom_tersedia = [col for col in kolom_excel_md if col in df_sk_merged.columns] # kalau di SPK ganti df_spk_merged
-                df_excel_md = df_sk_merged[kolom_tersedia].copy() # kalau di SPK ganti df_spk_merged
-                
-                import io
-                output_excel = io.BytesIO()
-                with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
-                    df_excel_md.to_excel(writer, index=False, sheet_name='Multidrop_Per_Rute')
-                    # Auto-fit lebar kolom Excel
-                    worksheet = writer.sheets['Multidrop_Per_Rute']
-                    for col in worksheet.columns:
-                        max_len = max(len(str(cell.value or '')) for cell in col)
-                        col_letter = col[0].column_letter
-                        worksheet.column_dimensions[col_letter].width = max(max_len + 3, 12)
-                        
-                excel_data = output_excel.getvalue()
-                
-                st.download_button(
-                    label="📥 Download Excel Multidrop per Rute",
-                    data=excel_data,
-                    file_name=f"Multidrop_Per_Rute_{safe_load}_{safe_val}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="btn_download_excel_md_sk" # kalau pasang di SPK juga, bedain key-nya misal: md_spk
-                )
                         
         # --- TAB 5: SPH UPLOADS (FITUR BARU) ---
         with tabs[4]:
