@@ -1017,7 +1017,6 @@ def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name
     for org in unique_origins:
         # Judul Area Origin
         p = sd.add_paragraph(f"Origin: {org}")
-        p.paragraph_format.left_indent = Inches(0.5) # 🎯 SUNTIK INDENTASI KIRI 0.5 INCH (SEJAJAR PELURU WORD LO)
         p.paragraph_format.space_after = Pt(2)
         run = p.runs[0]; run.bold = True; run.font.size = Pt(10)
         
@@ -2868,22 +2867,25 @@ def admin_dashboard():
                                                 
                                             tpl_spk_stream = io.BytesIO(response.content)
                                             
-                                            v_direktur = df_final_spk.iloc[0].get('direktur', '')
+                                            row_vendor_aktif = df_final_spk.iloc[0]
+
+                                            # 1. Tarik nama Direktur untuk TTD
+                                            v_direktur = row_vendor_aktif.get('direktur', '')
                                             if pd.isna(v_direktur) or str(v_direktur).lower() in ['nan', 'none', '', '-']:
-                                                # Fallback: Kalau kolom direktur kosong, pinjam nama contact person (PIC) lama
-                                                v_direktur = df_final_spk.iloc[0].get('contact_person', '.......................')
+                                                # Fallback kalau beneran kosong di sheets, pinjam contact_person
+                                                v_direktur = row_vendor_aktif.get('contact_person', '.......................')
                                             
-                                            # 2. Ambil & Amankan Jabatan Resmi (MUTLAK DINAMIS SESUAI KOLOM)
-                                            v_jabatan = df_final_spk.iloc[0].get('jabatan', '')
+                                            # 2. Tarik Jabatan Resmi (Mutlak sesuai kolom jabatan di Sheets lo!)
+                                            v_jabatan = row_vendor_aktif.get('jabatan', '')
                                             if pd.isna(v_jabatan) or str(v_jabatan).lower() in ['nan', 'none', '', '-']:
-                                                # Cuma jadi 'Pimpinan Perusahaan' kalau di Sheets bener-bener kosong melompong gais
-                                                v_jabatan = "Pimpinan Perusahaan" 
+                                                v_jabatan = "Pimpinan Perusahaan"
                                             else:
-                                                # Kalau ada isinya, paksa string-kan and bersihkan spasi liar ujungnya
                                                 v_jabatan = str(v_jabatan).strip()
                                                 
-                                            pic = df_final_spk.iloc[0].get('contact_person', 'Pimpinan Perusahaan')
-                                            if pd.isna(pic) or pic == "-": pic = "Pimpinan Perusahaan"
+                                            # 3. PIC operasional tetep contact person asli (buat koordinasi lapangan)
+                                            pic = row_vendor_aktif.get('contact_person', 'Pimpinan Perusahaan')
+                                            if pd.isna(pic) or pic == "-": 
+                                                pic = "Pimpinan Perusahaan"
 
                                             try:
                                                 user_row = df_u[df_u['vendor_name'] == v_name]
@@ -2901,27 +2903,22 @@ def admin_dashboard():
                                             # ==============================================================================
                                             from docxtpl import RichText
                                             
+                                            # Sesuaiin font 'Calibri' and size 10 biar ga kegedean
                                             alamat_str_combined = RichText()
                                             
                                             if not df_gudang.empty:
-                                                # Tambahin 'idx_addr' di sini biar kebaca sama if-condition di bawah
                                                 for idx_addr, org in enumerate(list_origin):
                                                     res_addr = df_gudang[df_gudang['origin'].astype(str).str.lower() == str(org).lower()]
-                                                    if not res_addr.empty:
-                                                        alamat_found = res_addr.iloc[0]['alamat']
-                                                    else:
-                                                        alamat_found = "-"
+                                                    alamat_found = res_addr.iloc[0]['alamat'] if not res_addr.empty else "-"
                                                     
-                                                    # 📌 CUMA nama kota (org) yang dikasih bold & underline
-                                                    alamat_str_combined.add(f"{org}", bold=True, underline=True)
-                                                    # Sisanya (alamat_found) polosan teks biasa gais, gak bakal ikut ke-bold!
-                                                    alamat_str_combined.add(f": {alamat_found}")
+                                                    # 🎯 FIX FONT: Tambahin font and size di setiap .add()
+                                                    alamat_str_combined.add(f"{org}", bold=True, underline=True, font='Calibri', size=20) # size 24 = 10pt
+                                                    alamat_str_combined.add(f": {alamat_found}", font='Calibri', size=24)
                                                     
-                                                    # Kasih baris baru kalau rutenya multi-origin
                                                     if idx_addr < len(list_origin) - 1:
-                                                        alamat_str_combined.add('\n') # 👈 Pake \n langsung di .add(), anti-error 'add_break'
+                                                        alamat_str_combined.add('\n')
                                             else:
-                                                alamat_str_combined.add("(Sheet Gudang Kosong)")
+                                                alamat_str_combined.add("(Sheet Gudang Kosong)", font='Calibri', size=20)
 
                                             # --- RE-MAPPING LOGIKA MULTIDROP DAN BIAYA BURUH ---
                                             df_spk_merged = df_final_spk.copy()
