@@ -2899,7 +2899,7 @@ def admin_dashboard():
                                             from docxtpl import RichText
                                             
                                             alamat_str_combined = RichText()
-                                            
+                                            alamat_list = []
                                             if not df_gudang.empty:
                                                 for idx_addr, org in enumerate(list_origin):
                                                     res_addr = df_gudang[df_gudang['origin'].astype(str).str.lower() == str(org).lower()]
