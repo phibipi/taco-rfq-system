@@ -662,8 +662,9 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     for org in unique_origins:
         # Judul Origin Area
         p = sd.add_paragraph(f"Origin: {org}")
+        p.paragraph_format.left_indent = Inches(0.4)
         p.paragraph_format.space_after = Pt(2)
-        run = p.runs[0]; run.bold = True; run.font.size = Pt(10)
+        run = p.runs[0]; run.bold = True; run.font.size = Pt(12)
         
         df_sub = df_data[df_data['origin'] == org].copy()
         df_sub = df_sub.sort_values(by=['kota_asal', 'kota_tujuan', 'unit_type', 'price'])
@@ -1788,7 +1789,7 @@ def admin_dashboard():
         df_units = get_data("Master_Units")
         df_gudang = get_data("Gudang")
     
-        # BIG MERGE MASTER (Untuk Tab 2, 3, 4)
+       # BIG MERGE MASTER (Untuk Tab 2, 3, 4)
         df_master = pd.DataFrame()
         if not df_p.empty and not df_g.empty:
             df_p['route_id'] = df_p['route_id'].astype(str).str.strip()
@@ -1800,12 +1801,16 @@ def admin_dashboard():
             m3['vendor_name'] = m3['vendor_name'].fillna(m3['vendor_email'])
             if not df_prof.empty:
                 df_prof_clean = df_prof.sort_values('updated_at', ascending=False).drop_duplicates('email')
-                m4 = pd.merge(m3, df_prof_clean[['email', 'top', 'ppn', 'pph', 'address', 'contact_person', 'phone']], left_on='vendor_email', right_on='email', how='left')
-                for c in ['top', 'ppn', 'pph', 'address', 'contact_person', 'phone']:
+                
+                # 🎯 SUNTIK DI SINI: Tambahin 'direktur' dan 'jabatan' ke dalam list merge m4
+                m4 = pd.merge(m3, df_prof_clean[['email', 'top', 'ppn', 'pph', 'address', 'contact_person', 'phone', 'direktur', 'jabatan']], left_on='vendor_email', right_on='email', how='left')
+                
+                # 🎯 SUNTIK DI SINI JUGA: Daftarkan kolom baru ke looping fillna
+                for c in ['top', 'ppn', 'pph', 'address', 'contact_person', 'phone', 'direktur', 'jabatan']:
                     if c in m4.columns: m4[c] = m4[c].fillna("-")
             else:
                 m4 = m3
-                for c in ['top', 'address', 'contact_person', 'phone']: m4[c] = "-"
+                for c in ['top', 'address', 'contact_person', 'phone', 'direktur', 'jabatan']: m4[c] = "-"
             m4['price'] = pd.to_numeric(m4['price'], errors='coerce').fillna(0)
             df_master = m4
 
@@ -2912,7 +2917,7 @@ def admin_dashboard():
                                                     alamat_found = res_addr.iloc[0]['alamat'] if not res_addr.empty else "-"
                                                     
                                                     # 🎯 FIX FONT: Tambahin font and size di setiap .add()
-                                                    alamat_str_combined.add(f"{org}", bold=True, underline=True, font='Calibri', size=20) # size 24 = 10pt
+                                                    alamat_str_combined.add(f"{org}", bold=True, underline=True, font='Calibri', size=24) # size 24 = 10pt
                                                     alamat_str_combined.add(f": {alamat_found}", font='Calibri', size=24)
                                                     
                                                     if idx_addr < len(list_origin) - 1:
