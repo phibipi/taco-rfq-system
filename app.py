@@ -2868,13 +2868,17 @@ def admin_dashboard():
                                             
                                             v_direktur = df_final_spk.iloc[0].get('direktur', '')
                                             if pd.isna(v_direktur) or str(v_direktur).lower() in ['nan', 'none', '', '-']:
-                                                # Fallback: Kalau direktur kosong, pinjam nama contact person (PIC) lama biar slamet
+                                                # Fallback: Kalau kolom direktur kosong, pinjam nama contact person (PIC) lama
                                                 v_direktur = df_final_spk.iloc[0].get('contact_person', '.......................')
                                             
-                                            # 2. Ambil & Amankan Jabatan Resmi
+                                            # 2. Ambil & Amankan Jabatan Resmi (MUTLAK DINAMIS SESUAI KOLOM)
                                             v_jabatan = df_final_spk.iloc[0].get('jabatan', '')
                                             if pd.isna(v_jabatan) or str(v_jabatan).lower() in ['nan', 'none', '', '-']:
-                                                v_jabatan = "Pimpinan Perusahaan" # Default aman
+                                                # Cuma jadi 'Pimpinan Perusahaan' kalau di Sheets bener-bener kosong melompong gais
+                                                v_jabatan = "Pimpinan Perusahaan" 
+                                            else:
+                                                # Kalau ada isinya, paksa string-kan and bersihkan spasi liar ujungnya
+                                                v_jabatan = str(v_jabatan).strip()
                                                 
                                             pic = v_direktur # Tetap umpan ke pic lama jika dibutuhin module lain
 
