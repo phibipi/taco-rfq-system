@@ -662,7 +662,7 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     for org in unique_origins:
         # Judul Origin Area
         p = sd.add_paragraph(f"Origin: {org}")
-        p.paragraph_format.left_indent = Inches(0.4)
+        p.paragraph_format.left_indent = Pt(75)
         p.paragraph_format.space_after = Pt(2)
         run = p.runs[0]; run.bold = True; run.font.size = Pt(12)
         
