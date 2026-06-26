@@ -662,7 +662,6 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     for org in unique_origins:
         # Judul Origin Area
         p = sd.add_paragraph(f"Origin: {org}")
-        p.paragraph_format.left_indent = Inches(1.05)
         p.paragraph_format.space_after = Pt(2)
         run = p.runs[0]; run.bold = True; run.font.size = Pt(12)
         
@@ -1024,9 +1023,15 @@ def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name
     
     for org in unique_origins:
         # Judul Area Origin
-        p = sd.add_paragraph(f"Origin: {org}")
-        p.paragraph_format.space_after = Pt(2)
-        run = p.runs[0]; run.bold = True; run.font.size = Pt(10)
+        p = sd.add_paragraph()
+        p.paragraph_format.left_indent = Inches(0.4)  # Atur angka ini (misal 0.4 atau 0.5) sampai pas lurus dengan teks poin a
+        p.paragraph_format.space_before = Pt(12)      # Jarak sebelum tulisan origin baru biar gak terlalu mepet tabel atas
+        p.paragraph_format.space_after = Pt(4)        # Jarak ke tabel di bawahnya
+        
+        run = p.add_run(f"Origin: {org}")
+        run.bold = True
+        run.font.name = 'Calibri'
+        run.font.size = Pt(12)
         
         df_sub = df_data[df_data['origin'] == org].copy()
         
@@ -1038,7 +1043,9 @@ def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name
         table = sd.add_table(rows=1, cols=len(headers))
         table.style = 'Table Grid'
         table.alignment = WD_TABLE_ALIGNMENT.CENTER 
-        
+        tblPr = table._tbl.tblPr
+        tblInd = parse_xml(r'<w:tblInd {} w:w="1512" w:type="dxa"/>'.format(nsdecls('w')))
+        tblPr.append(tblInd)
         # Render Table Header
         hdr_row = table.rows[0]; set_repeat_table_header(hdr_row)
         hdr_cells = hdr_row.cells
