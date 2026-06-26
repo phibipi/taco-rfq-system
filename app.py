@@ -2896,11 +2896,15 @@ def admin_dashboard():
                                             list_origin = sorted(df_final_spk['origin'].unique().tolist())
                                             origin_str_combined = ", ".join(list_origin)
                                             
+                                            # ==============================================================================
+                                            # 🎯 FIX SAKLEK: HANYA ORIGIN YANG BOLD + UNDERLINE (ANTI-CRASH)
+                                            # ==============================================================================
                                             from docxtpl import RichText
                                             
                                             alamat_str_combined = RichText()
-                                            alamat_list = []
+                                            
                                             if not df_gudang.empty:
+                                                # Tambahin 'idx_addr' di sini biar kebaca sama if-condition di bawah
                                                 for idx_addr, org in enumerate(list_origin):
                                                     res_addr = df_gudang[df_gudang['origin'].astype(str).str.lower() == str(org).lower()]
                                                     if not res_addr.empty:
@@ -2908,16 +2912,16 @@ def admin_dashboard():
                                                     else:
                                                         alamat_found = "-"
                                                     
-                                                    # 📌 KUNCI UTAMA: Langsung cetak nama Kotanya (ex: Cikarang) Bold + Underline tanpa kata "Origin: "
+                                                    # 📌 CUMA nama kota (org) yang dikasih bold & underline
                                                     alamat_str_combined.add(f"{org}", bold=True, underline=True)
+                                                    # Sisanya (alamat_found) polosan teks biasa gais, gak bakal ikut ke-bold!
                                                     alamat_str_combined.add(f": {alamat_found}")
                                                     
-                                                    # Kasih baris baru (enter) kalau rutenya ada banyak
+                                                    # Kasih baris baru kalau rutenya multi-origin
                                                     if idx_addr < len(list_origin) - 1:
-                                                        alamat_str_combined.add_break()
+                                                        alamat_str_combined.add('\n') # 👈 Pake \n langsung di .add(), anti-error 'add_break'
                                             else:
                                                 alamat_str_combined.add("(Sheet Gudang Kosong)")
-                                            alamat_str_combined = "\n".join(alamat_list)
 
                                             # --- RE-MAPPING LOGIKA MULTIDROP DAN BIAYA BURUH ---
                                             df_spk_merged = df_final_spk.copy()
