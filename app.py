@@ -956,7 +956,7 @@ def generate_bulk_spk(template_file, nomor_surat, validity, load_type, df_filter
         
         try:
             # Panggil fungsi generator untuk menggambar tabel ke Word
-            create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name, contact_person, password_last5, origin_combined, alamat_combined, df_data)
+            create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name, contact_person, direktur, jabatan, password_last5, origin_combined, alamat_combined, df_data)
             success_count += 1
             st.success(f"✅ Berhasil generate SPK untuk Vendor: **{vendor}**")
         except Exception as e:
@@ -968,7 +968,7 @@ def generate_bulk_spk(template_file, nomor_surat, validity, load_type, df_filter
 # ==============================================================================
 # 🎯 FUNGSI GENERATOR: DRAW TABEL SPK (9 KOLOM - TANPA RANKING)
 # ==============================================================================
-def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name, contact_person, password_last5, origin_combined, alamat_combined, df_data):
+def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name, contact_person, direktur, jabatan, password_last5, origin_combined, alamat_combined, df_data):
     doc = DocxTemplate(template_file)
     
     # --- HELPER 1: SET LEBAR KOLOM ---
@@ -1107,6 +1107,8 @@ def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name
         'tanggal_spk': tgl_spk,
         'vendor_name': vendor_name,
         'contact_person': contact_person,
+        'direktur': direktur,
+        'jabatan': jabatan,
         'password_vendor': password_last5,
         'alamat_gudang': alamat_combined,
         'tabel_harga_vendor': sd
@@ -2864,9 +2866,18 @@ def admin_dashboard():
                                                 
                                             tpl_spk_stream = io.BytesIO(response.content)
                                             
-                                            pic = df_final_spk.iloc[0].get('contact_person', 'Pimpinan Perusahaan')
-                                            if pd.isna(pic) or pic == "-": pic = "Pimpinan Perusahaan"
+                                            v_direktur = df_final_spk.iloc[0].get('direktur', '')
+                                            if pd.isna(v_direktur) or str(v_direktur).lower() in ['nan', 'none', '', '-']:
+                                                # Fallback: Kalau direktur kosong, pinjam nama contact person (PIC) lama biar slamet
+                                                v_direktur = df_final_spk.iloc[0].get('contact_person', '.......................')
                                             
+                                            # 2. Ambil & Amankan Jabatan Resmi
+                                            v_jabatan = df_final_spk.iloc[0].get('jabatan', '')
+                                            if pd.isna(v_jabatan) or str(v_jabatan).lower() in ['nan', 'none', '', '-']:
+                                                v_jabatan = "Pimpinan Perusahaan" # Default aman
+                                                
+                                            pic = v_direktur # Tetap umpan ke pic lama jika dibutuhin module lain
+
                                             try:
                                                 user_row = df_u[df_u['vendor_name'] == v_name]
                                                 if not user_row.empty:
@@ -2981,7 +2992,7 @@ def admin_dashboard():
                                             # 🎯 BALIKIN PEMANGGILAN ASLI LO BIAR TANGGAL, TABEL, USERNAME GA RUSAK:
                                             doc_obj = create_docx_spk(
                                                 tpl_spk_stream, custom_no_spk, spk_val, spk_load,
-                                                v_name, pic, final_pass, origin_str_combined,
+                                                v_name, pic, v_direktur, v_jabatan, final_pass, origin_str_combined,
                                                 alamat_str_combined, df_spk_merged
                                             )
                                             
@@ -3542,14 +3553,21 @@ def vendor_dashboard(email):
                     with c1:
                         ad = st.text_area("Alamat Perusahaan", value=curr.get('address',''))
                         cp = st.text_input("Nama PIC", value=curr.get('contact_person',''))
+                        # 🎯 TAMBAHAN BARU: Input Teks Direktur Utama
+                        direktur_input = st.text_input("Nama Direktur Utama (Penandatangan SPK):", value=curr.get('direktur',''))
                     with c2:
                         ph = st.text_input("No. Telepon", value=curr.get('phone',''))
                         top = st.selectbox("Term of Payment", ["7 hari","14 Hari", "30 Hari"])
+                        # 🎯 TAMBAHAN BARU: Input Teks Jabatan Resmi
+                        jabatan_input = st.text_input("Jabatan Resmi Penandatangan:", value=curr.get('jabatan','Direktur Utama'))
+                    
                     ppn = st.selectbox("PPN", ["11%", "1,1%","0%"])
                     pph = st.selectbox("PPh", ["Include", "Exclude"])
+                    
                     if st.form_submit_button("Simpan Data", type="primary"):
-                        save_data("Vendor_Profile", [[email, ad, cp, ph, top, ppn, pph, datetime.now().strftime("%Y-%m-%d")]])
-                        st.success("Saved")
+                        # 🔒 UPDATE MATRIX: Tambahkan variabel 'direktur_input' dan 'jabatan_input' ke susunan Google Sheets lo
+                        save_data("Vendor_Profile", [[email, ad, cp, ph, top, ppn, pph, datetime.now().strftime("%Y-%m-%d"), direktur_input, jabatan_input]])
+                        st.success("Data Perusahaan Berhasil Diperbarui!")
         
         # Tab 1: List Rute
         with t1:
