@@ -20,6 +20,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 import hashlib
 import requests
+from docxtpl import RichText
 
 
 # --- MAIN APP ---
@@ -1016,6 +1017,7 @@ def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name
     for org in unique_origins:
         # Judul Area Origin
         p = sd.add_paragraph(f"Origin: {org}")
+        p.paragraph_format.left_indent = Inches(0.5) # 🎯 SUNTIK INDENTASI KIRI 0.5 INCH (SEJAJAR PELURU WORD LO)
         p.paragraph_format.space_after = Pt(2)
         run = p.runs[0]; run.bold = True; run.font.size = Pt(10)
         
@@ -2880,7 +2882,8 @@ def admin_dashboard():
                                                 # Kalau ada isinya, paksa string-kan and bersihkan spasi liar ujungnya
                                                 v_jabatan = str(v_jabatan).strip()
                                                 
-                                            pic = v_direktur # Tetap umpan ke pic lama jika dibutuhin module lain
+                                            pic = df_final_spk.iloc[0].get('contact_person', 'Pimpinan Perusahaan')
+                                            if pd.isna(pic) or pic == "-": pic = "Pimpinan Perusahaan"
 
                                             try:
                                                 user_row = df_u[df_u['vendor_name'] == v_name]
@@ -2893,15 +2896,27 @@ def admin_dashboard():
                                             list_origin = sorted(df_final_spk['origin'].unique().tolist())
                                             origin_str_combined = ", ".join(list_origin)
                                             
-                                            alamat_list = []
+                                            from docxtpl import RichText
+                                            
+                                            alamat_str_combined = RichText()
+                                            
                                             if not df_gudang.empty:
-                                                for org in list_origin:
+                                                for idx_addr, org in enumerate(list_origin):
                                                     res_addr = df_gudang[df_gudang['origin'].astype(str).str.lower() == str(org).lower()]
                                                     if not res_addr.empty:
                                                         alamat_found = res_addr.iloc[0]['alamat']
-                                                        alamat_list.append(f"{org}: {alamat_found}" if len(list_origin) > 1 else alamat_found)
-                                                    else: alamat_list.append(f"{org}: -")
-                                            else: alamat_list.append("(Sheet Gudang Kosong)")
+                                                    else:
+                                                        alamat_found = "-"
+                                                    
+                                                    # 📌 KUNCI UTAMA: Langsung cetak nama Kotanya (ex: Cikarang) Bold + Underline tanpa kata "Origin: "
+                                                    alamat_str_combined.add(f"{org}", bold=True, underline=True)
+                                                    alamat_str_combined.add(f": {alamat_found}")
+                                                    
+                                                    # Kasih baris baru (enter) kalau rutenya ada banyak
+                                                    if idx_addr < len(list_origin) - 1:
+                                                        alamat_str_combined.add_break()
+                                            else:
+                                                alamat_str_combined.add("(Sheet Gudang Kosong)")
                                             alamat_str_combined = "\n".join(alamat_list)
 
                                             # --- RE-MAPPING LOGIKA MULTIDROP DAN BIAYA BURUH ---
