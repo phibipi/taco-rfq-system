@@ -662,7 +662,7 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     for org in unique_origins:
         # Judul Origin Area
         p = sd.add_paragraph(f"Origin: {org}")
-        p.paragraph_format.left_indent = Pt(75)
+        p.paragraph_format.left_indent = Inches(1.05)
         p.paragraph_format.space_after = Pt(2)
         run = p.runs[0]; run.bold = True; run.font.size = Pt(12)
         
@@ -674,7 +674,14 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
         headers = ['Asal', 'Tujuan', 'Unit', 'Rank', 'Vendor', 'Biaya/Unit', 'Multidrop Dalam', 'Multidrop Luar', 'Biaya Buruh', 'Lead Time', 'TOP']
         table = sd.add_table(rows=1, cols=len(headers))
         table.style = 'Table Grid'
-        table.alignment = WD_TABLE_ALIGNMENT.LEFT 
+        table.autofit = False
+        table.allow_autofit = False
+        
+        # Mengatur posisi indentasi tabel secara keseluruhan di halaman Word
+        table.rows[0]._tr.get_or_add_trPr().append(
+            parse_xml(r'<w:tblInd {} w:w="1512" w:type="dxa"/>'.format(nsdecls('w')))
+        )
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER 
         
         # Render Table Header
         hdr_row = table.rows[0]; set_repeat_table_header(hdr_row)
