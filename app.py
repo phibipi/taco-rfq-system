@@ -3357,58 +3357,53 @@ def admin_dashboard():
                                         
                                         # Loop per baris Rute
                                         for _, r_row in routes_sub.iterrows():
-                                            rid = str(r_row['route_id']).strip()
-                                            
-                                            row_entry = {
-                                                "Route ID": rid,
-                                                "Kota Asal": r_row['kota_asal'],
-                                                "Kota Tujuan": r_row['kota_tujuan']
-                                            }
-                                            
-                                            # Loop per kolom Jenis Unit (JEJER KE SAMPING)
-                                            for unit in units_sub:
-                                                if sel_round_tmpl == "Tahap 2":
-                                                    # A. Lookup nilai Target Price global rute ini
-                                                    tgt_val = get_target_price(df_p_merged, rid, unit, sel_val_tmpl)
-                                                    row_entry[f"Target {unit}"] = tgt_val if tgt_val > 0 else 0
-                                                    
-                                                    # B. Lookup histori Harga Tahap 1 milik vendor ini
-                                                    p1_val = 0
-                                                    if not df_prices_ref.empty:
-                                                        p1_sub = df_prices_ref[
-                                                            (df_prices_ref['route_id_clean'] == rid) & 
-                                                            (df_prices_ref['unit_type'] == unit) & 
-                                                            (df_prices_ref['vendor_email_clean'] == target_email) & 
-                                                            (df_prices_ref['round_clean_int'] == 1)
-                                                        ]
-                                                        if not p1_sub.empty: p1_val = p1_sub['price'].max()
-                                                            p1_val = p1_sub['price'].max()
-                                                            if row_lead_time == "":   # <-- NEW: ambil lead_time dari histori Tahap 1
-                                                                lt_raw = p1_sub.iloc[0].get('lead_time', "")
-                                                                lt_clean = clean_numeric(lt_raw)
-                                                                row_lead_time = int(lt_clean) if lt_clean > 0 else ""
-                                                    row_entry[f"Harga Tahap 1 {unit}"] = p1_val
-                                                    
-                                                    # C. Lookup cicilan Harga Tahap 2 (jika ada)
-                                                    p2_val = 0
-                                                    if not df_prices_ref.empty:
-                                                        p2_sub = df_prices_ref[
-                                                            (df_prices_ref['route_id_clean'] == rid) & 
-                                                            (df_prices_ref['unit_type'] == unit) & 
-                                                            (df_prices_ref['vendor_email_clean'] == target_email) & 
-                                                            (df_prices_ref['round_clean_int'] == 2)
-                                                        ]
-                                                        if not p2_sub.empty: p2_val = p2_sub['price'].max()
-                                                            
-                                                    row_entry[f"Harga Tahap 2 {unit}"] = p2_val if p2_val > 0 else ""
-                                                else:
-                                                    # Jika milih Tahap 1, murni kolom kosong biasa siap ketik
-                                                    row_entry[f"Harga Tahap 1 {unit}"] = ""
-                                                    
-                                            # Tambahkan kolom buntut parameter pendukung di paling ujung kanan
-                                            row_entry["Lead Time (Hari)"] = row_lead_time
-                                            row_entry["Keterangan Vendor"] = ""
-                                            matrix_rows.append(row_entry)
+                                        rid = str(r_row['route_id']).strip()
+                                        
+                                        row_entry = {
+                                            "Route ID": rid,
+                                            "Kota Asal": r_row['kota_asal'],
+                                            "Kota Tujuan": r_row['kota_tujuan']
+                                        }
+                                        
+                                        row_lead_time = ""   # <-- NEW: penampung lead time hasil lookup
+                                    
+                                        for unit in units_sub:
+                                            if sel_round_tmpl == "Tahap 2":
+                                                tgt_val = get_target_price(df_p_merged, rid, unit, sel_val_tmpl)
+                                                row_entry[f"Target {unit}"] = tgt_val if tgt_val > 0 else 0
+                                                
+                                                p1_val = 0
+                                                if not df_prices_ref.empty:
+                                                    p1_sub = df_prices_ref[
+                                                        (df_prices_ref['route_id_clean'] == rid) & 
+                                                        (df_prices_ref['unit_type'] == unit) & 
+                                                        (df_prices_ref['vendor_email_clean'] == target_email) & 
+                                                        (df_prices_ref['round_clean_int'] == 1)
+                                                    ]
+                                                    if not p1_sub.empty:
+                                                        p1_val = p1_sub['price'].max()
+                                                        if row_lead_time == "":   # <-- NEW: ambil lead_time dari histori Tahap 1
+                                                            lt_raw = p1_sub.iloc[0].get('lead_time', "")
+                                                            lt_clean = clean_numeric(lt_raw)
+                                                            row_lead_time = int(lt_clean) if lt_clean > 0 else ""
+                                                row_entry[f"Harga Tahap 1 {unit}"] = p1_val
+                                                
+                                                p2_val = 0
+                                                if not df_prices_ref.empty:
+                                                    p2_sub = df_prices_ref[
+                                                        (df_prices_ref['route_id_clean'] == rid) & 
+                                                        (df_prices_ref['unit_type'] == unit) & 
+                                                        (df_prices_ref['vendor_email_clean'] == target_email) & 
+                                                        (df_prices_ref['round_clean_int'] == 2)
+                                                    ]
+                                                    if not p2_sub.empty: p2_val = p2_sub['price'].max()
+                                                row_entry[f"Harga Tahap 2 {unit}"] = p2_val if p2_val > 0 else ""
+                                            else:
+                                                row_entry[f"Harga Tahap 1 {unit}"] = ""
+                                                
+                                        row_entry["Lead Time (Hari)"] = row_lead_time   # <-- CHANGED: dari "" jadi hasil lookup
+                                        row_entry["Keterangan Vendor"] = ""
+                                        matrix_rows.append(row_entry)
                                             
                                         df_sheet_final = pd.DataFrame(matrix_rows)
                                         
