@@ -3382,7 +3382,7 @@ def admin_dashboard():
                                                             (df_prices_ref['round_clean_int'] == 1)
                                                         ]
                                                         if not p1_sub.empty: p1_val = p1_sub['price'].max()
-                                                        p1_val = p1_sub['price'].max()
+                                                            p1_val = p1_sub['price'].max()
                                                             if row_lead_time == "":   # <-- NEW: ambil lead_time dari histori Tahap 1
                                                                 lt_raw = p1_sub.iloc[0].get('lead_time', "")
                                                                 lt_clean = clean_numeric(lt_raw)
