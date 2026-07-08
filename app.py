@@ -3382,6 +3382,11 @@ def admin_dashboard():
                                                             (df_prices_ref['round_clean_int'] == 1)
                                                         ]
                                                         if not p1_sub.empty: p1_val = p1_sub['price'].max()
+                                                        p1_val = p1_sub['price'].max()
+                                                            if row_lead_time == "":   # <-- NEW: ambil lead_time dari histori Tahap 1
+                                                                lt_raw = p1_sub.iloc[0].get('lead_time', "")
+                                                                lt_clean = clean_numeric(lt_raw)
+                                                                row_lead_time = int(lt_clean) if lt_clean > 0 else ""
                                                     row_entry[f"Harga Tahap 1 {unit}"] = p1_val
                                                     
                                                     # C. Lookup cicilan Harga Tahap 2 (jika ada)
@@ -3394,13 +3399,14 @@ def admin_dashboard():
                                                             (df_prices_ref['round_clean_int'] == 2)
                                                         ]
                                                         if not p2_sub.empty: p2_val = p2_sub['price'].max()
+                                                            
                                                     row_entry[f"Harga Tahap 2 {unit}"] = p2_val if p2_val > 0 else ""
                                                 else:
                                                     # Jika milih Tahap 1, murni kolom kosong biasa siap ketik
                                                     row_entry[f"Harga Tahap 1 {unit}"] = ""
                                                     
                                             # Tambahkan kolom buntut parameter pendukung di paling ujung kanan
-                                            row_entry["Lead Time (Hari)"] = ""
+                                            row_entry["Lead Time (Hari)"] = row_lead_time
                                             row_entry["Keterangan Vendor"] = ""
                                             matrix_rows.append(row_entry)
                                             
