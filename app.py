@@ -115,10 +115,38 @@ def init_style():
         
         hr { margin-top: 0.5em; margin-bottom: 0.5em; border: none; height: 1px; background-color: #E5E7EB; }
         
-        /* TABS */
+        /* TABS (legacy st.tabs styling, kept for other pages that still use st.tabs) */
         .stTabs [data-baseweb="tab-list"] { gap: 8px; }
         .stTabs [data-baseweb="tab"] { background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 6px; padding: 4px 16px; color: #111827 !important; }
         .stTabs [data-baseweb="tab"][aria-selected="true"] { background-color: #B5B2B0 !important; color: #FFFFFF !important; border: none; }
+
+        /* --- PSEUDO-TAB STYLING UNTUK st.radio (Menu Monitoring) --- */
+        div[role="radiogroup"] {
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        div[role="radiogroup"] label {
+            background-color: #FFFFFF !important;
+            border: 1px solid #E5E7EB !important;
+            border-radius: 6px !important;
+            padding: 6px 16px !important;
+            cursor: pointer;
+            margin-right: 0 !important;
+        }
+        div[role="radiogroup"] label:hover {
+            border-color: #FCA568 !important;
+        }
+        div[role="radiogroup"] label[data-checked="true"] {
+            background-color: #B5B2B0 !important;
+            border-color: #B5B2B0 !important;
+        }
+        div[role="radiogroup"] label[data-checked="true"] p {
+            color: #FFFFFF !important;
+            font-weight: 600 !important;
+        }
+        div[role="radiogroup"] input[type="radio"] {
+            display: none !important;
+        }
        
         /* --- PERBAIKAN TAMPILAN EXPANDER (DROPDOWN) --- */
         
@@ -1426,7 +1454,10 @@ def user_dashboard():
                 search_dest = st.selectbox("🔍 Pilih Kota Tujuan", avail_dest, key="s_dest")
                 
                 if search_dest:
-                    df_search = df_for_dest[df_for_dest['kota_tujuan'] == search_dest].copy()
+                    df_search = df_for_dest[
+                        (df_for_dest['kota_tujuan'] == search_dest) & 
+                        (df_for_dest['round'].astype(str).str.strip() == "2")
+                    ].copy()
                 
                 if not df_search.empty:
                     df_search['vendor_email'] = df_search['vendor_email'].astype(str).str.strip().str.lower()
@@ -1828,10 +1859,23 @@ def admin_dashboard():
             m4['price'] = pd.to_numeric(m4['price'], errors='coerce').fillna(0)
             df_master = m4
 
-        tabs = st.tabs(["⏳ Submit Monitor", "✅ Lock Data", "📊 Summary", "🖨️ Print Dokumen", "📥 SPH Uploads", "Template", "comparison"])
+        tab_labels = ["⏳ Submit Monitor", "✅ Lock Data", "📊 Summary", "🖨️ Print Dokumen", "📥 SPH Uploads", "Template", "comparison", "Price Search"]
+        if 'monitor_active_tab' not in st.session_state or st.session_state['monitor_active_tab'] not in tab_labels:
+            st.session_state['monitor_active_tab'] = tab_labels[0]
+
+        sel_tab = st.radio(
+            "Menu Monitoring",
+            tab_labels,
+            index=tab_labels.index(st.session_state['monitor_active_tab']),
+            horizontal=True,
+            label_visibility="collapsed",
+            key="monitor_tab_radio"
+        )
+        st.session_state['monitor_active_tab'] = sel_tab
+        st.divider()
         
 # --- TAB 1: SUBMIT MONITOR (UPDATE: STATS & SEARCH BAR) ---
-        with tabs[0]:
+        if sel_tab == "⏳ Submit Monitor":
             if not df_acc.empty and not df_g.empty:
                 # Merge Access dengan Group untuk tahu origin, route_group & load type
                 acc_merge = pd.merge(df_acc, df_g[['group_id', 'origin', 'route_group', 'load_type']], on='group_id', how='left')
@@ -2052,7 +2096,7 @@ def admin_dashboard():
                     st.info("Tidak ada data akses untuk filter ini.")
                     
 # --- TAB 2: LOCK DATA ---
-        with tabs[1]:
+        if sel_tab == "✅ Lock Data":
             st.subheader("Lock Data")
             df_price = get_data("Price_Data")
             df_routes = get_data("Master_Routes")
@@ -2240,7 +2284,7 @@ def admin_dashboard():
                                             st.error("Gagal mengirim email alert.")
     
         # === TAB 3: SUMMARY & RANKING VENDOR (PATUH TAHAP & AMANKAN TARGET PRICE) ===   
-        with tabs[2]:
+        if sel_tab == "📊 Summary":
             st.subheader("📊 Summary & Ranking Vendor")
             
             if df_master.empty:
@@ -2489,7 +2533,7 @@ def admin_dashboard():
                     
 # ===================================================================================================
 
-        with tabs[3]:
+        if sel_tab == "🖨️ Print Dokumen":
             st.subheader("🖨️ Print Dokumen")
         
             if df_master.empty:
@@ -3199,7 +3243,7 @@ def admin_dashboard():
                 # ==============================================================================
                         
         # --- TAB 5: SPH UPLOADS (FITUR BARU) ---
-        with tabs[4]:
+        if sel_tab == "📥 SPH Uploads":
             st.subheader("📥 Dokumen SPH Vendor (Signed)")
             st.caption("Daftar dokumen Surat Penawaran Harga yang sudah ditandatangani dan di-upload oleh Vendor.")
             
@@ -3228,7 +3272,7 @@ def admin_dashboard():
                                 st.error("❌ Link Error")               
 
         # ==================== TAB TEMPLATE (TABS[5]) ====================
-        with tabs[5]:
+        if sel_tab == "Template":
             st.subheader("📄 Template Generator & Pre-populate Horizontal Excel")
             st.caption("Membuat file Excel penawaran harga berjejer ke samping per jenis unit dengan auto-format Currency Rupiah.")
 
@@ -3416,7 +3460,7 @@ def admin_dashboard():
             else:
                 st.error("Database Master tidak lengkap (Master Groups/Routes/Units/Users ada yang kosong).")  
 
-        with tabs[6]: # Tab Perbandingan
+        if sel_tab == "comparison": # Tab Perbandingan
             st.subheader("⚖️ Perbandingan Harga Tahap 1 vs Tahap 2")
             st.caption("Lihat penurunan harga per rute dan per vendor untuk negosiasi.")
 
@@ -3555,6 +3599,118 @@ def admin_dashboard():
                         st.warning("Data vendor tidak ditemukan.")
             else:
                 st.error("Database tidak lengkap (Price/Route/Group missing).")
+
+        # === TAB 2: SEARCH VENDOR BY ROUTE ===
+        if sel_tab == "Price Search": # 🎯 TAB BARU ADMIN: PRICE SEARCH WITH HARGA
+            st.subheader("🔍 Price Search (Admin Mode)")
+            st.caption("Cari vendor berdasarkan rute lengkap dengan visual Harga Unit. Pilih Tahap sesuai kebutuhan.")
+            if df_master.empty:
+                st.info("Data belum tersedia.")
+            else:
+                # Filter Utama
+                c0, c1, c2, c3 = st.columns(4)
+                avail_round_s = sorted(df_master['round'].dropna().unique().tolist())
+                s_round = c0.selectbox("0. Pilih Tahap", avail_round_s, key="adm_s_round", index=len(avail_round_s)-1)
+
+                avail_val_s = sorted(df_master['validity'].unique().tolist())
+                s_val = c1.selectbox("1. Pilih Periode", avail_val_s, key="adm_s_val")
+                
+                avail_load_s = sorted(df_master['load_type'].unique().tolist())
+                s_load = c2.selectbox("2. Pilih Muatan", avail_load_s, key="adm_s_load")
+                
+                filtered_1 = df_master[(df_master['validity'] == s_val) & (df_master['load_type'] == s_load)]
+                avail_asal_s = sorted(filtered_1['kota_asal'].dropna().unique().tolist())
+                s_org = c3.selectbox("3. Pilih Kota Asal", avail_asal_s, key="adm_s_org")
+                
+                st.write("")
+                df_for_dest = filtered_1[filtered_1['kota_asal'] == s_org].copy()
+                avail_dest = sorted(df_for_dest['kota_tujuan'].dropna().unique().tolist())
+                
+                if avail_dest:
+                    search_dest = st.selectbox("🔍 Pilih Kota Tujuan", avail_dest, key="adm_s_dest")
+                    
+                    if search_dest:
+                        df_search = df_for_dest[
+                            (df_for_dest['kota_tujuan'] == search_dest) & 
+                            (df_for_dest['round'].astype(str).str.strip() == str(s_round).strip())
+                        ].copy()
+                    
+                        if not df_search.empty:
+                            df_search['vendor_email'] = df_search['vendor_email'].astype(str).str.strip().str.lower()
+                            df_search['route_id'] = df_search['route_id'].astype(str).str.strip()
+                            df_search['validity_clean'] = df_search['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
+                            df_search['unit_type'] = df_search['unit_type'].astype(str).str.strip().str.lower()
+                            df_search['price'] = pd.to_numeric(df_search['price'], errors='coerce').fillna(0)
+            
+                            df_search = df_search.sort_values(by=['vendor_email', 'route_id', 'unit_type', 'price'], ascending=True)
+                            df_search_clean = df_search.drop_duplicates(subset=['vendor_email', 'route_id', 'unit_type'], keep='first').copy()
+                            df_search_clean['group_id_match'] = df_search_clean['route_id'].str[:5].str.upper().str.strip()
+            
+                            if not df_md.empty:
+                                df_md_copy = df_md.copy()
+                                df_md_copy['vendor_email_clean'] = df_md_copy['vendor_email'].astype(str).str.strip().str.lower()
+                                df_md_copy['validity_clean'] = df_md_copy['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
+                                df_md_copy['group_id_clean'] = df_md_copy['group_id'].astype(str).str.upper().str.strip()
+                                
+                                for mc in ['inner_city_price', 'outer_city_price', 'labor_cost']:
+                                    if mc in df_md_copy.columns:
+                                        df_md_copy[mc] = df_md_copy[mc].astype(str).str.replace(",", "")
+                                        df_md_copy[mc] = pd.to_numeric(df_md_copy[mc], errors='coerce').fillna(0)
+            
+                                df_md_clean = df_md_copy.drop_duplicates(subset=['vendor_email_clean', 'group_id_clean', 'validity_clean'], keep='last')
+                                
+                                df_result = pd.merge(
+                                    df_search_clean,
+                                    df_md_clean[['vendor_email_clean', 'group_id_clean', 'validity_clean', 'inner_city_price', 'outer_city_price', 'labor_cost', 'catatan_tambahan']],
+                                    left_on=['vendor_email', 'group_id_match', 'validity_clean'],
+                                    right_on=['vendor_email_clean', 'group_id_clean', 'validity_clean'],
+                                    how='left'
+                                )
+                            else:
+                                df_result = df_search_clean.copy()
+                                df_result['inner_city_price'] = 0
+                                df_result['outer_city_price'] = 0
+                                df_result['labor_cost'] = 0
+                                df_result['catatan_tambahan'] = '-'
+            
+                            df_result['price'] = pd.to_numeric(df_result['price'], errors='coerce').fillna(0)
+                            df_result['inner_city_price'] = pd.to_numeric(df_result['inner_city_price'], errors='coerce').fillna(0)
+                            df_result['outer_city_price'] = pd.to_numeric(df_result['outer_city_price'], errors='coerce').fillna(0)
+                            df_result['labor_cost'] = pd.to_numeric(df_result['labor_cost'], errors='coerce').fillna(0)
+            
+                            df_result_display = df_result[df_result['kota_asal'] == s_org].copy()
+                            df_result_display = df_result_display.sort_values(by='price', ascending=True)
+                            
+                            def fmt_rp(x):
+                                try: return f"Rp {int(float(x)):,}".replace(",", ".")
+                                except: return "Rp 0"
+            
+                            df_result_display['Harga Unit']      = df_result_display['price'].apply(fmt_rp)
+                            df_result_display['Multidrop Dalam'] = df_result_display['inner_city_price'].apply(fmt_rp)
+                            df_result_display['Multidrop Luar']  = df_result_display['outer_city_price'].apply(fmt_rp)
+                            df_result_display['Biaya Buruh']     = df_result_display['labor_cost'].apply(fmt_rp)
+            
+                            unique_units = df_result_display['unit_type'].unique()
+                            st.success(f"Ditemukan {len(df_result_display)} penawaran untuk tujuan '{search_dest}'.")
+            
+                            for unit in unique_units:
+                                st.markdown(f"##### 🚛 Unit: {unit}")
+                                sub_res = df_result_display[df_result_display['unit_type'] == unit].copy().reset_index(drop=True)
+                                sub_res['Rank'] = range(1, len(sub_res) + 1)
+                                
+                                # 🎯 KUNCI ADMIN: 'Harga Unit' WAJIB ADA DI SINI
+                                display_cols = ['Rank', 'vendor_name', 'Harga Unit', 'top', 'lead_time', 'Multidrop Dalam', 'Multidrop Luar', 'Biaya Buruh']
+                                st.dataframe(
+                                    sub_res[display_cols],
+                                    use_container_width=True,
+                                    hide_index=True,
+                                    column_config={"vendor_name": "Vendor", "top": "TOP", "lead_time": "Lead Time (Hari)"}
+                                )
+                                st.markdown("---")
+                        else:
+                            st.warning(f"Tidak ditemukan rute ke '{search_dest}' dari {s_org}.")
+                    else:
+                        st.info("Silakan ketik nama kota tujuan di atas untuk mulai mencari.")
 
 # ================= VENDOR DASHBOARD (UPDATE: DYNAMIC TABS) =================
 def vendor_dashboard(email):
@@ -4341,6 +4497,3 @@ def vendor_dashboard(email):
                         
 if __name__ == "__main__":
     main()
-
-
-
