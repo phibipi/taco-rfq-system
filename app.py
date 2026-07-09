@@ -1489,6 +1489,7 @@ def user_dashboard():
                             sub_res[display_cols],
                             use_container_width=True,
                             hide_index=True,
+                            on_select="ignore",
                             column_config={"vendor_name": "Vendor", "top": "TOP", "lead_time": "Lead Time (Hari)"}
                         )
                         st.markdown("---")
