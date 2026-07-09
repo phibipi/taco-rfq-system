@@ -1374,7 +1374,7 @@ def user_dashboard():
         df_master = df_master[df_master['price'] > 0]
     
     # --- TABS ---
-    tab_labels_user = ["🔎 Cari Vendor per Rute", "📊 Summary & Ranking"]
+    tab_labels_user = ["🔎 Cari Vendor per Rute"]
     if 'user_active_tab' not in st.session_state or st.session_state['user_active_tab'] not in tab_labels_user:
         st.session_state['user_active_tab'] = tab_labels_user[0]
 
@@ -1497,58 +1497,6 @@ def user_dashboard():
                 else:
                     st.info("Silakan ketik nama kota tujuan di atas untuk mulai mencari.")
                 
-    # === TAB 1: SUMMARY RANKING (Mirip Admin) ===
-    if sel_tab_user == "📊 Summary & Ranking":
-        if df_master.empty:
-            st.info("Data harga belum tersedia.")
-        else:
-            c1, c2, c3 = st.columns(3)
-            # Filter
-            avail_val = sorted(df_master['validity'].unique().tolist())
-            avail_load = sorted(df_master['load_type'].unique().tolist())
-            avail_rounds = sorted(df_master['round'].dropna().unique().tolist())
-            
-            sel_val = c1.selectbox("Filter Periode", avail_val, key="sum_val")
-            sel_load = c2.selectbox("Filter Tipe Muatan", avail_load, key="sum_load")
-            sel_round = c3.selectbox("Filter Tahap/Round", avail_rounds, key="sum_round_user", index=len(avail_rounds)-1)
-            
-            if not df_master.empty:
-                df_master_norm = df_master.copy()
-                df_master_norm['validity_clean'] = df_master_norm['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
-                df_master_norm['round_clean'] = pd.to_numeric(df_master_norm['round'], errors='coerce').fillna(1).astype(int)
-                    
-                    # Bersihkan parameter pemilih selectbox admin dari spasi gaib
-                clean_sel_val = str(sel_val).replace(" ", "").lower().strip()
-                    
-                    # Saring data secara akurat tanpa katarak spasi & tipe data ronde
-                df_view = df_master_norm[
-                    (df_master_norm['validity_clean'] == clean_sel_val) & 
-                    (df_master_norm['load_type'] == sel_load) & 
-                    (df_master_norm['round_clean'] == int(sel_round))
-                ].copy()
-            else:
-                df_view = pd.DataFrame()
-            
-            if not df_view.empty:
-                unique_origins = sorted(df_view['origin'].unique())
-                for org in unique_origins:
-                    with st.expander(f"📍 Origin: {org}", expanded=False):
-                        sub_df = df_view[df_view['origin'] == org].copy()
-                        # Ranking Logic
-                        sub_df = sub_df.sort_values(by=['kota_tujuan', 'unit_type', 'price'])
-                        sub_df['Ranking'] = sub_df.groupby(['kota_tujuan', 'unit_type']).cumcount() + 1
-                        
-                        
-                        sub_df['price_fmt'] = sub_df['price'].apply(lambda x: f"Rp {int(x):,}".replace(",", "."))
-                        
-                        st.dataframe(
-                            sub_df[['kota_tujuan', 'unit_type', 'Ranking', 'vendor_name', 'price_fmt', 'lead_time', 'top']],
-                            use_container_width=True,
-                            hide_index=True,
-                            column_config={"kota_tujuan": "Tujuan", "price_fmt": "Harga", "vendor_name": "Vendor", "top": "TOP"}
-                        )
-            else:
-                st.warning("Data tidak ditemukan untuk filter ini.")
 
     
 # ================= ADMIN =================
