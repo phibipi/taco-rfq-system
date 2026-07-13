@@ -1432,80 +1432,80 @@ def user_dashboard():
                         (df_for_dest['round'].astype(str).str.strip() == "2")
                     ].copy()
                 
-                if not df_search.empty:
-                    df_search['vendor_email'] = df_search['vendor_email'].astype(str).str.strip().str.lower()
-                    df_search['route_id'] = df_search['route_id'].astype(str).str.strip()
-                    df_search['validity_clean'] = df_search['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
-                    df_search['unit_type'] = df_search['unit_type'].astype(str).str.strip().str.lower()
-                    df_search['price'] = pd.to_numeric(df_search['price'], errors='coerce').fillna(0)
+                    if not df_search.empty:
+                        df_search['vendor_email'] = df_search['vendor_email'].astype(str).str.strip().str.lower()
+                        df_search['route_id'] = df_search['route_id'].astype(str).str.strip()
+                        df_search['validity_clean'] = df_search['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
+                        df_search['unit_type'] = df_search['unit_type'].astype(str).str.strip().str.lower()
+                        df_search['price'] = pd.to_numeric(df_search['price'], errors='coerce').fillna(0)
     
-                    df_search = df_search.sort_values(by=['vendor_email', 'route_id', 'unit_type', 'price'], ascending=True)
-                    df_search_clean = df_search.drop_duplicates(subset=['vendor_email', 'route_id', 'unit_type'], keep='first').copy()
-                    df_search_clean['group_id_match'] = df_search_clean['route_id'].str[:5].str.upper().str.strip()
+                        df_search = df_search.sort_values(by=['vendor_email', 'route_id', 'unit_type', 'price'], ascending=True)
+                        df_search_clean = df_search.drop_duplicates(subset=['vendor_email', 'route_id', 'unit_type'], keep='first').copy()
+                        df_search_clean['group_id_match'] = df_search_clean['route_id'].str[:5].str.upper().str.strip()
     
-                    # === PROSES LOOKUP MULTIDROP PERBAIKAN  ===
-                    if not df_md.empty:
-                        df_md_copy = df_md.copy()
-                        df_md_copy['vendor_email_clean'] = df_md_copy['vendor_email'].astype(str).str.strip().str.lower()
-                        df_md_copy['validity_clean'] = df_md_copy['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
-                        df_md_copy['group_id_clean'] = df_md_copy['group_id'].astype(str).str.upper().str.strip()
-                        
-                        # Bersihkan nominal dari koma/titik string bawaan Sheets
-                        for mc in ['inner_city_price', 'outer_city_price', 'labor_cost']:
-                            if mc in df_md_copy.columns:
-                                df_md_copy[mc] = df_md_copy[mc].astype(str).str.replace(",", "")
-                                df_md_copy[mc] = pd.to_numeric(df_md_copy[mc], errors='coerce').fillna(0)
+                        # === PROSES LOOKUP MULTIDROP PERBAIKAN  ===
+                        if not df_md.empty:
+                            df_md_copy = df_md.copy()
+                            df_md_copy['vendor_email_clean'] = df_md_copy['vendor_email'].astype(str).str.strip().str.lower()
+                            df_md_copy['validity_clean'] = df_md_copy['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
+                            df_md_copy['group_id_clean'] = df_md_copy['group_id'].astype(str).str.upper().str.strip()
+                            
+                            # Bersihkan nominal dari koma/titik string bawaan Sheets
+                            for mc in ['inner_city_price', 'outer_city_price', 'labor_cost']:
+                                if mc in df_md_copy.columns:
+                                    df_md_copy[mc] = df_md_copy[mc].astype(str).str.replace(",", "")
+                                    df_md_copy[mc] = pd.to_numeric(df_md_copy[mc], errors='coerce').fillna(0)
     
-                        df_md_clean = df_md_copy.drop_duplicates(subset=['vendor_email_clean', 'group_id_clean', 'validity_clean'], keep='last')
-                        
-                        df_result = pd.merge(
-                            df_search_clean,
-                            df_md_clean[['vendor_email_clean', 'group_id_clean', 'validity_clean', 'inner_city_price', 'outer_city_price', 'labor_cost', 'catatan_tambahan']],
-                            left_on=['vendor_email', 'group_id_match', 'validity_clean'],
-                            right_on=['vendor_email_clean', 'group_id_clean', 'validity_clean'],
-                            how='left'
-                        )
-                    else:
-                        df_result = df_search_clean.copy()
-                        df_result['inner_city_price'] = 0
-                        df_result['outer_city_price'] = 0
-                        df_result['labor_cost'] = 0
-                        df_result['catatan_tambahan'] = '-'
+                            df_md_clean = df_md_copy.drop_duplicates(subset=['vendor_email_clean', 'group_id_clean', 'validity_clean'], keep='last')
+                            
+                            df_result = pd.merge(
+                                df_search_clean,
+                                df_md_clean[['vendor_email_clean', 'group_id_clean', 'validity_clean', 'inner_city_price', 'outer_city_price', 'labor_cost', 'catatan_tambahan']],
+                                left_on=['vendor_email', 'group_id_match', 'validity_clean'],
+                                right_on=['vendor_email_clean', 'group_id_clean', 'validity_clean'],
+                                how='left'
+                            )
+                        else:
+                            df_result = df_search_clean.copy()
+                            df_result['inner_city_price'] = 0
+                            df_result['outer_city_price'] = 0
+                            df_result['labor_cost'] = 0
+                            df_result['catatan_tambahan'] = '-'
     
-                    df_result['price'] = pd.to_numeric(df_result['price'], errors='coerce').fillna(0)
-                    df_result['inner_city_price'] = pd.to_numeric(df_result['inner_city_price'], errors='coerce').fillna(0)
-                    df_result['outer_city_price'] = pd.to_numeric(df_result['outer_city_price'], errors='coerce').fillna(0)
-                    df_result['labor_cost'] = pd.to_numeric(df_result['labor_cost'], errors='coerce').fillna(0)
-    
-                    df_result_display = df_result[df_result['kota_asal'] == s_org].copy()
-                    df_result_display = df_result_display.sort_values(by='price', ascending=True)
+                        df_result['price'] = pd.to_numeric(df_result['price'], errors='coerce').fillna(0)
+                        df_result['inner_city_price'] = pd.to_numeric(df_result['inner_city_price'], errors='coerce').fillna(0)
+                        df_result['outer_city_price'] = pd.to_numeric(df_result['outer_city_price'], errors='coerce').fillna(0)
+                        df_result['labor_cost'] = pd.to_numeric(df_result['labor_cost'], errors='coerce').fillna(0)
+        
+                        df_result_display = df_result[df_result['kota_asal'] == s_org].copy()
+                        df_result_display = df_result_display.sort_values(by='price', ascending=True)
                     
-                    def fmt_rp(x):
-                        try: return f"Rp {int(float(x)):,}".replace(",", ".")
-                        except: return "Rp 0"
+                        def fmt_rp(x):
+                            try: return f"Rp {int(float(x)):,}".replace(",", ".")
+                            except: return "Rp 0"
     
-                    df_result_display['Harga Unit']      = df_result_display['price'].apply(fmt_rp)
-                    df_result_display['Multidrop Dalam'] = df_result_display['inner_city_price'].apply(fmt_rp)
-                    df_result_display['Multidrop Luar']  = df_result_display['outer_city_price'].apply(fmt_rp)
-                    df_result_display['Biaya Buruh']     = df_result_display['labor_cost'].apply(fmt_rp)
+                        df_result_display['Harga Unit']      = df_result_display['price'].apply(fmt_rp)
+                        df_result_display['Multidrop Dalam'] = df_result_display['inner_city_price'].apply(fmt_rp)
+                        df_result_display['Multidrop Luar']  = df_result_display['outer_city_price'].apply(fmt_rp)
+                        df_result_display['Biaya Buruh']     = df_result_display['labor_cost'].apply(fmt_rp)
+        
+                        unique_units = df_result_display['unit_type'].unique()
+                        st.success(f"Ditemukan {len(df_result_display)} penawaran untuk tujuan '{search_dest}'.")
     
-                    unique_units = df_result_display['unit_type'].unique()
-                    st.success(f"Ditemukan {len(df_result_display)} penawaran untuk tujuan '{search_dest}'.")
-    
-                    for unit in unique_units:
-                        st.markdown(f"##### 🚛 Unit: {unit}")
-                        sub_res = df_result_display[df_result_display['unit_type'] == unit].copy().reset_index(drop=True)
-                        sub_res['Rank'] = range(1, len(sub_res) + 1)
-                        
-                        display_cols = ['Rank', 'vendor_name', 'Harga Unit', 'top', 'lead_time', 'Multidrop Dalam', 'Multidrop Luar', 'Biaya Buruh']
-                        st.dataframe(
-                            sub_res[display_cols],
-                            use_container_width=True,
-                            hide_index=True,
-                            on_select="ignore",
-                            column_config={"vendor_name": "Vendor", "top": "TOP", "lead_time": "Lead Time (Hari)"}
-                        )
-                        st.markdown("---")
+                        for unit in unique_units:
+                            st.markdown(f"##### 🚛 Unit: {unit}")
+                            sub_res = df_result_display[df_result_display['unit_type'] == unit].copy().reset_index(drop=True)
+                            sub_res['Rank'] = range(1, len(sub_res) + 1)
+                            
+                            display_cols = ['Rank', 'vendor_name', 'Harga Unit', 'top', 'lead_time', 'Multidrop Dalam', 'Multidrop Luar', 'Biaya Buruh']
+                            st.dataframe(
+                                sub_res[display_cols],
+                                use_container_width=True,
+                                hide_index=True,
+                                on_select="ignore",
+                                column_config={"vendor_name": "Vendor", "top": "TOP", "lead_time": "Lead Time (Hari)"}
+                            )
+                            st.markdown("---")
                     else:
                         st.warning(f"Tidak ditemukan rute ke '{search_dest}' dari {s_org}.")
                 else:
