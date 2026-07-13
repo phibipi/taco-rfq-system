@@ -1327,6 +1327,19 @@ def main():
 
 # ================= INTERNAL USER DASHBOARD =================
 def user_dashboard():
+    st.markdown("""
+        <style>
+        div[data-testid="stDataFrame"] button[title="Download as CSV"] {
+            display: none !important;
+        }
+        div[data-testid="stDataFrame"] button[data-testid="stBaseButton-toolbar"] {
+            display: none !important;
+        }
+        .stDataFrame [data-testid="stElementToolbar"] {
+            display: none !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
     st.subheader("🔍 Portal Pencarian Tarif")
     
     # --- LOAD DATA ---
