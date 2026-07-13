@@ -1438,12 +1438,13 @@ def user_dashboard():
                         df_search['validity_clean'] = df_search['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
                         df_search['unit_type'] = df_search['unit_type'].astype(str).str.strip().str.lower()
                         df_search['price'] = pd.to_numeric(df_search['price'], errors='coerce').fillna(0)
-    
+        
                         df_search = df_search.sort_values(by=['vendor_email', 'route_id', 'unit_type', 'price'], ascending=True)
                         df_search_clean = df_search.drop_duplicates(subset=['vendor_email', 'route_id', 'unit_type'], keep='first').copy()
                         df_search_clean['group_id_match'] = df_search_clean['route_id'].str[:5].str.upper().str.strip()
-    
-                        # === PROSES LOOKUP MULTIDROP PERBAIKAN  ===
+        
+                        # === PROSES LOOKUP MULTIDROP PERBAIKAN ===
+                        # 🎯 SEKARANG SUDAH MASUK KAMAR SINKRON SEJAJAR DI SINI!
                         if not df_md.empty:
                             df_md_copy = df_md.copy()
                             df_md_copy['vendor_email_clean'] = df_md_copy['vendor_email'].astype(str).str.strip().str.lower()
@@ -1455,7 +1456,7 @@ def user_dashboard():
                                 if mc in df_md_copy.columns:
                                     df_md_copy[mc] = df_md_copy[mc].astype(str).str.replace(",", "")
                                     df_md_copy[mc] = pd.to_numeric(df_md_copy[mc], errors='coerce').fillna(0)
-    
+        
                             df_md_clean = df_md_copy.drop_duplicates(subset=['vendor_email_clean', 'group_id_clean', 'validity_clean'], keep='last')
                             
                             df_result = pd.merge(
@@ -1471,7 +1472,7 @@ def user_dashboard():
                             df_result['outer_city_price'] = 0
                             df_result['labor_cost'] = 0
                             df_result['catatan_tambahan'] = '-'
-    
+        
                         df_result['price'] = pd.to_numeric(df_result['price'], errors='coerce').fillna(0)
                         df_result['inner_city_price'] = pd.to_numeric(df_result['inner_city_price'], errors='coerce').fillna(0)
                         df_result['outer_city_price'] = pd.to_numeric(df_result['outer_city_price'], errors='coerce').fillna(0)
@@ -1479,11 +1480,11 @@ def user_dashboard():
         
                         df_result_display = df_result[df_result['kota_asal'] == s_org].copy()
                         df_result_display = df_result_display.sort_values(by='price', ascending=True)
-                    
+                        
                         def fmt_rp(x):
                             try: return f"Rp {int(float(x)):,}".replace(",", ".")
                             except: return "Rp 0"
-    
+        
                         df_result_display['Harga Unit']      = df_result_display['price'].apply(fmt_rp)
                         df_result_display['Multidrop Dalam'] = df_result_display['inner_city_price'].apply(fmt_rp)
                         df_result_display['Multidrop Luar']  = df_result_display['outer_city_price'].apply(fmt_rp)
@@ -1491,13 +1492,13 @@ def user_dashboard():
         
                         unique_units = df_result_display['unit_type'].unique()
                         st.success(f"Ditemukan {len(df_result_display)} penawaran untuk tujuan '{search_dest}'.")
-    
+        
                         for unit in unique_units:
                             st.markdown(f"##### 🚛 Unit: {unit}")
                             sub_res = df_result_display[df_result_display['unit_type'] == unit].copy().reset_index(drop=True)
                             sub_res['Rank'] = range(1, len(sub_res) + 1)
                             
-                            display_cols = ['Rank', 'vendor_name', 'Harga Unit', 'top', 'lead_time', 'Multidrop Dalam', 'Multidrop Luar', 'Biaya Buruh']
+                            display_cols = ['Rank', 'vendor_name', 'top', 'lead_time', 'Multidrop Dalam', 'Multidrop Luar', 'Biaya Buruh']
                             st.dataframe(
                                 sub_res[display_cols],
                                 use_container_width=True,
