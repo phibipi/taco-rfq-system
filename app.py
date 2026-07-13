@@ -1348,12 +1348,11 @@ def user_dashboard():
     df_g = get_data("Master_Groups")
     df_u = get_data("Users")
     df_prof = get_data("Vendor_Profile")
-    df_md = get_data("Multidrop_Data") # Load Multidrop untuk Tab Search
+    df_md = get_data("Multidrop_Data") 
 
     # --- PREPARE MASTER DATA ---
     df_master = pd.DataFrame()
     if not df_p.empty:
-        # Cleaning ID
         df_p['route_id'] = df_p['route_id'].astype(str).str.strip()
         df_r['route_id'] = df_r['route_id'].astype(str).str.strip()
         df_g['group_id'] = df_g['group_id'].astype(str).str.strip()
@@ -1362,48 +1361,26 @@ def user_dashboard():
             df_md['group_id'] = df_md['group_id'].astype(str).str.strip()
             df_md['validity'] = df_md['validity'].astype(str).str.strip()
 
-        # Merge 1: Price + Routes
         m1 = pd.merge(df_p, df_r, on='route_id', how='left')
-        # Merge 2: + Groups
         m2 = pd.merge(m1, df_g, on='group_id', how='left')
-        # Merge 3: + User (Vendor Name)
         m3 = pd.merge(m2, df_u[['email', 'vendor_name']], left_on='vendor_email', right_on='email', how='left')
         m3['vendor_name'] = m3['vendor_name'].fillna(m3['vendor_email'])
         
-        # Merge 4: + Vendor Profile (TOP, Address, etc)
         if not df_prof.empty:
             df_prof_clean = df_prof.sort_values('updated_at', ascending=False).drop_duplicates('email')
             m4 = pd.merge(m3, df_prof_clean[['email', 'top']], left_on='vendor_email', right_on='email', how='left')
             m4['top'] = m4['top'].fillna("-")
         else:
-            m4 = m3
-            m4['top'] = "-"
+            m4 = m3; m4['top'] = "-"
 
         m4['price'] = pd.to_numeric(m4['price'], errors='coerce').fillna(0)
-        
         df_master = m4.copy() 
-        
-        # --- TAMBAHAN FILTER HARGA 0 ---
         df_master = df_master[df_master['price'] > 0]
     
-    # --- TABS ---
-    tab_labels_user = ["🔎 Cari Vendor per Rute"]
-    if 'user_active_tab' not in st.session_state or st.session_state['user_active_tab'] not in tab_labels_user:
-        st.session_state['user_active_tab'] = tab_labels_user[0]
-
-    sel_tab_user = st.radio(
-        "Menu Pencarian",
-        tab_labels_user,
-        index=tab_labels_user.index(st.session_state['user_active_tab']),
-        horizontal=True,
-        label_visibility="collapsed",
-        key="user_tab_radio"
-    )
-    st.session_state['user_active_tab'] = sel_tab_user
-    st.divider()
-
-    if sel_tab_user == "🔎 Cari Vendor per Rute":
-   
+    # 🎯 FIX TOTAL: Pakai st.tabs steril biar ga pemicu crash pas filter di-klik!
+    tabs_user = st.tabs(["🔎 Cari Vendor per Rute"])
+    
+    with tabs_user[0]:
         if df_master.empty:
             st.info("Data belum tersedia.")
         else:
@@ -1443,15 +1420,12 @@ def user_dashboard():
                         df_search_clean = df_search.drop_duplicates(subset=['vendor_email', 'route_id', 'unit_type'], keep='first').copy()
                         df_search_clean['group_id_match'] = df_search_clean['route_id'].str[:5].str.upper().str.strip()
         
-                        # === PROSES LOOKUP MULTIDROP PERBAIKAN ===
-                        # 🎯 SEKARANG SUDAH MASUK KAMAR SINKRON SEJAJAR DI SINI!
                         if not df_md.empty:
                             df_md_copy = df_md.copy()
                             df_md_copy['vendor_email_clean'] = df_md_copy['vendor_email'].astype(str).str.strip().str.lower()
                             df_md_copy['validity_clean'] = df_md_copy['validity'].astype(str).str.replace(" ", "").str.replace("-","").str.lower().str.strip()
                             df_md_copy['group_id_clean'] = df_md_copy['group_id'].astype(str).str.upper().str.strip()
                             
-                            # Bersihkan nominal dari koma/titik string bawaan Sheets
                             for mc in ['inner_city_price', 'outer_city_price', 'labor_cost']:
                                 if mc in df_md_copy.columns:
                                     df_md_copy[mc] = df_md_copy[mc].astype(str).str.replace(",", "")
@@ -1503,13 +1477,14 @@ def user_dashboard():
                                 sub_res[display_cols],
                                 use_container_width=True,
                                 hide_index=True,
+                                on_select="ignore",
                                 column_config={"vendor_name": "Vendor", "top": "TOP", "lead_time": "Lead Time (Hari)"}
                             )
                             st.markdown("---")
                     else:
                         st.warning(f"Tidak ditemukan rute ke '{search_dest}' dari {s_org}.")
-                else:
-                    st.info("Silakan ketik nama kota tujuan di atas untuk mulai mencari.")
+            else:
+                st.info("Silakan ketik nama kota tujuan di atas untuk mulai mencari.")
                 
 
     
