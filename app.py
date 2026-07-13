@@ -1327,7 +1327,6 @@ def main():
 
 # ================= INTERNAL USER DASHBOARD =================
 def user_dashboard():
-
     st.subheader("🔍 Portal Pencarian Tarif")
     
     # --- LOAD DATA ---
