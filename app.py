@@ -1549,11 +1549,24 @@ def admin_dashboard():
             st.session_state['admin_step'] = 'home'
             st.rerun() 
         st.markdown("### 📂 Akses & Master Data")
-        tabs = st.tabs(["📍Master Groups", "🛣️Master Routes", "🚛Master Units", "👥Users", "🔑Access Rights"])
 
-    
+        tab_labels_master = ["📍Master Groups", "🛣️Master Routes", "🚛Master Units", "👥Users", "🔑Access Rights"]
+        if 'master_active_tab' not in st.session_state or st.session_state['master_active_tab'] not in tab_labels_master:
+            st.session_state['master_active_tab'] = tab_labels_master[0]
+
+        sel_tab_master = st.radio(
+            "Menu Master Data",
+            tab_labels_master,
+            index=tab_labels_master.index(st.session_state['master_active_tab']),
+            horizontal=True,
+            label_visibility="collapsed",
+            key="master_tab_radio"
+        )
+        st.session_state['master_active_tab'] = sel_tab_master
+        st.divider()
+
         # --- TAB 1: GROUPS ---
-        with tabs[0]:
+        if sel_tab_master == "📍Master Groups":
             st.caption("Buat Group Baru (ID Otomatis)")
             with st.form("add_grp"):
                 c1, c2, c3 = st.columns(3)
@@ -1582,7 +1595,7 @@ def admin_dashboard():
             st.dataframe(get_data("Master_Groups"), use_container_width=True)
 
         # --- TAB 2: ROUTES ---
-        with tabs[1]:
+        if sel_tab_master == "🛣️Master Routes":
             st.caption("Tambah Rute")
             df_g = get_data("Master_Groups")
         
@@ -1622,8 +1635,9 @@ def admin_dashboard():
             st.dataframe(get_data("Master_Routes"), use_container_width=True)
 
         # --- TAB 3: UNITS ---
-        with tabs[2]:
+        if sel_tab_master == "🚛Master Units":
             st.caption("Setting Unit per Group (Tanpa Unit ID)")
+            df_g = get_data("Master_Groups")  # <-- WAJIB fetch sendiri, tidak lagi "numpang" dari tab Routes
             all_grp_opts = {}
             if not df_g.empty:
                  for _, r in df_g.iterrows():
@@ -1656,7 +1670,7 @@ def admin_dashboard():
             st.dataframe(get_data("Master_Units"), use_container_width=True)
 
         # --- TAB 4: USERS ---
-        with tabs[3]:
+        if sel_tab_master == "👥Users":
             with st.form("add_usr"):
                 c1, c2, c3 = st.columns(3)
                 em = c1.text_input("Email")
@@ -1666,11 +1680,10 @@ def admin_dashboard():
                     save_data("Users", [[em, pw, "vendor", nm]])
                     st.success("Saved")
             
-            # Baris ini sekarang sejajar persis dengan 'with st.form'
             st.dataframe(get_data("Users"), use_container_width=True)
 
-# --- TAB 5: ACCESS RIGHTS (UPDATE: FORMAT VENDOR DROPDOWN) ---
-        with tabs[4]:
+        # --- TAB 5: ACCESS RIGHTS (UPDATE: FORMAT VENDOR DROPDOWN) ---
+        if sel_tab_master == "🔑Access Rights":
             st.write("Grant Access (Batch per Origin)")
             df_u = get_data("Users"); df_g = get_data("Master_Groups"); df_rights = get_data("Access_Rights")
         
@@ -1686,7 +1699,7 @@ def admin_dashboard():
                 # ------------------------------
 
                 c1, c2, c3 = st.columns(3)
-                ven = c1.selectbox("Pilih Vendor", vendor_emails, format_func=fmt_vendor) # <-- UPDATE DI SINI
+                ven = c1.selectbox("Pilih Vendor", vendor_emails, format_func=fmt_vendor)
                 sel_lt = c2.selectbox("Pilih Load Type", ["FTL", "FCL"])
                 sel_round = c3.selectbox("Tahap Penawaran", ["1", "2", "3"]) 
             
@@ -1710,7 +1723,7 @@ def admin_dashboard():
                             org_groups = df_g[(df_g['origin'] == org) & (df_g['load_type'] == sel_lt)]
                             org_gids = set(org_groups['group_id'].tolist())
                             is_checked = not org_gids.isdisjoint(existing_gids)
-                            if cols[idx % 3].checkbox(org, value=is_checked, key=f"chk_{org}_{sel_lt}_{sel_round}"):
+                            if cols[idx % 3].checkbox(org, value=is_checked, key=f"chk_{org}_{sel_lt}_{sel_round}"): 
                                 selected_origins.append(org)
                         
                         st.divider()
@@ -1766,7 +1779,7 @@ def admin_dashboard():
                     # FITUR RESET AKSES
                     with st.expander("🗑️ Area Berbahaya: Reset/Hapus Akses Vendor", expanded=False):
                         c_del1, c_del2 = st.columns(2)
-                        del_ven = c_del1.selectbox("Pilih Vendor (Hapus)", vendor_emails, format_func=fmt_vendor, key="del_ven") # <-- UPDATE DI SINI JUGA
+                        del_ven = c_del1.selectbox("Pilih Vendor (Hapus)", vendor_emails, format_func=fmt_vendor, key="del_ven")
                         del_lt = c_del2.selectbox("Pilih Tipe Muatan (Hapus)", ["FTL", "FCL"], key="del_lt")
                         if st.button("⚠️ Hapus Semua Akses Vendor Ini", type="primary"):
                             target_groups_del = df_g[df_g['load_type'] == del_lt]
