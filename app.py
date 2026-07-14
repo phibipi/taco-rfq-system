@@ -4170,8 +4170,8 @@ def vendor_dashboard(email):
                 else:
                     # Kalau Tahap 2 ke atas, ambil unit rujukan ronde lalu yang harganya valid diisi vendor
                     if not source_p_data.empty:
-                        submitted_units = source_p_data[source_p_data['price_numeric'] > 0]['unit_type'].unique().tolist()
-                        u_types = [u for u in all_u_types if u in submitted_units]
+                        submitted_units = source_p_data[source_p_data['price_numeric'] > 0]['unit_type'].astype(str).str.replace(" ", "").str.lower().str.strip().unique().tolist()
+                        u_types = [u for u in all_u_types if str(u).replace(" ", "").lower().strip() in submitted_units]
                     
                     # PENGAMAN NUKLIR: Jika vendor belum isi / submitted_units kosong, backup balik ke semua unit master
                     if not u_types:
