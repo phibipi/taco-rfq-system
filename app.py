@@ -4169,20 +4169,7 @@ def vendor_dashboard(email):
                 if not source_p_data.empty:
                     source_p_data['price_numeric'] = pd.to_numeric(source_p_data['price'], errors='coerce').fillna(0)
 
-                u_types = []
-                if cur_round == "1":
-                    # Kalau Tahap 1, munculkan semua unit bawaan master groups tanpa saringan
-                    u_types = all_u_types
-                else:
-                    # Kalau Tahap 2 ke atas, ambil unit rujukan ronde lalu yang harganya valid diisi vendor
-                    if not source_p_data.empty:
-                        submitted_units = source_p_data[source_p_data['price_numeric'] > 0]['unit_type'].astype(str).str.replace(" ", "").str.lower().str.strip().unique().tolist()
-                        u_types = [u for u in all_u_types if str(u).replace(" ", "").lower().strip() in submitted_units]
-                    
-                    # PENGAMAN NUKLIR: Jika vendor belum isi / submitted_units kosong, backup balik ke semua unit master
-                    if not u_types:
-                        u_types = all_u_types
-
+                u_types = all_u_types
                 # Jika benar-benar tidak ada unit yang terdaftar di master groups, baru kita skip form ini
                 if not u_types:
                     st.warning(f"⚠️ Tidak ada jenis unit armada yang terdaftar untuk grup rute {g_name}.")
