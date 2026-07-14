@@ -3667,18 +3667,26 @@ def vendor_dashboard(email):
             if "Locked" in df_p_check[df_p_check['vendor_email'] == email]['status'].values:
                 has_locked = True
                 
-        # Bikin Tabs Dinamis
+        # 🎯 FIX SAKLEK: MENU UTAMA VENDOR SEKARANG PAKAI st.radio GAYA PSEUDO-TABS
         tab_names = ["🛣️ Pilih Rute & Isi Harga", "📋 Isi Data Perusahaan"]
         if has_locked: 
             tab_names.append("📄 Surat Penawaran Harga")
             
-        tabs_ui = st.tabs(tab_names)
-        t1 = tabs_ui[0]
-        t2 = tabs_ui[1]
-        # ▲▲▲ BATAS CEK STATUS ▲▲▲
+        if 'vendor_active_tab' not in st.session_state or st.session_state['vendor_active_tab'] not in tab_names:
+            st.session_state['vendor_active_tab'] = tab_names[0]
+            
+        sel_tab_vendor = st.radio(
+            "Menu Vendor",
+            tab_names,
+            index=tab_names.index(st.session_state['vendor_active_tab']),
+            horizontal=True,
+            label_visibility="collapsed",
+            key="vendor_tab_radio_dyn"
+        )
+        st.session_state['vendor_active_tab'] = sel_tab_vendor
         
         # Tab 2: Profil
-        with t2:
+        if sel_tab_vendor == "📋 Isi Data Perusahaan":
             df_p = get_data("Vendor_Profile")
             curr = {}
             if not df_p.empty:
@@ -3707,7 +3715,7 @@ def vendor_dashboard(email):
                         st.success("Data Perusahaan Berhasil Diperbarui!")
         
         # Tab 1: List Rute
-        with t1:
+        if sel_tab_vendor == "🛣️ Pilih Rute & Isi Harga":
             df_acc = get_data("Access_Rights")
             df_grps = get_data("Master_Groups")
             df_routes = get_data("Master_Routes")
@@ -3859,11 +3867,9 @@ def vendor_dashboard(email):
                                     c4.markdown(status_ui, unsafe_allow_html=True)
                                     st.markdown("<hr>", unsafe_allow_html=True)
 # --- TAB 3: DOWNLOAD & UPLOAD SPH RESMI ---
-        if has_locked:
-            t3 = tabs_ui[2]
-            with t3:
-                st.markdown("### 📄 SPH (Surat Penawaran Harga)")
-                st.info("Anda dapat mendownload draf SPH kapan saja. Namun, **fitur Upload baru terbuka setelah SEMUA rute Anda di-Lock oleh Admin**.")
+        if has_locked and sel_tab_vendor == "📄 Surat Penawaran Harga":
+            st.markdown("### 📄 SPH (Surat Penawaran Harga)")
+            st.info("Anda dapat mendownload draf SPH kapan saja. Namun, **fitur Upload baru terbuka setelah SEMUA rute Anda di-Lock oleh Admin**.")
             
                 df_p = get_data("Price_Data")
                 df_r = get_data("Master_Routes")
