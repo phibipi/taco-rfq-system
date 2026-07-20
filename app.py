@@ -3337,18 +3337,33 @@ def admin_dashboard():
                                             for unit in units_sub:
                                                 if sel_round_tmpl == "Tahap 2":
                                                     row_entry[f"Target {unit}"] = get_target_price(df_p_merged, rid, unit, sel_val_tmpl)
+                                                    
                                                     p1_val = 0
+                                                    p2_val = 0  # 🎯 FIX: siapkan variabel harga tahap 2
                                                     if not df_p.empty:
                                                         p1_sub = df_p[
                                                             (df_p['route_id'].astype(str).str.strip() == rid) & 
                                                             (df_p['unit_type'] == unit) & 
                                                             (df_p['vendor_email'].astype(str).str.strip().str.lower() == str(sel_ven_tmpl).lower().strip()) & 
-                                                            (df_p['validity'].astype(str).str.replace(" ", "").str.lower().str.strip() == clean_sel_val_tmpl) &  # 🎯 FIX
+                                                            (df_p['validity'].astype(str).str.replace(" ", "").str.lower().str.strip() == clean_sel_val_tmpl) &
                                                             (pd.to_numeric(df_p['round'], errors='coerce').fillna(1).astype(int) == 1)
                                                         ]
                                                         if not p1_sub.empty: p1_val = pd.to_numeric(p1_sub['price'], errors='coerce').max()
+                                                        
+                                                        # 🎯 FIX: lookup harga Tahap 2 yang sudah pernah disubmit vendor
+                                                        p2_sub = df_p[
+                                                            (df_p['route_id'].astype(str).str.strip() == rid) & 
+                                                            (df_p['unit_type'] == unit) & 
+                                                            (df_p['vendor_email'].astype(str).str.strip().str.lower() == str(sel_ven_tmpl).lower().strip()) & 
+                                                            (df_p['validity'].astype(str).str.replace(" ", "").str.lower().str.strip() == clean_sel_val_tmpl) &
+                                                            (pd.to_numeric(df_p['round'], errors='coerce').fillna(1).astype(int) == 2)
+                                                        ]
+                                                        p2_price = pd.to_numeric(p2_sub['price'], errors='coerce')
+                                                        p2_price = p2_price[p2_price > 0]
+                                                        if not p2_price.empty: p2_val = p2_price.max()
+                                                        
                                                     row_entry[f"Harga Tahap 1 {unit}"] = p1_val
-                                                    row_entry[f"Harga Tahap 2 {unit}"] = ""
+                                                    row_entry[f"Harga Tahap 2 {unit}"] = p2_val if p2_val > 0 else ""  # 🎯 FIX: isi kalau ada, kosong kalau belum
                                                 else: 
                                                     row_entry[f"Harga Tahap 1 {unit}"] = ""
                                                     
