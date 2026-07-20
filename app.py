@@ -3308,7 +3308,9 @@ def admin_dashboard():
                                         matrix_rows = []
                                         
                                         # Loop per baris Rute
-                                        # Loop per baris Rute
+                                        # 🎯 FIX: siapkan validity yang sudah dibersihkan sebelum loop rute
+                                        clean_sel_val_tmpl = str(sel_val_tmpl).replace(" ", "").lower().strip()
+                                        
                                         for _, r_row in routes_sub.iterrows():
                                             rid = str(r_row['route_id']).strip()
                                             row_entry = {"Route ID": rid, "Kota Asal": r_row['kota_asal'], "Kota Tujuan": r_row['kota_tujuan']}
@@ -3320,6 +3322,7 @@ def admin_dashboard():
                                                 lt_sub = df_p[
                                                     (df_p['route_id'].astype(str).str.strip() == rid) & 
                                                     (df_p['vendor_email'].astype(str).str.strip().str.lower() == str(sel_ven_tmpl).lower().strip()) & 
+                                                    (df_p['validity'].astype(str).str.replace(" ", "").str.lower().str.strip() == clean_sel_val_tmpl) &  # 🎯 FIX
                                                     (pd.to_numeric(df_p['round'], errors='coerce').fillna(1).astype(int) == 1)
                                                 ]
                                                 if not lt_sub.empty:
@@ -3336,7 +3339,13 @@ def admin_dashboard():
                                                     row_entry[f"Target {unit}"] = get_target_price(df_p_merged, rid, unit, sel_val_tmpl)
                                                     p1_val = 0
                                                     if not df_p.empty:
-                                                        p1_sub = df_p[(df_p['route_id'].astype(str).str.strip() == rid) & (df_p['unit_type'] == unit) & (df_p['vendor_email'].astype(str).str.strip().str.lower() == str(sel_ven_tmpl).lower().strip()) & (pd.to_numeric(df_p['round'], errors='coerce').fillna(1).astype(int) == 1)]
+                                                        p1_sub = df_p[
+                                                            (df_p['route_id'].astype(str).str.strip() == rid) & 
+                                                            (df_p['unit_type'] == unit) & 
+                                                            (df_p['vendor_email'].astype(str).str.strip().str.lower() == str(sel_ven_tmpl).lower().strip()) & 
+                                                            (df_p['validity'].astype(str).str.replace(" ", "").str.lower().str.strip() == clean_sel_val_tmpl) &  # 🎯 FIX
+                                                            (pd.to_numeric(df_p['round'], errors='coerce').fillna(1).astype(int) == 1)
+                                                        ]
                                                         if not p1_sub.empty: p1_val = pd.to_numeric(p1_sub['price'], errors='coerce').max()
                                                     row_entry[f"Harga Tahap 1 {unit}"] = p1_val
                                                     row_entry[f"Harga Tahap 2 {unit}"] = ""
@@ -3344,8 +3353,7 @@ def admin_dashboard():
                                                     row_entry[f"Harga Tahap 1 {unit}"] = ""
                                                     
                                             row_entry["Keterangan Vendor"] = ""
-                                            matrix_rows.append(row_entry)
-                                            
+                                            matrix_rows.append(row_entry)                                            
                                         df_sheet_final = pd.DataFrame(matrix_rows)
                                         
                                         # Amankan penamaan sheet dari limit karakater
