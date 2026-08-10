@@ -485,7 +485,7 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
     
     # Hitung Due Date
     today = datetime.now()
-    due_date = today + timedelta(days=2)
+    due_date = today + timedelta(days=3)
     
     months_id = {1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni", 7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"}
     due_date_str = f"{due_date.day} {months_id[due_date.month]} {due_date.year}"
@@ -544,6 +544,14 @@ def send_reminder_email(to_email, vendor_name, load_type, validity, round_num, p
     
     cc_list = ["firli.mandaras@taco.co.id", "budhi.yuono@taco.co.id"]
     cc_string = ", ".join(cc_list)
+
+    # Hitung Due Date
+    today = datetime.now()
+    due_date = today + timedelta(days=3)
+    
+    months_id = {1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni", 7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"}
+    due_date_str = f"{due_date.day} {months_id[due_date.month]} {due_date.year}"
+
     
     subject = f"REMINDER: Pengisian Penawaran Harga Tender {load_type} - {validity} (Tahap {round_num})"
     
@@ -561,6 +569,7 @@ def send_reminder_email(to_email, vendor_name, load_type, validity, round_num, p
             <li><b>Tahap Penawaran:</b> {round_num}</li>
             <li><b>Tipe Armada:</b> {load_type}</li>
             <li><b style="color: #d9534f;">Origin yang belum diisi: {pending_groups_str}</b></li>
+            <li style="color: #d9534f;"><b>Batas Akhir Pengisian (extend): {due_date_str}</b></li>
         </ul>
         <p>Mohon segera login dan melengkapi form harga pada area (Origin) yang belum terselesaikan.</p>
         <p>
@@ -2062,7 +2071,7 @@ def admin_dashboard():
                                             if vendor_phone.startswith("0"):
                                                 vendor_phone = "62" + vendor_phone[1:]
                                             pending_str = ", ".join([str(g) for g in raw_pending_groups])
-                                            wa_text = f"Halo *{v_name}*,\n\nKami dari TACO Group ingin reminding bahwa Anda *belum menyelesaikan* pengisian harga Tender {sel_sm_lt} ({sel_sm_val}) Tahap {sel_sm_rnd} untuk area:\n\n📌 {pending_str}\n\nMohon segera melengkapi penawaran Anda di sistem.\nLink: https://taco-transport.streamlit.app/\n\n*BATAS PENGISIAN: RABU, 11 MARET 2026*\nJika tidak dilakukan pengisian, kami akan anggap dari {v_name} *TIDAK* akan mengikuti tender rute tersebut dan *TIDAK* dapat menyusul.\n\nTerima Kasih."
+                                            wa_text = f"Halo *{v_name}*,\n\nKami dari TACO Group ingin mengingatkan bahwa Anda *belum menyelesaikan* pengisian harga Tender {sel_sm_lt} ({sel_sm_val}) Tahap {sel_sm_rnd} untuk area:\n\n📌 {pending_str}\n\nMohon segera melengkapi penawaran Anda di sistem.\nLink: https://taco-transport.streamlit.app/\n\n*BATAS PENGISIAN: Jumat, 14 Agustus 2026*\nJika tidak dilakukan pengisian, kami akan anggap dari {v_name} *TIDAK* akan mengikuti tender rute tersebut dan *TIDAK* dapat menyusul.\n\nTerima Kasih."
                                             wa_text_encoded = urllib.parse.quote(wa_text)
                                             wa_url = f"https://wa.me/{vendor_phone}?text={wa_text_encoded}"
                                             st.markdown(f'<a href="{wa_url}" target="_blank" style="background-color:#25D366; color:white; padding:10px 16px; border-radius:8px; text-decoration:none; font-weight:bold; display:inline-block; text-align:center; width:100%; border: 1px solid #1eaa50; box-shadow: 0 2px 4px rgba(37, 211, 102, 0.2);">💬 Kirim WA</a>', unsafe_allow_html=True)
