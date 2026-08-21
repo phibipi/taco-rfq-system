@@ -507,7 +507,7 @@ def send_invitation_email(to_email, vendor_name, load_type, validity, origins, p
             <li><b>Area/Origin:</b> {origins_str}</li>
             <li style="color: #d9534f;"><b>Batas Akhir Pengisian: {due_date_str}</b></li>
         </ul>
-        <p>Silakan login ke sistem kami untuk memasukkan penawaran harga:</p>
+        <p>Mohon dapat mengisi best price berdasarkan harga target, karena akan langsung kami finalisasi tendernya di tanggal tersebut. Silakan login ke sistem kami untuk memasukkan penawaran harga:</p>
         <p>
             <b>Link App:</b> <a href="https://taco-transport.streamlit.app/">http://bit.ly/TACOtender</a><br>
             <b>Email Login:</b> {to_email}<br>
@@ -547,7 +547,7 @@ def send_reminder_email(to_email, vendor_name, load_type, validity, round_num, p
 
     # Hitung Due Date
     today = datetime.now()
-    due_date = today + timedelta(days=3)
+    due_date = today + timedelta(days=5)
     
     months_id = {1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni", 7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"}
     due_date_str = f"{due_date.day} {months_id[due_date.month]} {due_date.year}"
