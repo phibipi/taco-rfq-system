@@ -813,8 +813,8 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     today = datetime.now()
     tgl_str = f"{today.day} {bulan_indo[today.month]} {today.year}"
     validity_clean = str(validity).strip()
-    if validity_clean.replace(" ", "") == "Januari-Desember2026":
-        validity_clean = "1 Juli 2026 - 30 Juni 2027"
+    if validity_clean.replace(" ", "") == "Agustus-Oktober2026":
+        validity_clean = "1 September - 30 November 2026"
     context = {
         'no_surat': nomor_surat,
         'validity': validity_clean,
@@ -1151,8 +1151,8 @@ def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name
     today = datetime.now()
     tgl_spk = f"{today.day} {bulan_indo[today.month]} {today.year}"
     validity_clean = str(validity).strip()
-    if validity_clean.replace(" ", "") == "Januari-Desember2026":
-        validity_clean = "1 Juli 2026 - 30 Juni 2027"
+    if validity_clean.replace(" ", "") == "Agustus-Oktober2026":
+        validity_clean = "1 September - 30 November 2026"
     context = {
         'no_spk': nomor_surat,
         'validity': validity_clean,
@@ -2845,8 +2845,8 @@ def admin_dashboard():
                                                     nomor_urut_file = prefix_angka_str
                                                     
                                                 safe_val_sk = str(sk_val).replace(" - ", "-").replace(" ", "_")
-                                                if safe_val_sk.replace(" ", "") == "Januari-Desember2026":
-                                                    safe_val_sk = "1 Juli 2026 - 30 Juni 2027"
+                                                if safe_val_sk.replace(" ", "") == "Agustus-Oktober2026":
+                                                    safe_val_sk = "1 September - 30 November 2026"
                                                 safe_pt_name = "Tangkas" if sel_pt_sk == "PT Tangkas Cipta Optimal" else "TAC"
                                                 safe_org_name = str(org_tunggal).replace(" ", "")
                                                 
@@ -3146,8 +3146,8 @@ def admin_dashboard():
 
                                             # Tentukan nama file output unik per vendor
                                             safe_val = str(spk_val).replace(" - ", "-").replace(" ", "_")
-                                            if safe_val.replace(" ", "") == "Januari-Desember2026":
-                                                    safe_val = "1 Juli 2026 - 30 Juni 2027"
+                                            if safe_val.replace(" ", "") == "Agustus-Oktober2026":
+                                                    safe_val = "1 September - 30 November 2026"
                                             safe_load = str(spk_load).replace(" ", "")
                                             safe_pt_prefix = "TANGKAS" if "Tangkas" in sel_pt_entitas else "TAC"
                                             safe_ven_file = "".join(x for x in v_name if x.isalnum() or x in " -").replace(" ", "_")
