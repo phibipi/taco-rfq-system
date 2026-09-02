@@ -3807,7 +3807,7 @@ def vendor_dashboard(email):
             }
             
             # 3. Filter hanya tipe yang ada datanya (FTL duluan jika ada)
-            final_types = [t for t in ["FTL", "FTL Plafon, "FCL"] if t in avail_types_raw]
+            final_types = [t for t in ["FTL", "FTL Plafon", "FCL"] if t in avail_types_raw]
             
             if not final_types:
                 st.warning("Tipe muatan tidak dikenali.")
