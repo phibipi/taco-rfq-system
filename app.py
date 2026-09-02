@@ -1579,7 +1579,7 @@ def admin_dashboard():
             st.caption("Buat Group Baru (ID Otomatis)")
             with st.form("add_grp"):
                 c1, c2, c3 = st.columns(3)
-                lt = c1.selectbox("Load Type", ["FTL", "FCL"])
+                lt = c1.selectbox("Load Type", ["FTL", "FCL", "FTL Plafon"])
                 org = c2.text_input("Origin (Area)") 
                 gn = c3.text_input("Nama Route Group")
             
@@ -1709,7 +1709,7 @@ def admin_dashboard():
 
                 c1, c2, c3 = st.columns(3)
                 ven = c1.selectbox("Pilih Vendor", vendor_emails, format_func=fmt_vendor)
-                sel_lt = c2.selectbox("Pilih Load Type", ["FTL", "FCL"])
+                sel_lt = c2.selectbox("Pilih Load Type", ["FTL", "FCL", "FTL Plafon"])
                 sel_round = c3.selectbox("Tahap Penawaran", ["1", "2", "3"]) 
             
                 unique_origins = []
@@ -1789,7 +1789,7 @@ def admin_dashboard():
                     with st.expander("🗑️ Area Berbahaya: Reset/Hapus Akses Vendor", expanded=False):
                         c_del1, c_del2 = st.columns(2)
                         del_ven = c_del1.selectbox("Pilih Vendor (Hapus)", vendor_emails, format_func=fmt_vendor, key="del_ven")
-                        del_lt = c_del2.selectbox("Pilih Tipe Muatan (Hapus)", ["FTL", "FCL"], key="del_lt")
+                        del_lt = c_del2.selectbox("Pilih Tipe Muatan (Hapus)", ["FTL", "FCL", "FTL Plafon"], key="del_lt")
                         if st.button("⚠️ Hapus Semua Akses Vendor Ini", type="primary"):
                             target_groups_del = df_g[df_g['load_type'] == del_lt]
                             gids_to_remove = set(target_groups_del['group_id'].tolist())
@@ -3802,11 +3802,12 @@ def vendor_dashboard(email):
             # 2. Definisikan urutan dan nama tab
             type_map = {
                 "FTL": "🚛 FTL (Full Truck Load)",
-                "FCL": "🚢 FCL (Full Container Load)"
+                "FCL": "🚢 FCL (Full Container Load)",
+                "FTL Plafon": "🚛 FTL (Full Truck Load) Khusus Pengangkutan Plafon"
             }
             
             # 3. Filter hanya tipe yang ada datanya (FTL duluan jika ada)
-            final_types = [t for t in ["FTL", "FCL"] if t in avail_types_raw]
+            final_types = [t for t in ["FTL", "FTL Plafon, "FCL"] if t in avail_types_raw]
             
             if not final_types:
                 st.warning("Tipe muatan tidak dikenali.")
