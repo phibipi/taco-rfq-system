@@ -547,7 +547,7 @@ def send_reminder_email(to_email, vendor_name, load_type, validity, round_num, p
 
     # Hitung Due Date
     today = datetime.now()
-    due_date = today + timedelta(days=5)
+    due_date = today + timedelta(days=4)
     
     months_id = {1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni", 7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"}
     due_date_str = f"{due_date.day} {months_id[due_date.month]} {due_date.year}"
@@ -1738,7 +1738,7 @@ def admin_dashboard():
                         st.divider()
                         c_val1, c_val2 = st.columns([2, 1])
                         
-                        opt_validity = ["Januari - Juni", "Juli - Desember", "Agustus - Oktober"] if sel_lt == "FCL" else ["Januari - Desember", "Juli 2026 - Juni"]
+                        opt_validity = ["Januari - Juni", "Juli - Desember", "Agustus - Oktober", "September 2026 - Agustus"] if sel_lt == "FCL" else ["Januari - Desember", "Juli 2026 - Juni"]
                         val_period = c_val1.selectbox("Periode", opt_validity)
                         val_year = c_val2.text_input("Tahun", value=str(datetime.now().year))
                         
