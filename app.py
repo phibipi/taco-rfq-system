@@ -2680,16 +2680,35 @@ def admin_dashboard():
                         max_prio_sk_db = int(df_sk_global['Ranking'].max()) if not df_sk_global.empty else 3
                         prio_options_sk = [i for i in range(1, max_prio_sk_db + 1)]
                         
-                        # Sisipkan dropdown sortir prioritas dinamis untuk SK
-                        limit_prio_sk = st.selectbox(
-                            "🏅 Batasan Urutan Pemenang SK (Sampai Ranking Ke-X)",
-                            prio_options_sk,
-                            index=len(prio_options_sk)-1, # Default tampilkan semua sampai maksimal peringkat
-                            key="sk_prio_limit_select_box"
+                        # Hitung Best Rate (harga terendah) per rute+unit sebagai basis filter %
+                        df_sk_global['Best_Rate'] = df_sk_global.groupby(
+                            ['origin', 'kota_asal', 'kota_tujuan', 'unit_type']
+                        )['price'].transform('min')
+                        
+                        # 🎯 PILIHAN METODE FILTER VENDOR SK
+                        filter_method_sk = st.radio(
+                            "Metode Filter Vendor SK:",
+                            ["Berdasarkan Ranking", "Berdasarkan % dari Best Rate"],
+                            horizontal=True,
+                            key="sk_filter_method"
                         )
                         
-                        # Saring data global SK berdasarkan batasan prioritas pilihan
-                        df_sk_top_filtered = df_sk_global[df_sk_global['Ranking'] <= limit_prio_sk].copy()
+                        if filter_method_sk == "Berdasarkan Ranking":
+                            limit_prio_sk = st.selectbox(
+                                "🏅 Batasan Urutan Pemenang SK (Sampai Ranking Ke-X)",
+                                prio_options_sk,
+                                index=len(prio_options_sk)-1,
+                                key="sk_prio_limit_select_box"
+                            )
+                            df_sk_top_filtered = df_sk_global[df_sk_global['Ranking'] <= limit_prio_sk].copy()
+                        else:
+                            pct_limit_sk = st.number_input(
+                                "📊 Maksimal Selisih dari Best Rate (%)",
+                                min_value=0.0, max_value=100.0, value=15.0, step=1.0,
+                                key="sk_pct_limit_input"
+                            )
+                            df_sk_global['Max_Allowed_Price'] = df_sk_global['Best_Rate'] * (1 + pct_limit_sk / 100)
+                            df_sk_top_filtered = df_sk_global[df_sk_global['price'] <= df_sk_global['Max_Allowed_Price']].copy()
                         
                         avail_org = sorted(df_sk_top_filtered['origin'].unique())
                         sel_orgs = st.multiselect("Pilih Origin Area (SK):", avail_org, default=avail_org, key="sk_orgs")
@@ -2924,29 +2943,47 @@ def admin_dashboard():
                         st.write("")
                         st.markdown("##### ⚙️ Filter Wilayah & Vendor")
                         
-                        # --- 🎯 REVISI UTAMA: BARIS FILTER MULTI-SELECT ORIGIN & VENDOR ---
-                        col_spk_o, col_spk_v, col_spk_p = st.columns([1.2, 1.5, 1.3])
+                        # Hitung Best Rate per rute+unit
+                        df_spk_global['Best_Rate'] = df_spk_global.groupby(
+                            ['origin', 'kota_asal', 'kota_tujuan', 'unit_type']
+                        )['price'].transform('min')
                         
-                        # 1. Multi-select untuk ORIGIN
+                        col_spk_o, col_spk_v = st.columns([1.5, 2])
+                        
                         avail_origins = sorted(df_spk_global['origin'].dropna().unique().tolist())
                         sel_origins = col_spk_o.multiselect("Pilih Rute Origin (Bisa Banyak):", avail_origins, default=avail_origins, key="spk_origin_multiselect")
                         
-                        # Filter temporary data berdasarkan Origin yang dipilih untuk memperbarui list Vendor yang tersedia
                         df_spk_filtered_origin = df_spk_global[df_spk_global['origin'].isin(sel_origins)] if sel_origins else df_spk_global
                         
-                        # 2. Multi-select untuk VENDOR
                         avail_vens = sorted(df_spk_filtered_origin['vendor_name'].dropna().unique().tolist())
                         sel_vendors = col_spk_v.multiselect("Pilih Vendor Penerima SPK:", avail_vens, key="spk_ven_multiselect")
                         
-                        # 3. Dropdown Batasan Prioritas Dinamis
-                        max_prio_spk_db = int(df_spk_global['Ranking'].max()) if not df_spk_global.empty else 3
-                        prio_options_spk = [i for i in range(1, max_prio_spk_db + 1)]
-                        limit_prio_value = col_spk_p.selectbox(
-                            "🏅 Batasan Urutan Prioritas Vendor", 
-                            prio_options_spk, 
-                            index=len(prio_options_spk)-1,
-                            key="print_spk_prio_limit_select_box"
+                        # 🎯 PILIHAN METODE FILTER VENDOR SPK
+                        filter_method_spk = st.radio(
+                            "Metode Batasan Vendor SPK:",
+                            ["Berdasarkan Ranking", "Berdasarkan % dari Best Rate"],
+                            horizontal=True,
+                            key="spk_filter_method"
                         )
+                        
+                        if filter_method_spk == "Berdasarkan Ranking":
+                            max_prio_spk_db = int(df_spk_global['Ranking'].max()) if not df_spk_global.empty else 3
+                            prio_options_spk = [i for i in range(1, max_prio_spk_db + 1)]
+                            limit_prio_value = st.selectbox(
+                                "🏅 Batasan Urutan Prioritas Vendor", 
+                                prio_options_spk, 
+                                index=len(prio_options_spk)-1,
+                                key="print_spk_prio_limit_select_box"
+                            )
+                            df_spk_global['Included'] = df_spk_global['Ranking'] <= limit_prio_value
+                        else:
+                            pct_limit_spk = st.number_input(
+                                "📊 Maksimal Selisih dari Best Rate (%)",
+                                min_value=0.0, max_value=100.0, value=15.0, step=1.0,
+                                key="spk_pct_limit_input"
+                            )
+                            df_spk_global['Max_Allowed_Price'] = df_spk_global['Best_Rate'] * (1 + pct_limit_spk / 100)
+                            df_spk_global['Included'] = df_spk_global['price'] <= df_spk_global['Max_Allowed_Price']
                         
                         no_spk = st.text_input("Nomor Surat SPK (Rujukan Awal):", value="", placeholder="Contoh: 001/SPK/TACO/III/2026", key="no_spk")
                         
@@ -2996,7 +3033,7 @@ def admin_dashboard():
                                             # Saring data: harus masuk list Origin terpilih, masuk batas prioritas, dan milik Vendor ini
                                             df_final_spk = df_spk_global[
                                                 (df_spk_global['origin'].isin(sel_origins)) &
-                                                (df_spk_global['Ranking'] <= limit_prio_value) & 
+                                                (df_spk_global['Included']) & 
                                                 (df_spk_global['vendor_name'] == v_name)
                                             ].copy()
                                             
