@@ -744,11 +744,12 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
             else:
                 lt_fmt = f"{int(lt_clean)} Hari" if not str(lt_raw).endswith("hari") else str(row['lead_time'])
             top_raw = str(row.get('top', '')).strip().lower()
-            top_clean = clean_numeric(top_raw)
-            if top_clean == 0 or top_raw in ["", "-", "0", "0 hari", "nan", "none", "0 hari"]:
+            if top_raw in ["", "-", "0", "0 hari", "nan", "none"]:
                 top_fmt = "14 Hari"
             else:
-                top_fmt = f"{int(top_clean)} Hari" if not str(top_raw).endswith("hari") else str(row['top'])
+                top_num = top_raw.replace("hari", "").strip()
+                top_clean = clean_numeric(top_num)
+                top_fmt = f"{int(top_clean)} Hari" if top_clean > 0 else "14 Hari"
             # data multidrop and buruh ke dalam matriks rute Word
             data_map = [
                 str(row.get('kota_asal', '-')), 
@@ -1117,11 +1118,12 @@ def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name
             else:
                 lt_fmt = f"{int(lt_clean)} Hari" if not str(lt_raw).endswith("hari") else str(row['lead_time'])
             top_raw = str(row.get('top', '')).strip().lower()
-            top_clean = clean_numeric(top_raw)
-            if top_clean == 0 or top_raw in ["", "-", "0", "0 hari", "nan", "none", "0 hari"]:
+            if top_raw in ["", "-", "0", "0 hari", "nan", "none"]:
                 top_fmt = "14 Hari"
             else:
-                top_fmt = f"{int(top_clean)} Hari" if not str(top_raw).endswith("hari") else str(row['top'])
+                top_num = top_raw.replace("hari", "").strip()
+                top_clean = clean_numeric(top_num)
+                top_fmt = f"{int(top_clean)} Hari" if top_clean > 0 else "14 Hari"
             # 🎯 DATA MAP 9 KOLOM (TANPA RANKING)
             data_map = [
                 str(row.get('kota_asal', '-')), 
