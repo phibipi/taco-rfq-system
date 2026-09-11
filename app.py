@@ -737,9 +737,18 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
             try: harga = f"Rp {int(row['price']):,}".replace(",", ".")
             except: harga = "Rp 0"
               
-            lt_raw = str(row['lead_time'])
-            lt_fmt = f"{lt_raw} Hari" if lt_raw.isdigit() else "-"
-            
+            lt_raw = str(row.get('lead_time', '')).strip().lower()
+            lt_clean = clean_numeric(lt_raw)
+            if lt_clean == 0 or lt_raw in ["", "-", "0", "0 hari", "nan", "none"]:
+                lt_fmt = "7 Hari"
+            else:
+                lt_fmt = f"{int(lt_clean)} Hari" if not str(lt_raw).endswith("hari") else str(row['lead_time'])
+            top_raw = str(row.get('top', '')).strip().lower()
+            top_clean = clean_numeric(top_raw)
+            if top_clean == 0 or top_raw in ["", "-", "0", "0 hari", "nan", "none", "0 hari"]:
+                top_fmt = "14 Hari"
+            else:
+                top_fmt = f"{int(top_clean)} Hari" if not str(top_raw).endswith("hari") else str(row['top'])
             # data multidrop and buruh ke dalam matriks rute Word
             data_map = [
                 str(row.get('kota_asal', '-')), 
@@ -752,7 +761,7 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
                 fmt_val_rp(row.get('outer_city_price', 0)),
                 fmt_val_rp(row.get('labor_cost', 0)),
                 lt_fmt,
-                str(row['top'])
+                top_fmt
             ]
             
             for idx, val in enumerate(data_map):
@@ -1101,9 +1110,18 @@ def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name
             try: harga = f"Rp {int(row['price']):,}".replace(",", ".")
             except: harga = "Rp 0"
               
-            lt_raw = str(row['lead_time'])
-            lt_fmt = f"{lt_raw} Hari" if lt_raw.isdigit() else "-"
-            
+            lt_raw = str(row.get('lead_time', '')).strip().lower()
+            lt_clean = clean_numeric(lt_raw)
+            if lt_clean == 0 or lt_raw in ["", "-", "0", "0 hari", "nan", "none"]:
+                lt_fmt = "7 Hari"
+            else:
+                lt_fmt = f"{int(lt_clean)} Hari" if not str(lt_raw).endswith("hari") else str(row['lead_time'])
+            top_raw = str(row.get('top', '')).strip().lower()
+            top_clean = clean_numeric(top_raw)
+            if top_clean == 0 or top_raw in ["", "-", "0", "0 hari", "nan", "none", "0 hari"]:
+                top_fmt = "14 Hari"
+            else:
+                top_fmt = f"{int(top_clean)} Hari" if not str(top_raw).endswith("hari") else str(row['top'])
             # 🎯 DATA MAP 9 KOLOM (TANPA RANKING)
             data_map = [
                 str(row.get('kota_asal', '-')), 
@@ -1115,7 +1133,7 @@ def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name
                 fmt_val_rp(row.get('outer_city_price', 0)),
                 fmt_val_rp(row.get('labor_cost', 0)),
                 lt_fmt,
-                str(row['top'])
+                top_fmt
             ]
             
             for idx, val in enumerate(data_map):
