@@ -21,29 +21,12 @@ from googleapiclient.http import MediaIoBaseUpload
 import hashlib
 import requests
 from docxtpl import RichText
-import streamlit as st
+
 
 
 # --- MAIN APP ---
 st.set_page_config(page_title="TACO Procurement", layout="wide", page_icon="🚛")
-hide_style = """
-    <style>
-    /* Sembunyikan header atas (GitHub link, fork, menu titik tiga) */
-    header {visibility: hidden !important;}
-    #MainMenu {visibility: hidden !important;}
-    
-    /* Sembunyikan footer, watermark mahkota, dan badge profil hijau */
-    footer {visibility: hidden !important;}
-    div[data-testid="stStatusWidget"],
-    .viewerBadge_container__1QSob,
-    [class*="viewerBadge"],
-    [class*="profileCard"],
-    a[href*="streamlit.io"] {
-        display: none !important;
-        visibility: hidden !important;
-    }
-    </style>
-"""
+
 st.markdown(hide_style, unsafe_allow_html=True)
 # --- SHEET CONNECTION ---
 SPREADSHEET_ID = "1j9GCq8Wwm-MM8hOamsH26qlmjNwuDBuEMnbw6ORzTQk"
