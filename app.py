@@ -27,7 +27,6 @@ from docxtpl import RichText
 # --- MAIN APP ---
 st.set_page_config(page_title="TACO Procurement", layout="wide", page_icon="🚛")
 
-st.markdown(hide_style, unsafe_allow_html=True)
 # --- SHEET CONNECTION ---
 SPREADSHEET_ID = "1j9GCq8Wwm-MM8hOamsH26qlmjNwuDBuEMnbw6ORzTQk"
 
