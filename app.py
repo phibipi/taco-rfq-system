@@ -1289,11 +1289,11 @@ def main():
     add_scroll_to_top()
     c_logo, _ = st.columns([1, 6])
     with c_logo:
-        LOGO_URL = "https://raw.githubusercontent.com/phibipi/taco-rfq-system/main/image_2.png"
+        LOGO_PATH = "image_2.png"  # file harus ada di folder yang sama dengan app.py
 
-        try:
-            st.image(LOGO_URL, width=120)
-        except Exception:
+        if os.path.exists(LOGO_PATH):
+            st.image(LOGO_PATH, width=120)
+        else:
             st.markdown("## **TACO**")
 
     if 'user_info' not in st.session_state: st.session_state['user_info'] = None
