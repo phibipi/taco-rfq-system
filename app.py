@@ -22,7 +22,26 @@ import hashlib
 import requests
 from docxtpl import RichText
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
 
+def load_template(filename):
+    """Baca template .docx dari folder templates/ di repo (bukan dari URL GitHub)."""
+    path = os.path.join(TEMPLATE_DIR, filename)
+    if not os.path.exists(path):
+        st.error(f"Template tidak ditemukan: templates/{filename}. Pastikan file sudah di-commit ke repo.")
+        return None
+    with open(path, "rb") as f:
+        return f.read()
+
+def find_asset(*names):
+    """Cari file di root repo atau folder templates/."""
+    for n in names:
+        for folder in (BASE_DIR, TEMPLATE_DIR):
+            p = os.path.join(folder, n)
+            if os.path.exists(p):
+                return p
+    return None
 
 # --- MAIN APP ---
 st.set_page_config(page_title="TACO Procurement", layout="wide", page_icon="🚛")
@@ -1289,9 +1308,8 @@ def main():
     add_scroll_to_top()
     c_logo, _ = st.columns([1, 6])
     with c_logo:
-        LOGO_PATH = "image_2.png"  # file harus ada di folder yang sama dengan app.py
-
-        if os.path.exists(LOGO_PATH):
+        LOGO_PATH = find_asset("image_2.png", "image_2.PNG", "image_2.jpg")
+        if LOGO_PATH:
             st.image(LOGO_PATH, width=120)
         else:
             st.markdown("## **TACO**")
@@ -2749,18 +2767,13 @@ def admin_dashboard():
                                 import io
 
                                 
-                                GITHUB_BASE = "https://raw.githubusercontent.com/phibipi/taco-rfq-system/main/templates/"
-                                if sel_pt_sk == "PT Tangkas Cipta Optimal":
-                                    template_url_sk = GITHUB_BASE + "template_sk_tangkas.docx" 
-                                else:
-                                    template_url_sk = GITHUB_BASE + "template_sk_tac.docx" 
+                                tpl_name_sk = "template_sk_tangkas.docx" if sel_pt_sk == "PT Tangkas Cipta Optimal" else "template_sk_tac.docx"
+                                tpl_bytes_sk = load_template(tpl_name_sk)
+                                if tpl_bytes_sk is None:
+                                    st.stop()
                                 
-                                with st.spinner(f"Mengunduh template SK {sel_pt_sk} dan memproses pemecahan origin..."):
+                                with st.spinner(f"Memproses SK {sel_pt_sk} dan memecah per origin..."):
                                     try:
-                                        response_sk = requests.get(template_url_sk)
-                                        if response_sk.status_code != 200:
-                                            st.error(f"Gagal mendownload template SK dari GitHub. Status Code: {response_sk.status_code}.")
-                                            st.stop()
                                             
                                         # Potong 3 angka urut depan nomor surat resmi
                                         nomor_mentah = str(no_sk).strip()
@@ -2793,7 +2806,7 @@ def admin_dashboard():
                                                 else:
                                                     custom_no_sk = nomor_mentah
 
-                                                tpl_sk_stream = io.BytesIO(response_sk.content)
+                                                tpl_sk_stream = io.BytesIO(tpl_bytes_sk)
                                                 
                                                 # --- ENGINE RE-MAPPING MULTIDROP BANTUAN LOOKUP ---
                                                 df_sk_merged = df_single_org.copy()
@@ -3040,15 +3053,13 @@ def admin_dashboard():
                                 except ValueError:
                                     is_numeric_prefix_spk = False
                                 
-                                GITHUB_BASE = "https://raw.githubusercontent.com/phibipi/taco-rfq-system/main/templates/"
-                                template_url = GITHUB_BASE + ("template_spk_tangkas.docx" if sel_pt_entitas == "PT Tangkas Cipta Optimal" else "template_spk_tac.docx")
+                                tpl_name_spk = "template_spk_tangkas.docx" if sel_pt_entitas == "PT Tangkas Cipta Optimal" else "template_spk_tac.docx"
+                                tpl_bytes_spk = load_template(tpl_name_spk)
+                                if tpl_bytes_spk is None:
+                                    st.stop()
                                 
-                                with st.spinner("Mengunduh template dan memproses seluruh SPK dengan auto-number..."):
+                                with st.spinner("Memproses seluruh SPK dengan auto-number..."):
                                     try:
-                                        response = requests.get(template_url)
-                                        if response.status_code != 200:
-                                            st.error(f"Gagal mendownload template dari GitHub. Status Code: {response.status_code}.")
-                                            st.stop()
                                         
                                         success_count = 0
                                         generated_file_paths = []
@@ -3074,7 +3085,7 @@ def admin_dashboard():
                                             else:
                                                 custom_no_spk = nomor_mentah_spk
                                                 
-                                            tpl_spk_stream = io.BytesIO(response.content)
+                                            tpl_spk_stream = io.BytesIO(tpl_bytes_spk)
                                             
                                             row_vendor_aktif = df_final_spk.iloc[0]
 
@@ -4045,7 +4056,7 @@ def vendor_dashboard(email):
                             # TOMBOL KIRI (WORD SPH RESMI)
                             with c_btn1:
                                 if st.button("📄 Buat Dokumen SPH (Word)", type="primary", use_container_width=True):
-                                    tpl_sph = "template_sph.docx"
+                                    tpl_sph = find_asset("template_sph.docx") or "template_sph.docx"
                                     if not os.path.exists(tpl_sph): 
                                         st.error("Sistem error: Template SPH tidak ditemukan di server. Hubungi Admin!")
                                         st.stop()
