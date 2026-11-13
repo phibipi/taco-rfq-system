@@ -21,6 +21,7 @@ from googleapiclient.http import MediaIoBaseUpload
 import hashlib
 import requests
 from docxtpl import RichText
+from import_tab import render_import_tab
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
@@ -1296,7 +1297,7 @@ def try_restore_session(df_users):
             return None
         for _, user in df_users.iterrows():
             expected = generate_session_token(user['email'], user['password'])
-            if expected == token_in_url:
+            if expected == token_in_url and str(user.get('role', '')).lower() != 'vendor':
                 return user.to_dict()
     except:
         pass
@@ -1343,6 +1344,9 @@ def main():
                             u = df[(df['email']==email) & (df['password']==pw)]
                             if not u.empty:
                                 user_dict = u.iloc[0].to_dict()
+                                if str(user_dict.get('role', '')).lower() == 'vendor':
+                                    st.error("Portal vendor sudah ditutup. Silakan hubungi Procurement TACO.")
+                                    st.stop()
                                 st.session_state['user_info'] = user_dict
                                 token = generate_session_token(email, pw)
                                 st.query_params["session"] = token
@@ -1373,7 +1377,7 @@ def main():
         if role == 'admin':
             admin_dashboard()
         elif role == 'vendor':
-            vendor_dashboard(user['email'])
+            st.warning("Portal vendor sudah ditutup.")
         else:
             user_dashboard()
 
@@ -1900,7 +1904,7 @@ def admin_dashboard():
             m4['price'] = pd.to_numeric(m4['price'], errors='coerce').fillna(0)
             df_master = m4
 
-        tab_labels = ["⏳ Submit Monitor", "✅ Lock Data", "📊 Summary", "🖨️ Print Dokumen", "📥 SPH Uploads", "Template", "comparison", "Price Search"]
+        tab_labels = ["⏳ Submit Monitor", "✅ Lock Data", "📊 Summary", "🖨️ Print Dokumen", "📥 SPH Uploads", "Template", "comparison", "Price Search", "📤 Import Excel"]
         if 'monitor_active_tab' not in st.session_state or st.session_state['monitor_active_tab'] not in tab_labels:
             st.session_state['monitor_active_tab'] = tab_labels[0]
 
@@ -3759,6 +3763,8 @@ def admin_dashboard():
                     else:
                         st.info("Silakan ketik nama kota tujuan di atas untuk mulai mencari.")
 
+        if sel_tab == "📤 Import Excel":
+            render_import_tab(get_data, save_data, connect_to_gsheet)
 # ================= VENDOR DASHBOARD (UPDATE: DYNAMIC TABS) =================
 def vendor_dashboard(email):
     step = st.session_state['vendor_step']
