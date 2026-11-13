@@ -1311,7 +1311,14 @@ def main():
     with c_logo:
         LOGO_PATH = find_asset("image_2.png", "image_2.PNG", "image_2.jpg")
         if LOGO_PATH:
-            st.image(LOGO_PATH, width=120)
+            import base64
+            with open(LOGO_PATH, "rb") as f_logo:
+                b64_logo = base64.b64encode(f_logo.read()).decode()
+            mime_logo = "jpeg" if LOGO_PATH.lower().endswith(("jpg", "jpeg")) else "png"
+            st.markdown(
+                f'<img src="data:image/{mime_logo};base64,{b64_logo}" width="120">',
+                unsafe_allow_html=True,
+            )
         else:
             st.markdown("## **TACO**")
 
