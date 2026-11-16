@@ -22,6 +22,7 @@ import hashlib
 import requests
 from docxtpl import RichText
 from import_tab import render_import_tab
+import re
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
@@ -446,7 +447,12 @@ def clean_numeric(val):
         return float(s) if s else 0
     except: 
         return 0
-
+def pretty_validity(v):
+    """'1Desember2026-28Februari2027' -> '1 Desember 2026 - 28 Februari 2027' (untuk dicetak di dokumen)."""
+    s = str(v).strip()
+    s = re.sub(r'(?<=\d)(?=[A-Za-z])|(?<=[A-Za-z])(?=\d)', ' ', s)
+    s = re.sub(r'\s*-\s*', ' - ', s)
+    return re.sub(r'\s+', ' ', s)
 # --- TOMBOL SCROLL TO TOP (VERSI MANUAL ANCHOR) ---
 def add_scroll_to_top():
     st.markdown("""
@@ -843,7 +849,7 @@ def create_docx_sk(template_file, nomor_surat, validity, load_type, df_data):
     bulan_indo = {1:'Januari', 2:'Februari', 3:'Maret', 4:'April', 5:'Mei', 6:'Juni', 7:'Juli', 8:'Agustus', 9:'September', 10:'Oktober', 11:'November', 12:'Desember'}
     today = datetime.now()
     tgl_str = f"{today.day} {bulan_indo[today.month]} {today.year}"
-    validity_clean = str(validity).strip()
+    validity_clean = pretty_validity(validity)
     if validity_clean.replace(" ", "") == "Agustus-Oktober2026":
         validity_clean = "1 September - 30 November 2026"
     context = {
@@ -1191,7 +1197,7 @@ def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name
                   7:'Juli',8:'Agustus',9:'September',10:'Oktober',11:'November',12:'Desember'}
     today = datetime.now()
     tgl_spk = f"{today.day} {bulan_indo[today.month]} {today.year}"
-    validity_clean = str(validity).strip()
+    validity_clean = pretty_validity(validity)
     if validity_clean.replace(" ", "") == "Agustus-Oktober2026":
         validity_clean = "1 September - 30 November 2026"
     context = {
