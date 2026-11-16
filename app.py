@@ -2557,8 +2557,8 @@ def admin_dashboard():
                                         'Sumber Base': ti['base_source'],
                                     }
                                     if sel_load == 'FCL':
-                                        rec['Pelayaran'] = ti['pelayaran']
-                                        rec['Frekuensi (x/minggu)'] = ti['frekuensi']
+                                        rec['Pelayaran'] = ti.get('pelayaran', '-')
+                                        rec['Frekuensi (x/minggu)'] = ti.get('frekuensi', '-')
                                     rec['Potongan (%)'] = ti['pct']
                                     rec['Target Price (Angka)'] = kalkulasi_tp
                                     rec['Target Price (Format)'] = f"Rp {int(kalkulasi_tp):,}".replace(",", ".") if kalkulasi_tp > 0 else "Belum Ada Data"
