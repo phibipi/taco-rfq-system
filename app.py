@@ -23,6 +23,7 @@ import requests
 from docxtpl import RichText
 from import_tab import render_import_tab
 import re
+from target_price import get_target_price, get_target_info
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
@@ -1217,80 +1218,6 @@ def create_docx_spk(template_file, nomor_surat, validity, load_type, vendor_name
     return doc
     
 
-# ▼ POINTER FIX SAKLEK: TIMPA SELURUH ISI FUNGSI get_target_price DENGAN BLOK INI ▼
-def get_target_price(df_all, route_id, unit_type, cur_validity):
-    df_safe = df_all.copy()
-    if 'price' in df_safe.columns:
-        df_safe['price'] = pd.to_numeric(df_safe['price'], errors='coerce').fillna(0)
-        df_safe = df_safe[df_safe['price'] > 0]
-    else:
-        return 0
-    
-    # 📝 KUNCI SUCI: Normalisasi spasi dan tipe data di memori hitung target price
-    df_safe['validity_clean'] = df_safe['validity'].astype(str).str.replace(" ", "").str.lower().str.strip()
-    df_safe['route_id_clean'] = df_safe['route_id'].astype(str).str.strip()
-    df_safe['round_clean'] = pd.to_numeric(df_safe['round'], errors='coerce').fillna(1).astype(int)
-    
-    clean_cur_val = str(cur_validity).replace(" ", "").lower().strip()
-    clean_rid = str(route_id).strip()
-    
-    # 1. Ambil Harga Terendah Periode SAAT INI (Tahap 1) -> Paksa round == 1 murni angka
-    df_curr = df_safe[
-        (df_safe['validity_clean'] == clean_cur_val) & 
-        (df_safe['route_id_clean'] == clean_rid) & 
-        (df_safe['unit_type'].astype(str).str.strip().str.lower() == str(unit_type).strip().lower()) &
-        (df_safe['round_clean'] == 1)
-    ]
-    
-    if df_curr.empty: 
-        min_curr = 0 
-    else:
-        min_curr = df_curr['price'].min()
-
-    # 2. Tentukan Periode "SEBELUMNYA" (Histori Masa Lalu)
-    target_price = 0
-    df_prev = pd.DataFrame()
-    
-    try:
-        parts = str(cur_validity).strip().split(" ") 
-        cur_year_str = parts[-1]
-        cur_year_int = int(cur_year_str)
-        
-        is_semester_2 = "juli" in str(cur_validity).lower() or "july" in str(cur_validity).lower()
-        
-        if is_semester_2:
-            df_prev = df_safe[
-                (df_safe['validity'].str.contains(cur_year_str, na=False)) & 
-                (df_safe['validity'].str.contains("Jan", case=False, na=False)) & 
-                (df_safe['route_id_clean'] == clean_rid) & 
-                (df_safe['unit_type'].astype(str).str.strip().str.lower() == str(unit_type).strip().str.lower())
-            ]
-        else:
-            prev_year_str = str(cur_year_int - 1)
-            df_prev = df_safe[
-                (df_safe['validity'].str.contains(prev_year_str, na=False)) & 
-                (df_safe['route_id_clean'] == clean_rid) & 
-                (df_safe['unit_type'].astype(str).str.strip().str.lower() == str(unit_type).strip().str.lower())
-            ]
-
-        # 3. Bandingkan Harga
-        if not df_prev.empty:
-            min_prev = df_prev['price'].min()
-            if min_prev > 0 and min_curr > 0:
-                if min_prev < min_curr: target_price = min_prev * 0.95 
-                else: target_price = min_curr * 0.85 
-            elif min_prev > 0 and min_curr == 0: target_price = min_prev * 0.95
-            elif min_prev == 0 and min_curr > 0: target_price = min_curr * 0.85
-            else: target_price = 0
-        else:
-            if min_curr > 0: target_price = min_curr * 0.85
-            else: target_price = 0
-            
-    except:
-        if min_curr > 0: target_price = min_curr * 0.85
-        else: target_price = 0
-        
-    return int(target_price)
 
 def generate_session_token(email, password):
     raw = f"{email}:{password}:taco_secret_2025"
@@ -2607,8 +2534,9 @@ def admin_dashboard():
                                     unit = row['unit_type']
                                     
                                     # Panggil fungsi get_target_price
-                                    kalkulasi_tp = get_target_price(prices_for_tp, rid, unit, sel_val)
-                                    
+                                    ti = get_target_info(prices_for_tp, rid, unit, sel_val)
+                                    kalkulasi_tp = ti['target']
+
                                     tp_results.append({
                                         'Origin': row.get('origin', '-'),
                                         'Kota Asal': row.get('kota_asal', '-'),
@@ -2616,6 +2544,9 @@ def admin_dashboard():
                                         'Nama Grup Rute': row.get('route_group', '-'),
                                         'Tipe Muatan': row.get('load_type', '-'),
                                         'Unit': unit,
+                                        'Base Price': ti['base'],
+                                        'Sumber Base': ti['base_source'],
+                                        'Potongan (%)': ti['pct'],
                                         'Target Price (Angka)': kalkulasi_tp,
                                         'Target Price (Format)': f"Rp {int(kalkulasi_tp):,}".replace(",", ".") if kalkulasi_tp > 0 else "Belum Ada Data"
                                     })
