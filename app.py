@@ -2367,7 +2367,7 @@ def admin_dashboard():
                         if not prices_clean.empty:
                             summary_df = pd.merge(
                                 base_df, 
-                                prices_clean[['route_id', 'unit_type', 'vendor_name', 'vendor_email', 'price', 'validity', 'round', 'lead_time']], 
+                                prices_clean[['route_id', 'unit_type', 'vendor_name', 'vendor_email', 'price', 'validity', 'round', 'lead_time'] + [c for c in ['pelayaran', 'frekuensi'] if c in prices_clean.columns]], 
                                 on=['route_id', 'unit_type'], 
                                 how='left'
                             )
@@ -2392,6 +2392,9 @@ def admin_dashboard():
                         summary_df['validity'] = summary_df['validity'].fillna(sel_val).replace('nan', sel_val)
                         summary_df['round'] = summary_df['round'].fillna(sel_round).replace('nan', sel_round)
                         summary_df['lead_time'] = summary_df['lead_time'].fillna('-').replace('nan', '-')
+                        for c_ship in ['pelayaran', 'frekuensi']:
+                            if c_ship not in summary_df.columns: summary_df[c_ship] = '-'
+                            summary_df[c_ship] = summary_df[c_ship].fillna('-').astype(str).replace(['', 'nan', 'None'], '-')
                         summary_df['Harga Penawaran'] = summary_df['price'].apply(lambda x: f"Rp {int(x):,}".replace(",", ".") if x > 0 else "Rp 0")
 
                         # ==========================================================
@@ -2478,11 +2481,17 @@ def admin_dashboard():
                         summary_df['Biaya Buruh'] = summary_df['labor_cost'].apply(lambda x: f"Rp {int(x):,}".replace(",", ".") if x > 0 else "-")
                         # ==========================================================
 
-                        cols_to_keep = ['origin', 'kota_asal', 'kota_tujuan', 'route_group', 'load_type', 'unit_type', 'Prioritas', 'vendor_name', 'Harga Penawaran', 'Multidrop Dalam Kota', 'Multidrop Luar Kota', 'Biaya Buruh', 'lead_time', 'validity', 'round']
+                        cols_to_keep = ['origin', 'kota_asal', 'kota_tujuan', 'route_group', 'load_type', 'unit_type', 'Prioritas', 'vendor_name', 'Harga Penawaran', 'Multidrop Dalam Kota', 'Multidrop Luar Kota', 'Biaya Buruh', 'lead_time']
+                        nama_kolom = ['Origin', 'Kota Asal', 'Kota Tujuan', 'Nama Grup Rute', 'Tipe Muatan', 'Unit', 'Prioritas', 'Nama Vendor', 'Harga Penawaran', 'Multidrop Dalam Kota', 'Multidrop Luar Kota', 'Biaya Buruh', 'Lead Time']
+                        if sel_load == 'FCL':
+                            cols_to_keep += ['pelayaran', 'frekuensi']
+                            nama_kolom += ['Pelayaran', 'Frekuensi (x/minggu)']
+                        cols_to_keep += ['validity', 'round']
+                        nama_kolom += ['Periode', 'Tahap']
                         for c in cols_to_keep:
                             if c not in summary_df.columns: summary_df[c] = '-'
                         summary_df = summary_df[cols_to_keep]
-                        summary_df.columns = ['Origin', 'Kota Asal', 'Kota Tujuan', 'Nama Grup Rute', 'Tipe Muatan', 'Unit', 'Prioritas', 'Nama Vendor', 'Harga Penawaran', 'Multidrop Dalam Kota', 'Multidrop Luar Kota', 'Biaya Buruh', 'Lead Time', 'Periode', 'Tahap']
+                        summary_df.columns = nama_kolom
                         
                         # Render file object biner Excel
                         output = io.BytesIO()
@@ -2537,7 +2546,7 @@ def admin_dashboard():
                                     ti = get_target_info(prices_for_tp, rid, unit, sel_val)
                                     kalkulasi_tp = ti['target']
 
-                                    tp_results.append({
+                                    rec = {
                                         'Origin': row.get('origin', '-'),
                                         'Kota Asal': row.get('kota_asal', '-'),
                                         'Kota Tujuan': row.get('kota_tujuan', '-'),
@@ -2546,10 +2555,14 @@ def admin_dashboard():
                                         'Unit': unit,
                                         'Base Price': ti['base'],
                                         'Sumber Base': ti['base_source'],
-                                        'Potongan (%)': ti['pct'],
-                                        'Target Price (Angka)': kalkulasi_tp,
-                                        'Target Price (Format)': f"Rp {int(kalkulasi_tp):,}".replace(",", ".") if kalkulasi_tp > 0 else "Belum Ada Data"
-                                    })
+                                    }
+                                    if sel_load == 'FCL':
+                                        rec['Pelayaran'] = ti['pelayaran']
+                                        rec['Frekuensi (x/minggu)'] = ti['frekuensi']
+                                    rec['Potongan (%)'] = ti['pct']
+                                    rec['Target Price (Angka)'] = kalkulasi_tp
+                                    rec['Target Price (Format)'] = f"Rp {int(kalkulasi_tp):,}".replace(",", ".") if kalkulasi_tp > 0 else "Belum Ada Data"
+                                    tp_results.append(rec)
                                 
                                 df_tp_export = pd.DataFrame(tp_results)
                                 
