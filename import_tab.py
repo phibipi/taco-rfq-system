@@ -21,6 +21,19 @@ from excel_import import (
 NEW_VENDOR = "➕ Vendor baru..."
 
 
+def fit_row(values_by_name, headers, old=None):
+    """Susun satu baris sesuai urutan header sheet. Nilai baru dipakai bila ada,
+    kalau tidak ambil dari data lama, kalau tidak ada juga dikosongkan."""
+    old = old or {}
+    return [values_by_name.get(h, old.get(h, "")) for h in headers]
+
+
+def pad_rows(rows, headers):
+    """Lengkapi baris yang lebih pendek dari jumlah header dengan sel kosong (mencegah error 'N columns passed')."""
+    n = len(headers)
+    return [r + [""] * (n - len(r)) if n and len(r) < n else r for r in rows]
+
+
 # ----------------------------------------------------------------------------
 # Logic murni (tanpa Streamlit) -> gampang dites
 # ----------------------------------------------------------------------------
@@ -104,6 +117,10 @@ def _backup(sh, names, st):
     for n in names:
         try:
             sh.worksheet(n).duplicate(new_sheet_name=f"bak_{n}_{stamp}"[:99])
+            # hapus backup lama, sisakan 2 terbaru per sheet
+            olds = sorted([w for w in sh.worksheets() if w.title.startswith(f"bak_{n}_")], key=lambda w: w.title)
+            for w in olds[:-2]:
+                sh.del_worksheet(w)
         except Exception as e:
             st.warning(f"Backup {n} gagal ({e}). Import tetap dilanjutkan.")
 
@@ -168,6 +185,7 @@ def render_import_tab(get_data, save_data, connect_to_gsheet):
         status = c6.selectbox("Status data", ["Open", "Locked"], key=f"imp_st_{fkey}")
         opt_prof = st.checkbox("Perbarui profil vendor (alamat, PIC, telp, TOP, PPN, PPh) dari file", value=True, key=f"imp_prof_{fkey}")
         opt_acc = st.checkbox("Catat juga ke Access_Rights (supaya muncul di Submit Monitor)", value=True, key=f"imp_acc_{fkey}")
+        opt_backup = st.checkbox("Backup Price_Data & Multidrop_Data sebelum simpan (maks. 2 backup terakhir disimpan)", value=False, key=f"imp_bak_{fkey}")
 
     # ---------------- 2. Preview per sheet ----------------
     st.markdown("#### 2. Preview per Origin")
@@ -274,7 +292,7 @@ def render_import_tab(get_data, save_data, connect_to_gsheet):
                      key=f"imp_save_{fkey}"):
             with st.spinner("Backup & menyimpan..."):
                 sh_obj = connect_to_gsheet()
-                if sh_obj:
+                if sh_obj and opt_backup:
                     _backup(sh_obj, ["Price_Data", "Multidrop_Data"], st)
                 ok = True
                 if sel == NEW_VENDOR:
@@ -283,14 +301,23 @@ def render_import_tab(get_data, save_data, connect_to_gsheet):
                 if opt_prof:
                     old = df_prof[df_prof["email"] == email].iloc[-1].to_dict() if (not df_prof.empty and (df_prof["email"] == email).any()) else {}
                     pick = lambda new, key: new or old.get(key, "")
-                    ok &= bool(save_data("Vendor_Profile", [[
-                        email, pick(ven.get("address"), "address"), pick(ven.get("contact_person"), "contact_person"),
-                        pick(ven.get("phone"), "phone"), pick(ven.get("top_norm"), "top"),
-                        pick(ven.get("ppn"), "ppn"), pick(ven.get("pph"), "pph"),
-                        datetime.now().strftime("%Y-%m-%d"), old.get("direktur", ""), old.get("jabatan", "Direktur Utama"),
-                    ]]))
-                ok &= bool(save_data("Price_Data", payload["price_rows"]))
-                ok &= bool(save_data("Multidrop_Data", payload["md_rows"]))
+                    new_vals = {
+                        "email": email,
+                        "address": pick(ven.get("address"), "address"),
+                        "contact_person": pick(ven.get("contact_person"), "contact_person"),
+                        "phone": pick(ven.get("phone"), "phone"),
+                        "top": pick(ven.get("top_norm"), "top"),
+                        "ppn": pick(ven.get("ppn"), "ppn"),
+                        "pph": pick(ven.get("pph"), "pph"),
+                        "updated_at": datetime.now().strftime("%Y-%m-%d"),
+                        "direktur": old.get("direktur", ""),
+                        "jabatan": old.get("jabatan", "Direktur Utama"),
+                    }
+                    # Susun sesuai header sheet; kolom lain yang tidak dikenal dipertahankan dari data lama
+                    prof_row = fit_row(new_vals, list(df_prof.columns), old) if len(df_prof.columns) else list(new_vals.values())
+                    ok &= bool(save_data("Vendor_Profile", [prof_row]))
+                ok &= bool(save_data("Price_Data", pad_rows(payload["price_rows"], list(df_p.columns))))
+                ok &= bool(save_data("Multidrop_Data", pad_rows(payload["md_rows"], list(df_md.columns))))
                 if opt_acc and sh_obj:
                     try:
                         ws = sh_obj.worksheet("Access_Rights")
