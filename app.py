@@ -24,6 +24,7 @@ from docxtpl import RichText
 from import_tab import render_import_tab
 import re
 from target_price import get_target_price, get_target_info
+from cost_saving import add_prev_rate, build_saving_df, write_saving_sheet, fmt_rp
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
@@ -2481,8 +2482,20 @@ def admin_dashboard():
                         summary_df['Biaya Buruh'] = summary_df['labor_cost'].apply(lambda x: f"Rp {int(x):,}".replace(",", ".") if x > 0 else "-")
                         # ==========================================================
 
-                        cols_to_keep = ['origin', 'kota_asal', 'kota_tujuan', 'route_group', 'load_type', 'unit_type', 'Prioritas', 'vendor_name', 'Harga Penawaran', 'Multidrop Dalam Kota', 'Multidrop Luar Kota', 'Biaya Buruh', 'lead_time']
-                        nama_kolom = ['Origin', 'Kota Asal', 'Kota Tujuan', 'Nama Grup Rute', 'Tipe Muatan', 'Unit', 'Prioritas', 'Nama Vendor', 'Harga Penawaran', 'Multidrop Dalam Kota', 'Multidrop Luar Kota', 'Biaya Buruh', 'Lead Time']
+                        # Rate urutan 1 periode sebelumnya (Tahap 2); tidak ada -> 0
+                        summary_df = add_prev_rate(summary_df, df_p, sel_val)
+                        summary_df['Rate Periode Sebelumnya (Tahap 2)'] = summary_df['prev_rate'].apply(fmt_rp)
+                        summary_df['Periode Sebelumnya'] = summary_df['prev_period']
+
+                        # Potential Cost Saving 3 bulan - HANYA FCL
+                        df_sav = None
+                        if sel_load == 'FCL':
+                            df_sav = build_saving_df(summary_df, df_r_clean)
+                            if 'keterangan' not in df_r_clean.columns:
+                                st.warning("Kolom 'keterangan' tidak ada di Master_Routes, volume dianggap 0 sehingga saving = 0.")
+
+                        cols_to_keep = ['origin', 'kota_asal', 'kota_tujuan', 'route_group', 'load_type', 'unit_type', 'Prioritas', 'vendor_name', 'Harga Penawaran', 'Rate Periode Sebelumnya (Tahap 2)', 'Periode Sebelumnya', 'Multidrop Dalam Kota', 'Multidrop Luar Kota', 'Biaya Buruh', 'lead_time']
+                        nama_kolom = ['Origin', 'Kota Asal', 'Kota Tujuan', 'Nama Grup Rute', 'Tipe Muatan', 'Unit', 'Prioritas', 'Nama Vendor', 'Harga Penawaran', 'Rate Periode Sebelumnya (Tahap 2)', 'Periode Sebelumnya', 'Multidrop Dalam Kota', 'Multidrop Luar Kota', 'Biaya Buruh', 'Lead Time']
                         if sel_load == 'FCL':
                             cols_to_keep += ['pelayaran', 'frekuensi']
                             nama_kolom += ['Pelayaran', 'Frekuensi (x/minggu)']
@@ -2497,6 +2510,8 @@ def admin_dashboard():
                         output = io.BytesIO()
                         with pd.ExcelWriter(output, engine='openpyxl') as writer:
                             summary_df.to_excel(writer, index=False, sheet_name='Master Summary')
+                            if df_sav is not None:
+                                write_saving_sheet(writer, df_sav, sel_round, sel_val)
                         excel_data = output.getvalue()
                         
                         safe_val_name = str(sel_val).replace(" - ", "-").replace(" ", "_")
