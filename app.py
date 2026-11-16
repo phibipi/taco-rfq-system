@@ -24,7 +24,7 @@ from docxtpl import RichText
 from import_tab import render_import_tab
 import re
 from target_price import get_target_price, get_target_info
-from cost_saving import add_prev_rate, build_saving_df, write_saving_sheet, fmt_rp
+from cost_saving import add_prev_rate, build_saving_df, write_saving_sheet, fmt_rp as cs_fmt_rp
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
@@ -2484,7 +2484,7 @@ def admin_dashboard():
 
                         # Rate urutan 1 periode sebelumnya (Tahap 2); tidak ada -> 0
                         summary_df = add_prev_rate(summary_df, df_p, sel_val)
-                        summary_df['Rate Periode Sebelumnya (Tahap 2)'] = summary_df['prev_rate'].apply(fmt_rp)
+                        summary_df['Rate Periode Sebelumnya (Tahap 2)'] = summary_df['prev_rate'].apply(cs_fmt_rp)
                         summary_df['Periode Sebelumnya'] = summary_df['prev_period']
 
                         # Potential Cost Saving 3 bulan - HANYA FCL
