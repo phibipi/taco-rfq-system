@@ -33,6 +33,11 @@ _MONTH_RE = re.compile(
 )
 
 
+def _cell(v):
+    t = "" if v is None else str(v).strip()
+    return "-" if t.lower() in ("", "nan", "none") else t
+
+
 def _key(v):
     return re.sub(r"\s+", "", str(v)).lower().strip()
 
@@ -68,12 +73,13 @@ def parse_period(v):
 
 def get_target_info(df_all, route_id, unit_type, cur_validity, prev_round=2, prev_round_strict=False):
     """
-    Return dict: target, base, base_source, pct, min_curr, min_prev, prev_period, prev_round
+    Return dict: target, base, base_source, pct, min_curr, min_prev, prev_period, prev_round,
+                 pelayaran, frekuensi  (milik penawaran termurah yang dijadikan base; '-' bila kolomnya belum ada)
     prev_round_strict=False -> kalau periode sebelumnya belum punya Tahap 2 untuk rute+unit itu,
                                pakai tahap tertinggi yang ada. True -> hanya Tahap 2, kalau tidak ada dianggap kosong.
     """
     info = {"target": 0, "base": 0, "base_source": "-", "pct": 0, "min_curr": 0, "min_prev": 0,
-            "prev_period": "-", "prev_round": "-"}
+            "prev_period": "-", "prev_round": "-", "pelayaran": "-", "frekuensi": "-"}
     if df_all is None or df_all.empty or "price" not in df_all.columns:
         return info
 
@@ -94,9 +100,11 @@ def get_target_info(df_all, route_id, unit_type, cur_validity, prev_round=2, pre
     # A. termurah periode ini, Tahap 1
     cur = d[(d["val_key"] == cur_key) & (d["rnd"] == 1)]
     min_curr = float(cur["price"].min()) if not cur.empty else 0.0
+    row_cur = cur.loc[cur["price"].idxmin()] if not cur.empty else None
 
     # B. periode sebelumnya (urutan waktu), harga Tahap 2
     min_prev, prev_label, prev_rnd = 0.0, "-", "-"
+    row_prev = None
     p_cur = parse_period(cur_key)
     if p_cur:
         best = None
@@ -111,7 +119,9 @@ def get_target_info(df_all, route_id, unit_type, cur_validity, prev_round=2, pre
             rounds = set(prev_rows["rnd"])
             use = prev_round if prev_round in rounds else (None if prev_round_strict else max(rounds))
             if use is not None:
-                min_prev = float(prev_rows[prev_rows["rnd"] == use]["price"].min())
+                sel_rows = prev_rows[prev_rows["rnd"] == use]
+                min_prev = float(sel_rows["price"].min())
+                row_prev = sel_rows.loc[sel_rows["price"].idxmin()]
                 prev_label, prev_rnd = pretty_period(best[1]), use
 
     # Keputusan
@@ -127,7 +137,10 @@ def get_target_info(df_all, route_id, unit_type, cur_validity, prev_round=2, pre
     else:
         return {**info, "min_curr": min_curr, "min_prev": min_prev, "prev_period": prev_label, "prev_round": prev_rnd}
 
+    base_row = row_prev if src == "prev" else row_cur
     info.update({
+        "pelayaran": _cell(base_row.get("pelayaran")) if base_row is not None else "-",
+        "frekuensi": _cell(base_row.get("frekuensi")) if base_row is not None else "-",
         "target": int(base * factor + 1e-9),
         "base": int(base),
         "pct": int(round((1 - factor) * 100)),
